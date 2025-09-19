@@ -9,12 +9,15 @@ const PERCENTILE: usize = 7;
 const TAB: &str = "    ";
 
 pub struct State {
-    screen_dims: ScreenDimensions,
+    content_dims: ScreenDimensions,
+    info_line: usize,
+
     term_pos: Position,
     text_pos: Position,
     stdout: RawTerminal<Stdout>,
 
     pub mode: Mode,
+    edited: bool,
 
     screen: Vec<String>,
     lines: Vec<String>,
@@ -29,19 +32,22 @@ impl State {
             .collect::<Result<Vec<String>, _>>()?;
 
         Ok(Self {
-            screen_dims: ScreenDimensions {
+            content_dims: ScreenDimensions {
                 w: width,
-                h: height,
+                // Spare one line for the info line
+                h: height - 1,
             },
+            info_line: height,
             term_pos: Position {
                 x: 1,
                 // Initialize cursor position at 1/10th of the screen height
-                y: height / PERCENTILE,
+                y: (height - 1) / PERCENTILE,
             },
             text_pos: Position { x: 0, y: 0 },
             stdout: std::io::stdout().into_raw_mode()?,
             mode: Mode::Command,
-            screen: vec![String::new(); height],
+            edited: false,
+            screen: vec![String::new(); height - 1],
             lines: if lines.is_empty() {
                 vec![String::new()]
             } else {
@@ -75,8 +81,20 @@ impl State {
 
     /// Writes the file buffer to the file.
     pub fn write(&mut self) -> Result<(), Error> {
+        if !self.edited {
+            return Ok(());
+        }
+        self.edited = false;
+
+        let size: usize = self.lines.iter().map(std::string::String::len).sum();
+        let newlines = self.lines.len() - 1;
+        self.file.set_len((size + newlines) as u64)?;
+
         self.file.seek(SeekFrom::Start(0))?;
-        write!(self.file, "{}", self.lines.join("\n"))?;
+        for line in &self.lines[..self.lines.len() - 1] {
+            writeln!(self.file, "{line}")?;
+        }
+        write!(self.file, "{}", self.lines[self.lines.len() - 1])?;
         self.file.flush()
     }
 
@@ -93,7 +111,7 @@ impl State {
                 if self.text_pos.y + n < text_bound {
                     // Don't move down past the percentile of the screen height
                     self.term_pos.y = (self.term_pos.y + n)
-                        .min((PERCENTILE - 1) * self.screen_dims.h / PERCENTILE);
+                        .min((PERCENTILE - 1) * self.content_dims.h / PERCENTILE);
                     self.text_pos.y += n;
                 }
             }
@@ -103,14 +121,14 @@ impl State {
                     .term_pos
                     .y
                     .saturating_sub(n)
-                    .max(self.screen_dims.h / PERCENTILE);
+                    .max(self.content_dims.h / PERCENTILE);
                 self.text_pos.y = self.text_pos.y.saturating_sub(n);
             }
             CursorMove::Right => {
                 // Only move right if there is more text available
                 let line_bound = self.lines[self.text_pos.y].chars().count();
                 if self.text_pos.x + n <= line_bound {
-                    self.term_pos.x = (self.term_pos.x + n).min(self.screen_dims.w);
+                    self.term_pos.x = (self.term_pos.x + n).min(self.content_dims.w);
                     self.text_pos.x += n;
                 }
             }
@@ -138,7 +156,7 @@ impl State {
         // Calculate which line of text is visible at what line on the screen
         #[allow(clippy::cast_possible_wrap)]
         let lines_offset = (self.text_pos.y + 1) as isize - self.term_pos.y as isize;
-        for (screen_idx, lines_idx) in (0..self.screen_dims.h).zip(lines_offset..) {
+        for (screen_idx, lines_idx) in (0..self.content_dims.h).zip(lines_offset..) {
             self.screen[screen_idx].clear();
 
             // Skip screen lines outside the text line bounds
@@ -155,7 +173,7 @@ impl State {
             // Minus one since terminal coordinates start at 1
             let lower = self.text_pos.x.saturating_sub(self.term_pos.x - 1);
             if line.chars().count() > lower {
-                let upper = (lower + self.screen_dims.w).min(line.chars().count());
+                let upper = (lower + self.content_dims.w).min(line.chars().count());
 
                 let start = line
                     .char_indices()
@@ -174,21 +192,46 @@ impl State {
             }
         }
 
-        // Write the new screen
-        // Since term_pos is always bounded by the screen dimensions it will never truncate
+        // Write the new content
+        write!(self.stdout, "{All}{}", Goto(1, 1))?;
+        for line in &self.screen[..self.screen.len() - 1] {
+            write!(self.stdout, "{line}\n\r")?;
+        }
+        write!(self.stdout, "{}\n\r", self.screen[self.screen.len() - 1])?;
+
+        // Write the new info line
+        let mode = match self.mode {
+            Command => "C",
+            Write => "W",
+        };
+        let edited = if self.edited { '*' } else { ' ' };
+        let line = self.text_pos.y + 1;
+        let col = self.text_pos.x + 1;
+        let total = self.lines.len();
+        let percentage = 100 * (self.text_pos.y + 1) / self.lines.len();
+        let size: usize = self.lines.iter().map(std::string::String::len).sum();
+        // Since info_line is always bounded by the screen dimensions it will never truncate
         #[allow(clippy::cast_possible_truncation)]
         write!(
             self.stdout,
-            "{All}{}{}{}",
-            Goto(1, 1),
-            self.screen.join("\n\r"),
-            Goto(self.term_pos.x as u16, self.term_pos.y as u16)
+            "{}[{mode}] {line}:{col}/{total}[{percentage}%] [{size}B] {edited}",
+            Goto(1, self.info_line as u16)
         )?;
 
         // Set the cursor to represent the current input mode
+        // Since term_pos is always bounded by the screen dimensions it will never truncate
+        #[allow(clippy::cast_possible_truncation)]
         match self.mode {
-            Command => write!(self.stdout, "{BlinkingBlock}")?,
-            Write => write!(self.stdout, "{BlinkingBar}")?,
+            Command => write!(
+                self.stdout,
+                "{}{BlinkingBlock}",
+                Goto(self.term_pos.x as u16, self.term_pos.y as u16)
+            )?,
+            Write => write!(
+                self.stdout,
+                "{}{BlinkingBar}",
+                Goto(self.term_pos.x as u16, self.term_pos.y as u16)
+            )?,
         }
 
         self.stdout.flush()
@@ -296,12 +339,14 @@ impl State {
     pub fn insert_move_new_line_above(&mut self) {
         self.lines.insert(self.text_pos.y, String::new());
         // No need to move since the cursor pos stays the same
+        self.edited = true;
     }
 
     /// Inserts a new line bellow the current line and moves to it
     pub fn insert_move_new_line_bellow(&mut self) {
         self.lines.insert(self.text_pos.y + 1, String::new());
         self.move_cursor(CursorMove::Down, 1);
+        self.edited = true;
     }
 
     /// Writes a character to the buffer
@@ -313,7 +358,8 @@ impl State {
         self.lines[self.text_pos.y].insert(idx, c);
 
         self.text_pos.x += 1;
-        self.term_pos.x = (self.term_pos.x + 1).min(self.screen_dims.w);
+        self.term_pos.x = (self.term_pos.x + 1).min(self.content_dims.w);
+        self.edited = true;
     }
 
     /// Writes a new line to the buffer, splitting an existing line if necessary
@@ -329,6 +375,7 @@ impl State {
 
         self.move_cursor(CursorMove::Down, 1);
         self.move_cursor(CursorMove::Left, self.text_pos.x);
+        self.edited = true;
     }
 
     /// Writes a tab character to the buffer
@@ -340,6 +387,7 @@ impl State {
         self.lines[self.text_pos.y].insert_str(idx, TAB);
 
         self.move_cursor(CursorMove::Right, TAB.chars().count());
+        self.edited = true;
     }
 
     /// Deletes a character from the buffer, joining two lines if necessary
@@ -356,6 +404,7 @@ impl State {
 
             line.remove(idx);
             self.move_cursor(CursorMove::Left, 1);
+            self.edited = true;
         } else if self.text_pos.y > 0 {
             // If deleting at the beginning of a line (don't delete the first line)
             let prev_line_len = self.lines[self.text_pos.y - 1].chars().count();
@@ -364,6 +413,7 @@ impl State {
 
             self.move_cursor(CursorMove::Up, 1);
             self.move_cursor(CursorMove::Right, prev_line_len);
+            self.edited = true;
         }
     }
 

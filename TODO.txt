@@ -1,4 +1,4 @@
-[x] Cursor always centered in the middle 50th percentile
+[x] Cursor always centered in the middle percentile
 [x] "./mini <path>" set as current file and read file at <path> into buffer if the file already exists
 - Command mode and write mode
     - Command mode:
@@ -19,5 +19,7 @@
     - Write mode:
         [x] "esc" exit write mode
 [ ] Highlight current line
-[ ] Show line numbers
+[x] Show line number
+    [ ] Show inline
 [ ] Line wrap at X width
+[ ] Support multiple editing windows
