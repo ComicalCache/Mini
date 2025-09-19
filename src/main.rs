@@ -18,16 +18,16 @@ fn main() -> Result<(), std::io::Error> {
 
     if path == "--help" {
         println!(" Mini terminal text editor, run with file(path) argument to open or create");
-        println!("   Pres q to exit");
-        println!("   Press h|j|k|l (or ←|↓|↑|→) to move the cursor");
+        println!("   Press q to exit");
+        println!("   Press h | j | k | l (or ← | ↓ | ↑ | →) to move the cursor");
         println!("   Press i to enter write mode");
         println!("   Press a to enter write mode one character after the current");
         println!("   Press esc to exit write mode");
         println!("   Press s to save the buffer to file");
         println!("   Press w to skip the the next word");
         println!("   Press b to go back one word");
-        println!("   Press <|> to jump to the beginning/end of a line");
-        println!("   Press . to jump to the matching closing bracket or quote");
+        println!("   Press < | > to jump to the beginning/end of a line");
+        println!("   Press . to jump to the matching opposite bracket");
         return Ok(());
     }
 
