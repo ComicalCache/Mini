@@ -1,7 +1,7 @@
 use crate::util::{CursorMove, Mode, Position, ScreenDimensions};
 use std::{
     fs::File,
-    io::{Error, Read, Seek, SeekFrom, Stdout, Write},
+    io::{BufRead, BufReader, Error, Seek, SeekFrom, Stdout, Write},
 };
 use termion::raw::{IntoRawMode, RawTerminal};
 
@@ -24,8 +24,9 @@ pub struct State {
 
 impl State {
     pub fn new(width: usize, height: usize, mut file: File) -> Result<Self, Error> {
-        let mut file_content = String::new();
-        file.read_to_string(&mut file_content)?;
+        let lines = BufReader::new(&mut file)
+            .lines()
+            .collect::<Result<Vec<String>, _>>()?;
 
         Ok(Self {
             screen_dims: ScreenDimensions {
@@ -41,10 +42,11 @@ impl State {
             stdout: std::io::stdout().into_raw_mode()?,
             mode: Mode::Command,
             screen: vec![String::new(); height],
-            lines: file_content
-                .lines()
-                .map(std::string::ToString::to_string)
-                .collect(),
+            lines: if lines.is_empty() {
+                vec![String::new()]
+            } else {
+                lines
+            },
             file,
         })
     }
@@ -362,6 +364,92 @@ impl State {
 
             self.move_cursor(CursorMove::Up, 1);
             self.move_cursor(CursorMove::Right, prev_line_len);
+        }
+    }
+
+    fn find_matching_bracket(&self) -> Option<Position> {
+        let Some(current_char) = self.lines[self.text_pos.y].chars().nth(self.text_pos.x) else {
+            return None; // Cursor is at the end of line
+        };
+
+        let (opening, closing, forward) = match current_char {
+            '(' => ('(', ')', true),
+            '[' => ('[', ']', true),
+            '{' => ('{', '}', true),
+            '<' => ('<', '>', true),
+            ')' => ('(', ')', false),
+            ']' => ('[', ']', false),
+            '}' => ('{', '}', false),
+            '>' => ('<', '>', false),
+            _ => return None,
+        };
+
+        let mut depth = 1;
+        if forward {
+            // Search forward from the character after the cursor
+            for y in self.text_pos.y..self.lines.len() {
+                let line = &self.lines[y];
+                let offset = if y == self.text_pos.y {
+                    self.text_pos.x + 1
+                } else {
+                    0
+                };
+
+                for (x, c) in line.char_indices().skip(offset) {
+                    if c == opening {
+                        depth += 1;
+                    } else if c == closing {
+                        depth -= 1;
+                    }
+
+                    if depth == 0 {
+                        return Some(Position { x, y });
+                    }
+                }
+            }
+        } else {
+            // Search backward from the character before the cursor
+            for y in (0..=self.text_pos.y).rev() {
+                let line = &self.lines[y];
+                let offset = if y == self.text_pos.y {
+                    line.chars().count() - self.text_pos.x
+                } else {
+                    0
+                };
+
+                for (x, c) in line.char_indices().rev().skip(offset) {
+                    if c == closing {
+                        depth += 1;
+                    } else if c == opening {
+                        depth -= 1;
+                    }
+
+                    if depth == 0 {
+                        return Some(Position { x, y });
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Jumps to the matching opposite bracket if on a bracket
+    pub fn jump_to_matching_opposite(&mut self) {
+        let Some(Position { x, y }) = self.find_matching_bracket() else {
+            return;
+        };
+
+        if y < self.text_pos.y {
+            self.move_cursor(CursorMove::Up, self.text_pos.y - y);
+        } else if y > self.text_pos.y {
+            self.move_cursor(CursorMove::Down, y - self.text_pos.y);
+        }
+
+        if x < self.text_pos.x {
+            self.move_cursor(CursorMove::Left, self.text_pos.x - x);
+        } else if x > self.text_pos.x {
+            self.move_cursor(CursorMove::Right, x - self.text_pos.x);
         }
     }
 }

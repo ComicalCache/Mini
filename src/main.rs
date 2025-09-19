@@ -27,6 +27,7 @@ fn main() -> Result<(), std::io::Error> {
         println!("   Press w to skip the the next word");
         println!("   Press b to go back one word");
         println!("   Press <|> to jump to the beginning/end of a line");
+        println!("   Press . to jump to the matching closing bracket or quote");
         return Ok(());
     }
 
@@ -75,6 +76,7 @@ fn main() -> Result<(), std::io::Error> {
                 Key::Char('b') => state.prev_word(),
                 Key::Char('<') => state.jump_to_start_of_line(),
                 Key::Char('>') => state.jump_to_end_of_line(),
+                Key::Char('.') => state.jump_to_matching_opposite(),
                 _ => {}
             },
             Mode::Write => match key {

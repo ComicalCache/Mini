@@ -15,7 +15,7 @@
         [ ] selectable redo options if multiple are available
         [x] "<" jump to start of line
         [x] ">" jump to end of line
-        [ ] "." to jump to matching closing bracket
+        [x] "." to jump to matching closing bracket
     - Write mode:
         [x] "esc" exit write mode
 [ ] Highlight current line
