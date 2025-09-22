@@ -89,13 +89,39 @@ impl State {
 
     /// Applies the command entered during command mode
     pub fn apply_cmd(&mut self) -> Result<CmdResult, Error> {
+        use CmdResult::{Continue, Quit};
+
         match self.cmd_buff.as_str() {
-            "q" => return Ok(CmdResult::Quit),
-            "w" => self.write()?,
-            _ => {}
+            "q" => {
+                if !self.edited {
+                    return Ok(Quit);
+                }
+
+                // TODO: fix this. There should be a buffer for errors that is somehow shown...
+                self.cmd_buff.replace_range(
+                    ..,
+                    "There are unsafed changes, save or qq to force quit (esc to close this error)",
+                );
+                self.cmd_pos.x = self.cmd_buff.chars().count();
+                self.term_cmd_pos.x = self.cmd_buff.chars().count() + 1;
+            }
+            "qq" => return Ok(Quit),
+            "wq" => {
+                self.write()?;
+                return Ok(Quit);
+            }
+            "w" => {
+                self.write()?;
+                self.change_mode(Mode::View);
+            }
+            _ => {
+                // Unrecognized command
+                // TODO: this should display an error, see above TODO for error buffer
+                self.change_mode(Mode::View);
+            }
         }
 
-        Ok(CmdResult::Continue)
+        Ok(Continue)
     }
 
     /// Get the current mode
@@ -266,7 +292,7 @@ impl State {
 
         // Set info line
         if let Err(err) = self.set_info_line(0) {
-            return Err(Error::new(std::io::ErrorKind::Other, err));
+            return Err(Error::other(err));
         }
 
         // Calculate which line of text is visible at what line on the screen
@@ -539,8 +565,8 @@ impl State {
             let line = self.line_buff.remove(self.txt_pos.y);
             self.line_buff[self.txt_pos.y - 1].push_str(&line);
 
-            self.move_cmd_cursor(CursorMove::Up, 1);
-            self.move_cmd_cursor(CursorMove::Right, prev_line_len);
+            self.move_cursor(CursorMove::Up, 1);
+            self.move_cursor(CursorMove::Right, prev_line_len);
             self.edited = true;
         }
     }

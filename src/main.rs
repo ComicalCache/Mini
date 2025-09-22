@@ -18,17 +18,18 @@ fn main() -> Result<(), std::io::Error> {
 
     if path == "--help" {
         println!(" Mini terminal text editor, run with file(path) argument to open or create");
-        println!("   Press space to enter command mode");
-        println!("     Write q to quit");
-        println!("     Write w to write the buffer to file");
         println!("   Press h | j | k | l (or ← | ↓ | ↑ | →) to move the cursor");
-        println!("   Press i to enter write mode");
-        println!("   Press a to enter write mode one character after the current");
-        println!("   Press esc to exit write mode");
         println!("   Press w to skip the the next word");
         println!("   Press b to go back one word");
         println!("   Press < | > to jump to the beginning/end of a line");
         println!("   Press . to jump to the matching opposite bracket");
+        println!("   Press space to enter command mode");
+        println!("     Write q to quit");
+        println!("     Write w to write the buffer to file");
+        println!("   Press esc to exit command mode");
+        println!("   Press i to enter write mode");
+        println!("   Press a to enter write mode one character after the current");
+        println!("   Press esc to exit write mode");
         return Ok(());
     }
 
@@ -102,7 +103,7 @@ fn main() -> Result<(), std::io::Error> {
                 Key::Char('\t') => state.write_cmd_tab(),
                 Key::Char(ch) => state.write_cmd_char(ch),
                 Key::Backspace => state.delete_cmd_char(),
-                _ => unimplemented!(),
+                _ => {}
             },
         }
 

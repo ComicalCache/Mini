@@ -4,7 +4,7 @@
     - View mode:
         [x] "s" write buffer to current file
         [x] "q" quit app
-            [ ] warn on unsaved changes
+            [x] warn on unsaved changes
         [x] "w" skip word
         [x] "b" word back
         [x] "hjkl" left/down/up/right
