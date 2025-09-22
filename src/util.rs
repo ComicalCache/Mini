@@ -5,8 +5,9 @@ pub struct Position {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
-    Command,
+    View,
     Write,
+    Command,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -15,6 +16,12 @@ pub enum CursorMove {
     Down,
     Up,
     Right,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum CmdResult {
+    Quit,
+    Continue,
 }
 
 pub struct ScreenDimensions {
