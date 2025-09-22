@@ -9,8 +9,7 @@ const PERCENTILE: usize = 7;
 const TAB: &str = "    ";
 
 pub struct State {
-    content_dims: ScreenDimensions,
-    info_line: usize,
+    screen_dims: ScreenDimensions,
 
     term_pos: Position,
     text_pos: Position,
@@ -32,22 +31,20 @@ impl State {
             .collect::<Result<Vec<String>, _>>()?;
 
         Ok(Self {
-            content_dims: ScreenDimensions {
+            screen_dims: ScreenDimensions {
                 w: width,
-                // Spare one line for the info line
-                h: height - 1,
+                h: height,
             },
-            info_line: height,
             term_pos: Position {
                 x: 1,
-                // Initialize cursor position at 1/10th of the screen height
+                // Initialize cursor position at percentile of the screen height
                 y: (height - 1) / PERCENTILE,
             },
             text_pos: Position { x: 0, y: 0 },
             stdout: std::io::stdout().into_raw_mode()?,
             mode: Mode::Command,
             edited: false,
-            screen: vec![String::new(); height - 1],
+            screen: vec![String::new(); height],
             lines: if lines.is_empty() {
                 vec![String::new()]
             } else {
@@ -111,7 +108,7 @@ impl State {
                 if self.text_pos.y + n < text_bound {
                     // Don't move down past the percentile of the screen height
                     self.term_pos.y = (self.term_pos.y + n)
-                        .min((PERCENTILE - 1) * self.content_dims.h / PERCENTILE);
+                        .min((PERCENTILE - 1) * self.screen_dims.h / PERCENTILE);
                     self.text_pos.y += n;
                 }
             }
@@ -121,14 +118,14 @@ impl State {
                     .term_pos
                     .y
                     .saturating_sub(n)
-                    .max(self.content_dims.h / PERCENTILE);
+                    .max(self.screen_dims.h / PERCENTILE);
                 self.text_pos.y = self.text_pos.y.saturating_sub(n);
             }
             CursorMove::Right => {
                 // Only move right if there is more text available
                 let line_bound = self.lines[self.text_pos.y].chars().count();
                 if self.text_pos.x + n <= line_bound {
-                    self.term_pos.x = (self.term_pos.x + n).min(self.content_dims.w);
+                    self.term_pos.x = (self.term_pos.x + n).min(self.screen_dims.w);
                     self.text_pos.x += n;
                 }
             }
@@ -145,6 +142,52 @@ impl State {
         }
     }
 
+    fn set_text_line(&mut self, screen_idx: usize, lines_idx: usize) {
+        let line = &self.lines[lines_idx];
+        // Minus one since terminal coordinates start at 1
+        let lower = self.text_pos.x.saturating_sub(self.term_pos.x - 1);
+        // Only print lines if their content is visible on the screen (horizontal movement)
+        if line.chars().count() > lower {
+            let upper = (lower + self.screen_dims.w).min(line.chars().count());
+
+            let start = line
+                .char_indices()
+                .nth(lower)
+                .map(|(i, _)| i)
+                // Safe to unwrap
+                .unwrap();
+
+            let end = line
+                .char_indices()
+                .nth(upper)
+                // Use all remaining bytes if they don't fill the entire line
+                .map_or(line.len(), |(i, _)| i);
+
+            self.screen[screen_idx].replace_range(.., &line[start..end]);
+        }
+    }
+
+    fn set_info_line(&mut self, screen_idx: usize) -> Result<(), std::fmt::Error> {
+        use std::fmt::Write;
+
+        let mode = match self.mode {
+            Mode::Command => "C",
+            Mode::Write => "W",
+        };
+        let edited = if self.edited { '*' } else { ' ' };
+        let line = self.text_pos.y + 1;
+        let col = self.text_pos.x + 1;
+        let total = self.lines.len();
+        let percentage = 100 * (self.text_pos.y + 1) / self.lines.len();
+        let size: usize = self.lines.iter().map(std::string::String::len).sum();
+
+        self.screen[screen_idx].clear();
+        write!(
+            &mut self.screen[screen_idx],
+            "[{mode}] {line}:{col}/{total}[{percentage}%] [{size}B] {edited}",
+        )
+    }
+
     /// Prints the current state to the screen
     pub fn print_screen(&mut self) -> Result<(), Error> {
         use Mode::{Command, Write};
@@ -153,10 +196,16 @@ impl State {
             cursor::{BlinkingBar, BlinkingBlock, Goto},
         };
 
+        // Set info line
+        if let Err(e) = self.set_info_line(0) {
+            return Err(Error::new(std::io::ErrorKind::Other, e));
+        }
+
         // Calculate which line of text is visible at what line on the screen
         #[allow(clippy::cast_possible_wrap)]
         let lines_offset = (self.text_pos.y + 1) as isize - self.term_pos.y as isize;
-        for (screen_idx, lines_idx) in (0..self.content_dims.h).zip(lines_offset..) {
+        // Plus one for info line offset
+        for (screen_idx, lines_idx) in (1..self.screen_dims.h).zip(lines_offset + 1..) {
             self.screen[screen_idx].clear();
 
             // Skip screen lines outside the text line bounds
@@ -166,30 +215,9 @@ impl State {
                 continue;
             }
 
-            // Only print lines if their content is visible on the screen (horizontal movement)
             // The value is guaranteed positive at that point
             #[allow(clippy::cast_sign_loss)]
-            let line = &self.lines[lines_idx as usize];
-            // Minus one since terminal coordinates start at 1
-            let lower = self.text_pos.x.saturating_sub(self.term_pos.x - 1);
-            if line.chars().count() > lower {
-                let upper = (lower + self.content_dims.w).min(line.chars().count());
-
-                let start = line
-                    .char_indices()
-                    .nth(lower)
-                    .map(|(i, _)| i)
-                    // Safe to unwrap
-                    .unwrap();
-
-                let end = line
-                    .char_indices()
-                    .nth(upper)
-                    // Use all remaining bytes if they don't fill the entire line
-                    .map_or(line.len(), |(i, _)| i);
-
-                self.screen[screen_idx].replace_range(.., &line[start..end]);
-            }
+            self.set_text_line(screen_idx, lines_idx as usize);
         }
 
         // Write the new content
@@ -197,26 +225,9 @@ impl State {
         for line in &self.screen[..self.screen.len() - 1] {
             write!(self.stdout, "{line}\n\r")?;
         }
-        write!(self.stdout, "{}\n\r", self.screen[self.screen.len() - 1])?;
+        write!(self.stdout, "{}", self.screen[self.screen.len() - 1])?;
 
         // Write the new info line
-        let mode = match self.mode {
-            Command => "C",
-            Write => "W",
-        };
-        let edited = if self.edited { '*' } else { ' ' };
-        let line = self.text_pos.y + 1;
-        let col = self.text_pos.x + 1;
-        let total = self.lines.len();
-        let percentage = 100 * (self.text_pos.y + 1) / self.lines.len();
-        let size: usize = self.lines.iter().map(std::string::String::len).sum();
-        // Since info_line is always bounded by the screen dimensions it will never truncate
-        #[allow(clippy::cast_possible_truncation)]
-        write!(
-            self.stdout,
-            "{}[{mode}] {line}:{col}/{total}[{percentage}%] [{size}B] {edited}",
-            Goto(1, self.info_line as u16)
-        )?;
 
         // Set the cursor to represent the current input mode
         // Since term_pos is always bounded by the screen dimensions it will never truncate
@@ -331,7 +342,10 @@ impl State {
     pub fn jump_to_end_of_line(&mut self) {
         self.move_cursor(
             CursorMove::Right,
-            self.lines[self.text_pos.y].chars().count() - self.text_pos.x - 1,
+            self.lines[self.text_pos.y]
+                .chars()
+                .count()
+                .saturating_sub(self.text_pos.x + 1),
         );
     }
 
@@ -358,7 +372,7 @@ impl State {
         self.lines[self.text_pos.y].insert(idx, c);
 
         self.text_pos.x += 1;
-        self.term_pos.x = (self.term_pos.x + 1).min(self.content_dims.w);
+        self.term_pos.x = (self.term_pos.x + 1).min(self.screen_dims.w);
         self.edited = true;
     }
 
