@@ -1,25 +1,9 @@
-[x] Cursor always centered in the middle percentile
-[x] "./mini <path>" set as current file and read file at <path> into buffer if the file already exists
 - View mode and write mode
     - View mode:
-        [x] "s" write buffer to current file
-        [x] "q" quit app
-            [x] warn on unsaved changes
-        [x] "w" skip word
-        [x] "b" word back
-        [x] "hjkl" left/down/up/right
-        [x] "i" enter write mode
-            [x] actually allow modifications
         [ ] "u" undo
         [ ] "r" hot redo
         [ ] selectable redo options if multiple are available
-        [x] "<" jump to start of line
-        [x] ">" jump to end of line
-        [x] "." to jump to matching closing bracket
-    - Write mode:
-        [x] "esc" exit write mode
 [ ] Highlight current line
 [x] Show line number
     [ ] Show inline
 [ ] Line wrap at X width
-[ ] Support multiple editing windows

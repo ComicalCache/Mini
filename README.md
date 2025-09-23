@@ -1,7 +1,4 @@
 # Mini
 
 A mini terminal based file editor. It has VIm-like keybinds and should fully support unicode characters.
-`./mini --help` prints supported operations.
-
-It keeps the cursor "centered" around the middle 5/7th percentile, and features an info bar displaying the editing mode
-, file and column numbers as well as information about the size of the buffer and if the buffer has unsafed changes.
+`./mini --help` prints supported operations. It offers multiple buffers, ergonomics like skipping words back and forth, or jumping to the opposite bracket as well as a simple info bar.
