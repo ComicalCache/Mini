@@ -1,7 +1,4 @@
-use crate::{
-    buffer::{Buffer, PERCENTILE},
-    util::CursorMove,
-};
+use crate::{buffer::Buffer, util::CursorMove};
 
 impl Buffer {
     /// Handles a cursor move.
@@ -19,19 +16,10 @@ impl Buffer {
                 // Only move down if there is more text available
                 let text_bound = self.line_buff.len();
                 if self.txt_pos.y + n < text_bound {
-                    // Don't move down past the percentile of the screen height
-                    self.term_content_pos.y = (self.term_content_pos.y + n)
-                        .min((PERCENTILE - 1) * self.screen_dims.h / PERCENTILE);
                     self.txt_pos.y = (self.txt_pos.y + n).min(text_bound.saturating_sub(1));
                 }
             }
             CursorMove::Up => {
-                // Don't move up past percentile of the screen height
-                self.term_content_pos.y = self
-                    .term_content_pos
-                    .y
-                    .saturating_sub(n)
-                    .max(self.screen_dims.h / PERCENTILE);
                 self.txt_pos.y = self.txt_pos.y.saturating_sub(n);
             }
             CursorMove::Right => {

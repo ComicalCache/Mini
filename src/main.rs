@@ -59,6 +59,9 @@ fn main() -> Result<(), std::io::Error> {
             println!("   Press g to go to the end of the file");
             println!("   Press G to go to the start of the file");
             println!("   Press esc to exit write mode");
+            println!("   Press v to start selection at the current cursor position");
+            println!("      Move cursor and press d to delete the selection");
+            println!("   Press esc to stop selection");
             println!("   Type a number followed by a motion to execute it multiple times");
             return Ok(());
         }
@@ -137,7 +140,12 @@ fn main() -> Result<(), std::io::Error> {
                 Key::Char(' ') if buffer != 0 => buffers[buffer].change_mode(Mode::Command),
                 Key::Char('e') if buffer == 0 => buffer = 1,
                 Key::Char('e') if buffer == 1 => buffer = 0,
-                Key::Char(ch) if '0' <= ch && ch <= '9' => repeat_buff.push(ch),
+                Key::Char(ch) if ch.is_ascii_digit() => repeat_buff.push(ch),
+                // Can't select in error buffer
+                Key::Char('v') if buffer != 0 => buffers[buffer].set_select(),
+                Key::Esc => buffers[buffer].reset_select(),
+                // Can't delete in error buffer
+                Key::Char('d') if buffer != 0 => buffers[buffer].delete_selection(),
                 _ => {}
             },
             Mode::Write => match key {

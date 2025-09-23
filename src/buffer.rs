@@ -1,6 +1,7 @@
 mod apply_cmd;
 mod cursor;
-mod input;
+mod edit;
+mod r#move;
 mod print_screen;
 
 use crate::util::{Mode, Position, ScreenDimensions};
@@ -8,8 +9,6 @@ use std::{
     fs::File,
     io::{Error, Seek, SeekFrom, Write},
 };
-
-const PERCENTILE: usize = 7;
 
 pub struct Buffer {
     screen_dims: ScreenDimensions,
@@ -19,6 +18,7 @@ pub struct Buffer {
 
     mode: Mode,
     edited: bool,
+    select: Option<Position>,
 
     screen_buff: Vec<String>,
 
@@ -40,12 +40,13 @@ impl Buffer {
             },
             term_content_pos: Position {
                 x: 1,
-                // Initialize cursor position at percentile of the screen height
-                y: (height - 1) / PERCENTILE,
+                // Initialize cursor position at middle of screen where it is fixed
+                y: (height - 1) / 2,
             },
             term_cmd_pos: Position { x: 1, y: height },
             mode: Mode::View,
             edited: false,
+            select: None,
             screen_buff: vec![String::new(); height],
             txt_pos: Position { x: 0, y: 0 },
             line_buff,
@@ -58,8 +59,8 @@ impl Buffer {
     pub fn reinit(&mut self) {
         self.term_content_pos = Position {
             x: 1,
-            // Initialize cursor position at percentile of the screen height
-            y: (self.screen_dims.h - 1) / PERCENTILE,
+            // Initialize cursor position at middle of screen where it is fixed
+            y: (self.screen_dims.h - 1) / 2,
         };
         self.term_cmd_pos = Position {
             x: 1,
@@ -93,11 +94,22 @@ impl Buffer {
         self.mode = mode;
     }
 
+    /// Sets the internal line buffer with new contents
     pub fn set_line_buff(&mut self, contents: &str) {
         self.line_buff = contents
             .lines()
             .map(ToString::to_string)
             .collect::<Vec<String>>();
+    }
+
+    /// Marks the position at which selection began
+    pub fn set_select(&mut self) {
+        self.select = Some(self.txt_pos);
+    }
+
+    /// Resets the select position
+    pub fn reset_select(&mut self) {
+        self.select = None;
     }
 
     /// Writes the file buffer to the file.

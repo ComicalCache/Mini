@@ -1,6 +1,4 @@
 - View mode:
-    [ ] "d" delete movements
-    [ ] "v" selection (?)
     [ ] "u" undo
     [ ] "r" hot redo
     [ ] selectable redo options if multiple are available

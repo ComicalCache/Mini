@@ -52,8 +52,17 @@ impl Buffer {
         self.screen_buff[screen_idx].clear();
         write!(
             &mut self.screen_buff[screen_idx],
-            "[{buff_name}] [{mode}] {line}:{col}/{total}[{percentage}%] [{size}B] {edited}",
-        )
+            "[{buff_name}] [{mode}] {line}:{col}/{total}[{percentage}%] [{size}B]",
+        )?;
+        if let Some(pos) = self.select {
+            write!(
+                &mut self.screen_buff[screen_idx],
+                " [Select {}:{}]",
+                pos.y + 1,
+                pos.x + 1
+            )?;
+        }
+        write!(&mut self.screen_buff[screen_idx], " {edited}")
     }
 
     fn set_cmd_line(&mut self, screen_idx: usize) {

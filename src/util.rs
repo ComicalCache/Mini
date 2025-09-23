@@ -3,9 +3,10 @@ use std::{
     io::{BufRead, BufReader, Error},
 };
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Position {
-    pub x: usize,
     pub y: usize,
+    pub x: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
