@@ -2,9 +2,9 @@ use std::io::{Error, Stdout, Write};
 
 use termion::raw::RawTerminal;
 
-use crate::{state::State, util::Mode};
+use crate::{buffer::Buffer, util::Mode};
 
-impl State {
+impl Buffer {
     fn set_text_line(&mut self, screen_idx: usize, lines_idx: usize) {
         let line = &self.line_buff[lines_idx];
         // Minus one since terminal coordinates start at 1
@@ -30,7 +30,11 @@ impl State {
         }
     }
 
-    fn set_info_line(&mut self, buff_no: usize, screen_idx: usize) -> Result<(), std::fmt::Error> {
+    fn set_info_line(
+        &mut self,
+        buff_name: &'static str,
+        screen_idx: usize,
+    ) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
 
         let mode = match self.mode {
@@ -48,7 +52,7 @@ impl State {
         self.screen_buff[screen_idx].clear();
         write!(
             &mut self.screen_buff[screen_idx],
-            "[{buff_no}] [{mode}] {line}:{col}/{total}[{percentage}%] [{size}B] {edited}",
+            "[{buff_name}] [{mode}] {line}:{col}/{total}[{percentage}%] [{size}B] {edited}",
         )
     }
 
@@ -57,11 +61,11 @@ impl State {
         self.screen_buff[screen_idx].clone_from(&self.cmd_buff);
     }
 
-    /// Prints the current state to the screen
+    /// Prints the current buffer to the screen
     pub fn print_screen(
         &mut self,
         stdout: &mut RawTerminal<Stdout>,
-        buff_no: usize,
+        buff_name: &'static str,
     ) -> Result<(), Error> {
         use Mode::{Command, View, Write};
         use termion::{
@@ -70,7 +74,7 @@ impl State {
         };
 
         // Set info line
-        if let Err(err) = self.set_info_line(buff_no, 0) {
+        if let Err(err) = self.set_info_line(buff_name, 0) {
             return Err(Error::other(err));
         }
 

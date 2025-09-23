@@ -1,9 +1,6 @@
-- View mode and write mode
-    - View mode:
-        [ ] "u" undo
-        [ ] "r" hot redo
-        [ ] selectable redo options if multiple are available
-[ ] Highlight current line
-[x] Show line number
-    [ ] Show inline
-[ ] Line wrap at X width
+- View mode:
+    [ ] "d" delete movements
+    [ ] "v" selection (?)
+    [ ] "u" undo
+    [ ] "r" hot redo
+    [ ] selectable redo options if multiple are available

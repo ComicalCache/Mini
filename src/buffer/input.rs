@@ -1,11 +1,11 @@
 use crate::{
-    state::State,
+    buffer::Buffer,
     util::{CursorMove, Position},
 };
 
 const TAB: &str = "    ";
 
-impl State {
+impl Buffer {
     /// Skip to the "next word" in the line
     pub fn next_word(&mut self) {
         let line = &self.line_buff[self.txt_pos.y];
@@ -314,5 +314,20 @@ impl State {
         } else if x > self.txt_pos.x {
             self.move_cursor(CursorMove::Right, x - self.txt_pos.x);
         }
+    }
+
+    /// Jumps to the end of the buffer
+    pub fn jump_to_end(&mut self) {
+        self.move_cursor(
+            CursorMove::Down,
+            self.line_buff.len() - (self.txt_pos.y + 1),
+        );
+        self.move_cursor(CursorMove::Left, self.txt_pos.x);
+    }
+
+    /// Jumps to the start of the buffer
+    pub fn jump_to_start(&mut self) {
+        self.move_cursor(CursorMove::Up, self.txt_pos.y + 1);
+        self.move_cursor(CursorMove::Left, self.txt_pos.x);
     }
 }

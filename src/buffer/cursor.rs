@@ -1,11 +1,15 @@
 use crate::{
-    state::{PERCENTILE, State},
+    buffer::{Buffer, PERCENTILE},
     util::CursorMove,
 };
 
-impl State {
+impl Buffer {
     /// Handles a cursor move.
     pub fn move_cursor(&mut self, cursor_move: CursorMove, n: usize) {
+        if n == 0 {
+            return;
+        }
+
         match cursor_move {
             CursorMove::Left => {
                 self.term_content_pos.x = self.term_content_pos.x.saturating_sub(n).max(1);

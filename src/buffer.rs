@@ -11,7 +11,7 @@ use std::{
 
 const PERCENTILE: usize = 7;
 
-pub struct State {
+pub struct Buffer {
     screen_dims: ScreenDimensions,
 
     term_content_pos: Position,
@@ -31,7 +31,7 @@ pub struct State {
     file: Option<File>,
 }
 
-impl State {
+impl Buffer {
     pub fn new(width: usize, height: usize, line_buff: Vec<String>, file: Option<File>) -> Self {
         Self {
             screen_dims: ScreenDimensions {
@@ -53,6 +53,23 @@ impl State {
             cmd_buff: String::new(),
             file,
         }
+    }
+
+    pub fn reinit(&mut self) {
+        self.term_content_pos = Position {
+            x: 1,
+            // Initialize cursor position at percentile of the screen height
+            y: (self.screen_dims.h - 1) / PERCENTILE,
+        };
+        self.term_cmd_pos = Position {
+            x: 1,
+            y: self.screen_dims.h,
+        };
+        self.mode = Mode::View;
+        self.edited = false;
+        self.txt_pos = Position { x: 0, y: 0 };
+        self.cmd_pos = Position { x: 0, y: 0 };
+        self.cmd_buff.clear();
     }
 
     /// Get the current mode
