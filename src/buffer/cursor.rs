@@ -56,9 +56,7 @@ impl Buffer {
                 self.term_cmd_pos.x = (self.term_cmd_pos.x + n).min(self.screen_dims.w);
                 self.cmd_pos.x = (self.cmd_pos.x + n).min(self.cmd_buff.chars().count());
             }
-            _ => {
-                // TODO: add command history to scroll
-            }
+            _ => {}
         }
     }
 }

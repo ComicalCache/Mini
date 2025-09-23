@@ -1,9 +1,8 @@
-use std::{fs::OpenOptions, io::Error};
-
 use crate::{
     buffer::Buffer,
     util::{CmdResult, read_file},
 };
+use std::{fs::OpenOptions, io::Error};
 
 impl Buffer {
     fn __quit(&mut self) -> CmdResult {

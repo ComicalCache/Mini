@@ -1,8 +1,10 @@
-use std::io::{Error, Stdout, Write};
-
-use termion::raw::RawTerminal;
-
 use crate::{buffer::Buffer, util::Mode};
+use std::io::{Error, Stdout, Write};
+use termion::{
+    clear::All,
+    cursor::{BlinkingBar, BlinkingBlock, Goto},
+    raw::RawTerminal,
+};
 
 impl Buffer {
     fn set_text_line(&mut self, screen_idx: usize, lines_idx: usize) {
@@ -12,14 +14,7 @@ impl Buffer {
         // Only print lines if their content is visible on the screen (horizontal movement)
         if line.chars().count() > lower {
             let upper = (lower + self.screen_dims.w).min(line.chars().count());
-
-            let start = line
-                .char_indices()
-                .nth(lower)
-                .map(|(idx, _)| idx)
-                // Safe to unwrap
-                .unwrap();
-
+            let start = line.char_indices().nth(lower).map(|(idx, _)| idx).unwrap();
             let end = line
                 .char_indices()
                 .nth(upper)
@@ -66,7 +61,6 @@ impl Buffer {
     }
 
     fn set_cmd_line(&mut self, screen_idx: usize) {
-        self.screen_buff[screen_idx].clear();
         self.screen_buff[screen_idx].clone_from(&self.cmd_buff);
     }
 
@@ -76,12 +70,6 @@ impl Buffer {
         stdout: &mut RawTerminal<Stdout>,
         buff_name: &'static str,
     ) -> Result<(), Error> {
-        use Mode::{Command, View, Write};
-        use termion::{
-            clear::All,
-            cursor::{BlinkingBar, BlinkingBlock, Goto},
-        };
-
         // Set info line
         if let Err(err) = self.set_info_line(buff_name, 0) {
             return Err(Error::other(err));
@@ -108,7 +96,7 @@ impl Buffer {
         }
 
         // Set command line if in command mode
-        if self.mode == Command {
+        if self.mode == Mode::Command {
             self.set_cmd_line(self.screen_dims.h - 1);
         }
 
@@ -123,7 +111,7 @@ impl Buffer {
         // Since term_pos is always bounded by the screen dimensions it will never truncate
         #[allow(clippy::cast_possible_truncation)]
         match self.mode {
-            View => write!(
+            Mode::View => write!(
                 stdout,
                 "{}{BlinkingBlock}",
                 Goto(
@@ -131,7 +119,7 @@ impl Buffer {
                     self.term_content_pos.y as u16
                 )
             )?,
-            Write => write!(
+            Mode::Write => write!(
                 stdout,
                 "{}{BlinkingBar}",
                 Goto(
@@ -139,7 +127,7 @@ impl Buffer {
                     self.term_content_pos.y as u16
                 )
             )?,
-            Command => write!(
+            Mode::Command => write!(
                 stdout,
                 "{}{BlinkingBar}",
                 Goto(self.term_cmd_pos.x as u16, self.term_cmd_pos.y as u16)

@@ -138,8 +138,9 @@ impl Buffer {
             (self.txt_pos, pos)
         };
 
-        // Single line deletion
         if start.y == end.y {
+            // Single line deletion
+
             let Some(line) = self.line_buff.get_mut(start.y) else {
                 unreachable!("Impossible to not contain the requested line");
             };
@@ -157,25 +158,24 @@ impl Buffer {
         } else {
             // Multiple lines were selected
 
-            // Get the remaining tail after deletion
+            let (start_line, remaining_lines) = self.line_buff.split_at_mut(start.y + 1);
+            let Some(end_line) = remaining_lines.get(end.y - (start.y + 1)) else {
+                unreachable!("Impossible to not contain the requested line");
+            };
             let tail = {
-                let line = &self.line_buff[end.y];
-                let tail_start_idx = line
+                let start_idx = end_line
                     .char_indices()
                     .nth(end.x)
-                    .map_or(line.len(), |(idx, _)| idx);
-                line[tail_start_idx..].to_string()
+                    .map_or(end_line.len(), |(idx, _)| idx);
+                &end_line[start_idx..]
             };
 
-            // Shorten the head of the selection
-            if let Some(start_line) = self.line_buff.get_mut(start.y) {
-                let idx = start_line
-                    .char_indices()
-                    .nth(start.x)
-                    .map_or(start_line.len(), |(idx, _)| idx);
-                start_line.truncate(idx);
-                start_line.push_str(&tail);
-            }
+            let start_idx = start_line[start.y]
+                .char_indices()
+                .nth(start.x)
+                .map_or(start_line[start.y].len(), |(idx, _)| idx);
+            start_line[start.y].truncate(start_idx);
+            start_line[start.y].push_str(tail);
 
             // Remove the inbetween lines
             self.line_buff.drain((start.y + 1)..=end.y);

@@ -7,7 +7,7 @@ mod print_screen;
 use crate::util::{Mode, Position, ScreenDimensions};
 use std::{
     fs::File,
-    io::{Error, Seek, SeekFrom, Write},
+    io::{BufWriter, Error, Seek, SeekFrom, Write},
 };
 
 pub struct Buffer {
@@ -56,6 +56,7 @@ impl Buffer {
         }
     }
 
+    // Reinit the buffer
     pub fn reinit(&mut self) {
         self.term_content_pos = Position {
             x: 1,
@@ -69,6 +70,7 @@ impl Buffer {
         self.mode = Mode::View;
         self.edited = false;
         self.txt_pos = Position { x: 0, y: 0 };
+        self.line_buff.clear();
         self.cmd_pos = Position { x: 0, y: 0 };
         self.cmd_buff.clear();
     }
@@ -80,15 +82,13 @@ impl Buffer {
 
     /// Set the mode
     pub fn change_mode(&mut self, mode: Mode) {
-        use Mode::{Command, View, Write};
-
         match self.mode {
-            Command => {
+            Mode::Command => {
                 self.cmd_buff.clear();
                 self.cmd_pos.x = 0;
                 self.term_cmd_pos.x = 1;
             }
-            View | Write => {}
+            Mode::View | Mode::Write => {}
         }
 
         self.mode = mode;
@@ -123,16 +123,15 @@ impl Buffer {
             return Ok(false);
         };
 
-        let size: usize = self.line_buff.iter().map(String::len).sum();
-        let newlines = self.line_buff.len() - 1;
-        file.set_len((size + newlines) as u64)?;
+        let size: u64 = self.line_buff.iter().map(|s| s.len() as u64 + 1).sum();
+        file.set_len(size.saturating_sub(1))?;
 
         file.seek(SeekFrom::Start(0))?;
-        for line in &self.line_buff[..self.line_buff.len() - 1] {
-            writeln!(file, "{line}")?;
+        let mut writer = BufWriter::new(file);
+        for line in &self.line_buff {
+            writeln!(writer, "{line}")?;
         }
-        write!(file, "{}", self.line_buff[self.line_buff.len() - 1])?;
-        file.flush()?;
+        writer.flush()?;
 
         Ok(true)
     }
