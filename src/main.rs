@@ -190,14 +190,14 @@ fn main() -> Result<(), std::io::Error> {
                 Key::Left => buffers[buffer].move_cmd_cursor(CursorMove::Left, 1),
                 Key::Right => buffers[buffer].move_cmd_cursor(CursorMove::Right, 1),
                 Key::Char('\n') => {
-                    let res = buffers[buffer].apply_cmd()?;
+                    let res = buffers[buffer].apply_cmd();
                     buffers[buffer].change_mode(Mode::View);
 
                     match res {
                         util::CmdResult::Quit => break,
                         // Reset error buffer on successful command
                         util::CmdResult::Continue => buffers[INFO_BUFF].set_line_buff(""),
-                        util::CmdResult::Error(err) => {
+                        util::CmdResult::Info(err) => {
                             // Write error to error buffer
                             buffer = INFO_BUFF;
                             buffers[buffer].set_line_buff(&err);

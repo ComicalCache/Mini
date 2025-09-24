@@ -4,10 +4,10 @@ mod edit;
 mod r#move;
 mod print_screen;
 
-use crate::util::{Mode, Position, ScreenDimensions};
+use crate::util::{CmdResult, Mode, Position, ScreenDimensions};
 use std::{
     fs::File,
-    io::{BufWriter, Error, Seek, SeekFrom, Write},
+    io::{BufWriter, Seek, SeekFrom, Write},
 };
 
 pub struct Buffer {
@@ -70,9 +70,11 @@ impl Buffer {
         self.mode = Mode::View;
         self.edited = false;
         self.txt_pos = Position { x: 0, y: 0 };
-        self.line_buff.clear();
+        self.line_buff.truncate(1);
+        self.line_buff[0].clear();
         self.cmd_pos = Position { x: 0, y: 0 };
         self.cmd_buff.clear();
+        self.file = None;
     }
 
     /// Updates the buffer on terminal resize
@@ -139,7 +141,7 @@ impl Buffer {
     }
 
     /// Writes the file buffer to the file.
-    pub fn write_to_file(&mut self) -> Result<bool, Error> {
+    pub fn write_to_file(&mut self) -> Result<bool, CmdResult> {
         if !self.edited {
             return Ok(true);
         }
@@ -149,14 +151,22 @@ impl Buffer {
         };
 
         let size: u64 = self.line_buff.iter().map(|s| s.len() as u64 + 1).sum();
-        file.set_len(size.saturating_sub(1))?;
+        if let Err(err) = file.set_len(size.saturating_sub(1)) {
+            return Err(CmdResult::Info(err.to_string()));
+        }
 
-        file.seek(SeekFrom::Start(0))?;
+        if let Err(err) = file.seek(SeekFrom::Start(0)) {
+            return Err(CmdResult::Info(err.to_string()));
+        }
         let mut writer = BufWriter::new(file);
         for line in &self.line_buff {
-            writeln!(writer, "{line}")?;
+            if let Err(err) = writeln!(writer, "{line}") {
+                return Err(CmdResult::Info(err.to_string()));
+            }
         }
-        writer.flush()?;
+        if let Err(err) = writer.flush() {
+            return Err(CmdResult::Info(err.to_string()));
+        }
 
         self.edited = false;
         Ok(true)

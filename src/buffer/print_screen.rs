@@ -47,7 +47,7 @@ impl Buffer {
         self.screen_buff[screen_idx].clear();
         write!(
             &mut self.screen_buff[screen_idx],
-            "[{buff_name}] [{mode}] {line}:{col}/{total}[{percentage}%] [{size}B]",
+            "[{buff_name}] [{mode}] [{line}:{col}/{total} {percentage}%] [{size}B]",
         )?;
         if let Some(pos) = self.select {
             // Plus 1 since text coordinates are 0 indexed

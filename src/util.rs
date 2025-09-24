@@ -28,7 +28,7 @@ pub enum CursorMove {
 pub enum CmdResult {
     Quit,
     Continue,
-    Error(String),
+    Info(String),
 }
 
 pub struct ScreenDimensions {
