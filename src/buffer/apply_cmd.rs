@@ -3,10 +3,44 @@ use crate::{
     buffer::Buffer,
     util::{CmdResult, read_file},
 };
-use std::fs::OpenOptions;
+use std::{
+    fs::OpenOptions,
+    io::{BufWriter, Seek, SeekFrom, Write},
+};
 
 impl Buffer {
-    fn quit(&mut self) -> CmdResult {
+    fn write_to_file(&mut self) -> Result<bool, CmdResult> {
+        if !self.edited {
+            return Ok(true);
+        }
+
+        let Some(file) = self.file.as_mut() else {
+            return Ok(false);
+        };
+
+        let size: u64 = self.line_buff.iter().map(|s| s.len() as u64 + 1).sum();
+        if let Err(err) = file.set_len(size.saturating_sub(1)) {
+            return Err(CmdResult::Info(err.to_string()));
+        }
+
+        if let Err(err) = file.seek(SeekFrom::Start(0)) {
+            return Err(CmdResult::Info(err.to_string()));
+        }
+        let mut writer = BufWriter::new(file);
+        for line in &self.line_buff {
+            if let Err(err) = writeln!(writer, "{line}") {
+                return Err(CmdResult::Info(err.to_string()));
+            }
+        }
+        if let Err(err) = writer.flush() {
+            return Err(CmdResult::Info(err.to_string()));
+        }
+
+        self.edited = false;
+        Ok(true)
+    }
+
+    fn quit_cmd(&mut self) -> CmdResult {
         if !self.edited {
             return CmdResult::Quit;
         }
@@ -17,7 +51,7 @@ impl Buffer {
         CmdResult::Info("There are unsaved changes, save or qq to force quit".to_string())
     }
 
-    fn open(&mut self, args: &str, force: bool) -> CmdResult {
+    fn open_cmd(&mut self, args: &str, force: bool) -> CmdResult {
         if self.edited && !force {
             return CmdResult::Info(
                 "There are unsaved changes, save or oo to force open new".to_string(),
@@ -56,7 +90,7 @@ impl Buffer {
         CmdResult::Continue
     }
 
-    fn write(&mut self, args: &str) -> CmdResult {
+    fn write_cmd(&mut self, args: &str) -> CmdResult {
         if !args.is_empty() {
             self.file = match OpenOptions::new()
                 .read(true)
@@ -93,7 +127,7 @@ impl Buffer {
         };
 
         match cmd {
-            "q" => self.quit(),
+            "q" => self.quit_cmd(),
             "qq" => CmdResult::Quit,
             "wq" => {
                 let res = match self.write_to_file() {
@@ -109,9 +143,9 @@ impl Buffer {
 
                 CmdResult::Quit
             }
-            "w" => self.write(args),
-            "o" => self.open(args, false),
-            "oo" => self.open(args, true),
+            "w" => self.write_cmd(args),
+            "o" => self.open_cmd(args, false),
+            "oo" => self.open_cmd(args, true),
             "?" => CmdResult::Info(INFO_MSG.to_string()),
             _ => CmdResult::Info(format!("Unrecognized command: '{cmd}'")),
         }

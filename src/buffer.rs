@@ -4,11 +4,8 @@ mod edit;
 mod r#move;
 mod print_screen;
 
-use crate::util::{CmdResult, Mode, Position, ScreenDimensions};
-use std::{
-    fs::File,
-    io::{BufWriter, Seek, SeekFrom, Write},
-};
+use crate::util::{Mode, Position, ScreenDimensions};
+use std::fs::File;
 
 pub struct Buffer {
     screen_dims: ScreenDimensions,
@@ -32,7 +29,16 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    pub fn new(width: usize, height: usize, line_buff: Vec<String>, file: Option<File>) -> Self {
+    pub fn new(
+        width: usize,
+        height: usize,
+        mut line_buff: Vec<String>,
+        file: Option<File>,
+    ) -> Self {
+        if line_buff.is_empty() {
+            line_buff.push(String::new());
+        }
+
         Self {
             screen_dims: ScreenDimensions {
                 w: width,
@@ -138,37 +144,5 @@ impl Buffer {
     /// Resets the select position
     pub fn reset_select(&mut self) {
         self.select = None;
-    }
-
-    /// Writes the file buffer to the file.
-    pub fn write_to_file(&mut self) -> Result<bool, CmdResult> {
-        if !self.edited {
-            return Ok(true);
-        }
-
-        let Some(file) = self.file.as_mut() else {
-            return Ok(false);
-        };
-
-        let size: u64 = self.line_buff.iter().map(|s| s.len() as u64 + 1).sum();
-        if let Err(err) = file.set_len(size.saturating_sub(1)) {
-            return Err(CmdResult::Info(err.to_string()));
-        }
-
-        if let Err(err) = file.seek(SeekFrom::Start(0)) {
-            return Err(CmdResult::Info(err.to_string()));
-        }
-        let mut writer = BufWriter::new(file);
-        for line in &self.line_buff {
-            if let Err(err) = writeln!(writer, "{line}") {
-                return Err(CmdResult::Info(err.to_string()));
-            }
-        }
-        if let Err(err) = writer.flush() {
-            return Err(CmdResult::Info(err.to_string()));
-        }
-
-        self.edited = false;
-        Ok(true)
     }
 }

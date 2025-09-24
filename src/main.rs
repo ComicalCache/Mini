@@ -60,22 +60,13 @@ fn main() -> Result<(), std::io::Error> {
         None
     };
     let line_buff = if let Some(file) = file.as_mut() {
-        let mut line_buff = read_file(file)?;
-        if line_buff.is_empty() {
-            line_buff.push(String::new());
-        }
-
-        line_buff
+        read_file(file)?
     } else {
         vec![String::new()]
     };
 
     let stdin = std::io::stdin();
     let mut stdout = BufWriter::new(std::io::stdout().into_raw_mode()?);
-
-    // Init terminal by switching to alternate screen
-    write!(&mut stdout, "{ToAlternateScreen}")?;
-    stdout.flush()?;
 
     // Init buffers
     let (width, height) = termion::terminal_size()?;
@@ -86,11 +77,14 @@ fn main() -> Result<(), std::io::Error> {
         Buffer::new(width as usize, height as usize, line_buff, file),
     ];
     let mut buffer = TXT_BUFF;
+
+    // Init terminal by switching to alternate screen
+    write!(&mut stdout, "{ToAlternateScreen}")?;
     buffers[buffer].print_screen(&mut stdout, "Text")?;
+    stdout.flush()?;
 
     // Repeat buffer to execute motions multiple times
     let mut repeat_buff = String::new();
-
     for key in stdin.keys() {
         let (width, height) = termion::terminal_size()?;
         for buff in &mut buffers {
