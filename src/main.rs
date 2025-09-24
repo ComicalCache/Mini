@@ -5,7 +5,10 @@ use crate::{
     buffer::Buffer,
     util::{CursorMove, Mode, read_file},
 };
-use std::{fs::OpenOptions, io::Write};
+use std::{
+    fs::OpenOptions,
+    io::{BufWriter, Write},
+};
 use termion::{
     event::Key,
     input::TermRead,
@@ -68,7 +71,7 @@ fn main() -> Result<(), std::io::Error> {
     };
 
     let stdin = std::io::stdin();
-    let mut stdout = std::io::stdout().into_raw_mode()?;
+    let mut stdout = BufWriter::new(std::io::stdout().into_raw_mode()?);
 
     // Init terminal by switching to alternate screen
     write!(&mut stdout, "{ToAlternateScreen}")?;

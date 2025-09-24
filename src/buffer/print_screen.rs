@@ -1,5 +1,5 @@
 use crate::{buffer::Buffer, util::Mode};
-use std::io::{Error, Stdout, Write};
+use std::io::{BufWriter, Error, Stdout, Write};
 use termion::{
     clear::All,
     cursor::{BlinkingBar, BlinkingBlock, Goto},
@@ -70,7 +70,7 @@ impl Buffer {
     /// Prints the current buffer to the screen
     pub fn print_screen(
         &mut self,
-        stdout: &mut RawTerminal<Stdout>,
+        stdout: &mut BufWriter<RawTerminal<Stdout>>,
         buff_name: &'static str,
     ) -> Result<(), Error> {
         // Set info line
