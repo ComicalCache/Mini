@@ -36,9 +36,12 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut file = if let Some(path) = args.next() {
         if path == "--help" {
-            println!(" Mini terminal text editor, run with file(path) argument to open or create");
+            println!(
+                " Mini terminal text editor, run with file(path) argument to open or create\n"
+            );
+            println!("   Type a number followed by a motion to execute it multiple times");
             println!("   Press h | j | k | l to move the cursor");
-            println!("   Press w to skip the the next word");
+            println!("   Press w to skip to the next word");
             println!("   Press b to go back one word");
             println!("   Press < | > to jump to the beginning/end of a line");
             println!("   Press . to jump to the matching opposite bracket");
@@ -51,7 +54,10 @@ fn main() -> Result<(), std::io::Error> {
             println!(
                 "     Write oo <path> to open a file and replace the buffer, discarding unsaved changes"
             );
-            println!("   Press esc to exit command mode");
+            println!("     Press esc to exit command mode");
+            println!("   Press v to start selection at the current cursor position");
+            println!("     Move cursor and press d to delete the selection");
+            println!("     Press esc to stop selection");
             println!("   Press i to enter write mode");
             println!("   Press a to enter write mode one character after the current");
             println!("   Press o to enter write mode one line under the current");
@@ -59,10 +65,7 @@ fn main() -> Result<(), std::io::Error> {
             println!("   Press g to go to the end of the file");
             println!("   Press G to go to the start of the file");
             println!("   Press esc to exit write mode");
-            println!("   Press v to start selection at the current cursor position");
-            println!("      Move cursor and press d to delete the selection");
-            println!("   Press esc to stop selection");
-            println!("   Type a number followed by a motion to execute it multiple times");
+
             return Ok(());
         }
 
@@ -105,6 +108,11 @@ fn main() -> Result<(), std::io::Error> {
     let mut repeat_buff = String::new();
 
     for key in stdin.keys() {
+        let (width, height) = termion::terminal_size()?;
+        for idx in 0..buffers.len() {
+            buffers[idx].update_screen_dimentions(width as usize, height as usize);
+        }
+
         let key = key?;
         match buffers[buffer].mode() {
             Mode::View => match key {

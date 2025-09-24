@@ -75,6 +75,24 @@ impl Buffer {
         self.cmd_buff.clear();
     }
 
+    /// Updates the buffer on terminal resize
+    pub fn update_screen_dimentions(&mut self, width: usize, height: usize) {
+        if self.screen_dims.w == width && self.screen_dims.h == height {
+            return;
+        }
+
+        self.screen_dims.w = width;
+        self.screen_dims.h = height;
+
+        self.term_content_pos.y = (height - 1) / 2;
+        self.term_cmd_pos.y = height;
+
+        self.term_content_pos.x = self.term_content_pos.x.min(width);
+        self.term_cmd_pos.x = self.term_cmd_pos.x.min(width);
+
+        self.screen_buff.resize(height, String::new());
+    }
+
     /// Get the current mode
     pub fn mode(&self) -> Mode {
         self.mode
@@ -96,10 +114,12 @@ impl Buffer {
 
     /// Sets the internal line buffer with new contents
     pub fn set_line_buff(&mut self, contents: &str) {
-        self.line_buff = contents
-            .lines()
-            .map(ToString::to_string)
-            .collect::<Vec<String>>();
+        let lines = contents.lines().count();
+
+        self.line_buff.resize(lines, String::new());
+        for (idx, line) in contents.lines().enumerate() {
+            self.line_buff[idx].replace_range(.., line);
+        }
     }
 
     /// Marks the position at which selection began
@@ -117,7 +137,6 @@ impl Buffer {
         if !self.edited {
             return Ok(true);
         }
-        self.edited = false;
 
         let Some(file) = self.file.as_mut() else {
             return Ok(false);
@@ -133,6 +152,7 @@ impl Buffer {
         }
         writer.flush()?;
 
+        self.edited = false;
         Ok(true)
     }
 }
