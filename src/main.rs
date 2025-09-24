@@ -57,7 +57,12 @@ fn main() -> Result<(), std::io::Error> {
         None
     };
     let line_buff = if let Some(file) = file.as_mut() {
-        read_file(file)?
+        let mut line_buff = read_file(file)?;
+        if line_buff.is_empty() {
+            line_buff.push(String::new());
+        }
+
+        line_buff
     } else {
         vec![String::new()]
     };
