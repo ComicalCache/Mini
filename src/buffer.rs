@@ -8,6 +8,7 @@ use crate::util::{Mode, Position, ScreenDimensions};
 use std::fs::File;
 
 pub struct Buffer {
+    buff_name: &'static str,
     screen_dims: ScreenDimensions,
 
     term_content_pos: Position,
@@ -30,6 +31,7 @@ pub struct Buffer {
 
 impl Buffer {
     pub fn new(
+        buff_name: &'static str,
         width: usize,
         height: usize,
         mut line_buff: Vec<String>,
@@ -40,23 +42,21 @@ impl Buffer {
         }
 
         Self {
+            buff_name,
             screen_dims: ScreenDimensions {
                 w: width,
                 h: height,
             },
-            term_content_pos: Position {
-                x: 1,
-                // Initialize cursor position at middle of screen where it is fixed
-                y: (height - 1) / 2,
-            },
-            term_cmd_pos: Position { x: 1, y: height },
+            // Initialize cursor position at middle of screen where it is fixed
+            term_content_pos: Position::new((height - 1) / 2, 1),
+            term_cmd_pos: Position::new(height, 1),
             mode: Mode::View,
             edited: false,
             select: None,
             screen_buff: vec![String::new(); height],
-            txt_pos: Position { x: 0, y: 0 },
+            txt_pos: Position::new(0, 0),
             line_buff,
-            cmd_pos: Position { x: 0, y: 0 },
+            cmd_pos: Position::new(0, 0),
             cmd_buff: String::new(),
             file,
         }
@@ -64,21 +64,15 @@ impl Buffer {
 
     // Reinit the buffer
     pub fn reinit(&mut self) {
-        self.term_content_pos = Position {
-            x: 1,
-            // Initialize cursor position at middle of screen where it is fixed
-            y: (self.screen_dims.h - 1) / 2,
-        };
-        self.term_cmd_pos = Position {
-            x: 1,
-            y: self.screen_dims.h,
-        };
+        // Initialize cursor position at middle of screen where it is fixed
+        self.term_content_pos = Position::new((self.screen_dims.h - 1) / 2, 1);
+        self.term_cmd_pos = Position::new(self.screen_dims.h, 1);
         self.mode = Mode::View;
         self.edited = false;
-        self.txt_pos = Position { x: 0, y: 0 };
+        self.txt_pos = Position::new(0, 0);
         self.line_buff.truncate(1);
         self.line_buff[0].clear();
-        self.cmd_pos = Position { x: 0, y: 0 };
+        self.cmd_pos = Position::new(0, 0);
         self.cmd_buff.clear();
         self.file = None;
     }

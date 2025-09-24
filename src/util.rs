@@ -9,6 +9,12 @@ pub struct Position {
     pub x: usize,
 }
 
+impl Position {
+    pub fn new(y: usize, x: usize) -> Self {
+        Position { y, x }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     View,

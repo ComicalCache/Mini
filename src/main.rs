@@ -77,17 +77,18 @@ fn main() -> Result<(), std::io::Error> {
 
     // Init buffers
     let (width, height) = termion::terminal_size()?;
+    let (width, height) = (width as usize, height as usize);
     let mut buffers = [
         // Buffer 1 (Info)
-        Buffer::new(width as usize, height as usize, vec![String::new()], None),
+        Buffer::new("Info", width, height, vec![String::new()], None),
         // Buffer 2 (Text)
-        Buffer::new(width as usize, height as usize, line_buff, file),
+        Buffer::new("Text", width, height, line_buff, file),
     ];
     let mut buffer = TXT_BUFF;
 
     // Init terminal by switching to alternate screen
     write!(&mut stdout, "{ToAlternateScreen}")?;
-    buffers[buffer].print_screen(&mut stdout, "Text")?;
+    buffers[buffer].print_screen(&mut stdout)?;
     stdout.flush()?;
 
     // Repeat buffer to execute motions multiple times
@@ -182,8 +183,7 @@ fn main() -> Result<(), std::io::Error> {
         }
 
         // Print new buffer after every input
-        let name = if buffer == INFO_BUFF { "Info" } else { "Text" };
-        buffers[buffer].print_screen(&mut stdout, name)?;
+        buffers[buffer].print_screen(&mut stdout)?;
     }
 
     write!(stdout, "{ToMainScreen}")?;

@@ -5,11 +5,11 @@ use crate::{
 };
 use std::{
     fs::OpenOptions,
-    io::{BufWriter, Seek, SeekFrom, Write},
+    io::{BufWriter, Error, Seek, SeekFrom, Write},
 };
 
 impl Buffer {
-    fn write_to_file(&mut self) -> Result<bool, CmdResult> {
+    fn write_to_file(&mut self) -> Result<bool, Error> {
         if !self.edited {
             return Ok(true);
         }
@@ -19,22 +19,14 @@ impl Buffer {
         };
 
         let size: u64 = self.line_buff.iter().map(|s| s.len() as u64 + 1).sum();
-        if let Err(err) = file.set_len(size.saturating_sub(1)) {
-            return Err(CmdResult::Info(err.to_string()));
-        }
+        file.set_len(size.saturating_sub(1))?;
 
-        if let Err(err) = file.seek(SeekFrom::Start(0)) {
-            return Err(CmdResult::Info(err.to_string()));
-        }
+        file.seek(SeekFrom::Start(0))?;
         let mut writer = BufWriter::new(file);
         for line in &self.line_buff {
-            if let Err(err) = writeln!(writer, "{line}") {
-                return Err(CmdResult::Info(err.to_string()));
-            }
+            writeln!(writer, "{line}")?;
         }
-        if let Err(err) = writer.flush() {
-            return Err(CmdResult::Info(err.to_string()));
-        }
+        writer.flush()?;
 
         self.edited = false;
         Ok(true)
@@ -107,7 +99,7 @@ impl Buffer {
         // Failed to write file
         let res = match self.write_to_file() {
             Ok(res) => res,
-            Err(err) => return err,
+            Err(err) => return CmdResult::Info(err.to_string()),
         };
         if !res {
             return CmdResult::Info(
@@ -132,7 +124,7 @@ impl Buffer {
             "wq" => {
                 let res = match self.write_to_file() {
                     Ok(res) => res,
-                    Err(err) => return err,
+                    Err(err) => return CmdResult::Info(err.to_string()),
                 };
                 if !res {
                     return CmdResult::Info(

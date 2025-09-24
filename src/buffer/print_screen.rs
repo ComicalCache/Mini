@@ -25,11 +25,7 @@ impl Buffer {
         }
     }
 
-    fn set_info_line(
-        &mut self,
-        buff_name: &'static str,
-        screen_idx: usize,
-    ) -> Result<(), std::fmt::Error> {
+    fn set_info_line(&mut self, screen_idx: usize) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
 
         let mode = match self.mode {
@@ -43,6 +39,7 @@ impl Buffer {
         let total = self.line_buff.len();
         let percentage = 100 * (self.txt_pos.y + 1) / self.line_buff.len();
         let size: usize = self.line_buff.iter().map(String::len).sum();
+        let buff_name = self.buff_name;
 
         self.screen_buff[screen_idx].clear();
         write!(
@@ -67,14 +64,13 @@ impl Buffer {
         self.screen_buff[screen_idx].clone_from(&self.cmd_buff);
     }
 
-    /// Prints the current buffer to the screen
+    // Prints the current buffer to the screen
     pub fn print_screen(
         &mut self,
         stdout: &mut BufWriter<RawTerminal<Stdout>>,
-        buff_name: &'static str,
     ) -> Result<(), Error> {
         // Set info line
-        if let Err(err) = self.set_info_line(buff_name, 0) {
+        if let Err(err) = self.set_info_line(0) {
             return Err(Error::other(err));
         }
 

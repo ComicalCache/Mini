@@ -141,7 +141,7 @@ impl Buffer {
                     }
 
                     if depth == 0 {
-                        return Some(Position { y, x });
+                        return Some(Position::new(y, x));
                     }
                 }
             }
@@ -163,7 +163,7 @@ impl Buffer {
                     }
 
                     if depth == 0 {
-                        return Some(Position { y, x });
+                        return Some(Position::new(y, x));
                     }
                 }
             }
