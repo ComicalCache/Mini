@@ -37,7 +37,7 @@ impl Buffer {
             Mode::Write => "W",
             Mode::Command => "C",
         };
-        let edited = if self.edited { '*' } else { ' ' };
+        // Plus 1 since text coordinates are 0 indexed
         let line = self.txt_pos.y + 1;
         let col = self.txt_pos.x + 1;
         let total = self.line_buff.len();
@@ -50,13 +50,16 @@ impl Buffer {
             "[{buff_name}] [{mode}] {line}:{col}/{total}[{percentage}%] [{size}B]",
         )?;
         if let Some(pos) = self.select {
+            // Plus 1 since text coordinates are 0 indexed
+            let line = pos.y + 1;
+            let col = pos.x + 1;
             write!(
                 &mut self.screen_buff[screen_idx],
-                " [Select {}:{}]",
-                pos.y + 1,
-                pos.x + 1
+                " [Selected {line}:{col}]"
             )?;
         }
+
+        let edited = if self.edited { '*' } else { ' ' };
         write!(&mut self.screen_buff[screen_idx], " {edited}")
     }
 

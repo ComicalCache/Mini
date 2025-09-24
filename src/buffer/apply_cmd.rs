@@ -1,4 +1,5 @@
 use crate::{
+    INFO_MSG,
     buffer::Buffer,
     util::{CmdResult, read_file},
 };
@@ -98,6 +99,7 @@ impl Buffer {
             "w" => self.__write(args),
             "o" => self.__open(args, false),
             "oo" => self.__open(args, true),
+            "?" => Ok(CmdResult::Error(INFO_MSG.to_string())),
             _ => Ok(CmdResult::Error(format!("Unrecognized command: '{cmd}'"))),
         }
     }

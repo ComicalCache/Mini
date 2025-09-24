@@ -115,6 +115,12 @@ impl Buffer {
     /// Sets the internal line buffer with new contents
     pub fn set_line_buff(&mut self, contents: &str) {
         let lines = contents.lines().count();
+        if lines == 0 {
+            // Line buffer always has at least one entry
+            self.line_buff.truncate(1);
+            self.line_buff[0].clear();
+            return;
+        }
 
         self.line_buff.resize(lines, String::new());
         for (idx, line) in contents.lines().enumerate() {

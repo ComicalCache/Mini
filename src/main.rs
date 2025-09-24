@@ -29,6 +29,51 @@ macro_rules! skip {
     }};
 }
 
+const INFO_BUFF: usize = 0;
+const TXT_BUFF: usize = 1;
+
+const INFO_MSG: &str = "Mini terminal text editor. Run it with a file(path) argument to open or create a file. Omit the file(path) to create a \"scratchpad\" buffer with no backing file.
+
+Motions:
+> Use motions to navigate the buffer. Type a number followed by a motion to execute it multiple times.
+- 'h' | 'j' | 'k' | 'l' to move the cursor
+- 'w' to skip to the next word
+- 'b' to go back one word
+- '<' | '>' to jump to the beginning/end of a line
+- '.' to jump to the matching opposite bracket
+- 'g' to go to the end of the file
+- 'G' to go to the start of the file
+
+Command Mode:
+> Issue commands to the editor using the command mode.
+Press space to enter command mode
+Press esc to exit command mode
+- 'q' to quit
+- '?' to see this message
+- 'w' to write the buffer to file
+- 'w <path>' to write this/all future writes to the specified path
+- 'o ?<path>' to open a file and replace the buffer (if the path is omitted a new \"scratchpad\" buffer with no backing file is created)
+- 'oo ?<path>' to open a file and replace the buffer, discarding unsaved changes (if the path is omitted a new \"scratchpad\" buffer with no backing file is created)
+
+Errors:
+> Display command errors.
+Press '?' to switch between the error and text buffer
+
+Selection:
+> Select text for deletion with the flexibility of all available motions.
+Press 'v' to start selection at the current cursor position, move the cursor using all available motions
+Press esc to stop selection
+- 'd' to delete the selection
+- 'D' to delete the selection including the character under the cursor
+
+Write Mode:
+> Insert text into the buffer.
+Press 'i' to enter write mode
+Press 'a' to enter write mode one character after the current
+Press 'o' to enter write mode one line under the current
+Press 'O' to enter write mode one line above the current
+Press 'esc' to exit write mode";
+
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), std::io::Error> {
     let mut args = std::env::args();
@@ -36,36 +81,7 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut file = if let Some(path) = args.next() {
         if path == "--help" {
-            println!(
-                " Mini terminal text editor, run with file(path) argument to open or create\n"
-            );
-            println!("   Type a number followed by a motion to execute it multiple times");
-            println!("   Press h | j | k | l to move the cursor");
-            println!("   Press w to skip to the next word");
-            println!("   Press b to go back one word");
-            println!("   Press < | > to jump to the beginning/end of a line");
-            println!("   Press . to jump to the matching opposite bracket");
-            println!("   Press e to switch between the error and text buffer");
-            println!("   Press space to enter command mode");
-            println!("     Write q to quit");
-            println!("     Write w to write the buffer to file");
-            println!("     Write w <path> to write this/all future writes to the specified path");
-            println!("     Write o <path> to open a file and replace the buffer");
-            println!(
-                "     Write oo <path> to open a file and replace the buffer, discarding unsaved changes"
-            );
-            println!("     Press esc to exit command mode");
-            println!("   Press v to start selection at the current cursor position");
-            println!("     Move cursor and press d to delete the selection");
-            println!("     Press esc to stop selection");
-            println!("   Press i to enter write mode");
-            println!("   Press a to enter write mode one character after the current");
-            println!("   Press o to enter write mode one line under the current");
-            println!("   Press O to enter write mode one line above the current");
-            println!("   Press g to go to the end of the file");
-            println!("   Press G to go to the start of the file");
-            println!("   Press esc to exit write mode");
-
+            println!("{INFO_MSG}");
             return Ok(());
         }
 
@@ -96,40 +112,40 @@ fn main() -> Result<(), std::io::Error> {
     // Init buffers
     let (width, height) = termion::terminal_size()?;
     let mut buffers = [
-        // Buffer 1 (Error)
+        // Buffer 1 (Info)
         Buffer::new(width as usize, height as usize, vec![String::new()], None),
-        // Buffer 2 (Default)
+        // Buffer 2 (Text)
         Buffer::new(width as usize, height as usize, line_buff, file),
     ];
-    let mut buffer = 1;
-    buffers[buffer].print_screen(&mut stdout, "Text Buffer")?;
+    let mut buffer = TXT_BUFF;
+    buffers[buffer].print_screen(&mut stdout, "Text")?;
 
     // Repeat buffer to execute motions multiple times
     let mut repeat_buff = String::new();
 
     for key in stdin.keys() {
         let (width, height) = termion::terminal_size()?;
-        for idx in 0..buffers.len() {
-            buffers[idx].update_screen_dimentions(width as usize, height as usize);
+        for buff in &mut buffers {
+            buff.update_screen_dimentions(width as usize, height as usize);
         }
 
         let key = key?;
         match buffers[buffer].mode() {
             Mode::View => match key {
                 // Can't edit error buffer
-                Key::Char('i') if buffer != 0 => buffers[buffer].change_mode(Mode::Write),
+                Key::Char('i') if buffer != INFO_BUFF => buffers[buffer].change_mode(Mode::Write),
                 // Can't edit error buffer
-                Key::Char('a') if buffer != 0 => {
+                Key::Char('a') if buffer != INFO_BUFF => {
                     buffers[buffer].move_cursor(CursorMove::Right, 1);
                     buffers[buffer].change_mode(Mode::Write);
                 }
                 // Can't edit error buffer
-                Key::Char('o') if buffer != 0 => {
+                Key::Char('o') if buffer != INFO_BUFF => {
                     buffers[buffer].insert_move_new_line_bellow();
                     buffers[buffer].change_mode(Mode::Write);
                 }
                 // Can't edit error buffer
-                Key::Char('O') if buffer != 0 => {
+                Key::Char('O') if buffer != INFO_BUFF => {
                     buffers[buffer].insert_move_new_line_above();
                     buffers[buffer].change_mode(Mode::Write);
                 }
@@ -145,15 +161,16 @@ fn main() -> Result<(), std::io::Error> {
                 Key::Char('g') => skip!(repeat_buff, buffers, buffer, jump_to_end),
                 Key::Char('G') => skip!(repeat_buff, buffers, buffer, jump_to_start),
                 // Can't command in error buffer
-                Key::Char(' ') if buffer != 0 => buffers[buffer].change_mode(Mode::Command),
-                Key::Char('e') if buffer == 0 => buffer = 1,
-                Key::Char('e') if buffer == 1 => buffer = 0,
+                Key::Char(' ') if buffer != INFO_BUFF => buffers[buffer].change_mode(Mode::Command),
+                Key::Char('?') if buffer == INFO_BUFF => buffer = TXT_BUFF,
+                Key::Char('?') if buffer == TXT_BUFF => buffer = INFO_BUFF,
                 Key::Char(ch) if ch.is_ascii_digit() => repeat_buff.push(ch),
                 // Can't select in error buffer
-                Key::Char('v') if buffer != 0 => buffers[buffer].set_select(),
+                Key::Char('v') if buffer != INFO_BUFF => buffers[buffer].set_select(),
                 Key::Esc => buffers[buffer].reset_select(),
                 // Can't delete in error buffer
-                Key::Char('d') if buffer != 0 => buffers[buffer].delete_selection(),
+                Key::Char('d') if buffer != INFO_BUFF => buffers[buffer].delete_selection(false),
+                Key::Char('D') if buffer != INFO_BUFF => buffers[buffer].delete_selection(true),
                 _ => {}
             },
             Mode::Write => match key {
@@ -178,28 +195,26 @@ fn main() -> Result<(), std::io::Error> {
 
                     match res {
                         util::CmdResult::Quit => break,
-                        util::CmdResult::Continue => {}
+                        // Reset error buffer on successful command
+                        util::CmdResult::Continue => buffers[INFO_BUFF].set_line_buff(""),
                         util::CmdResult::Error(err) => {
                             // Write error to error buffer
-                            buffer = 0;
+                            buffer = INFO_BUFF;
                             buffers[buffer].set_line_buff(&err);
                         }
                     }
                 }
                 Key::Char('\t') => buffers[buffer].write_cmd_tab(),
                 Key::Char(ch) => buffers[buffer].write_cmd_char(ch),
-                // Maybe support Delete key in the future
+                // TODO: support Delete key in the future
                 Key::Backspace => buffers[buffer].delete_cmd_char(),
                 _ => {}
             },
         }
 
         // Print new buffer after every input
-        if buffer == 0 {
-            buffers[buffer].print_screen(&mut stdout, "Error")?;
-        } else {
-            buffers[buffer].print_screen(&mut stdout, "Text Buffer")?;
-        }
+        let name = if buffer == INFO_BUFF { "Info" } else { "Text" };
+        buffers[buffer].print_screen(&mut stdout, name)?;
     }
 
     write!(stdout, "{ToMainScreen}")?;

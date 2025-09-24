@@ -127,24 +127,28 @@ impl Buffer {
     }
 
     /// Deletes the text between the selection point and current cursor
-    pub fn delete_selection(&mut self) {
+    pub fn delete_selection(&mut self, inclusive: bool) {
         let Some(pos) = self.select else {
             return;
         };
 
-        let (start, end) = if pos <= self.txt_pos {
+        let (start, mut end) = if pos <= self.txt_pos {
             (pos, self.txt_pos)
         } else {
             (self.txt_pos, pos)
         };
 
+        if inclusive {
+            let line = &self.line_buff[end.y];
+            if end.x < line.chars().count() {
+                end.x += 1;
+            }
+        }
+
         if start.y == end.y {
             // Single line deletion
 
-            let Some(line) = self.line_buff.get_mut(start.y) else {
-                unreachable!("Impossible to not contain the requested line");
-            };
-
+            let line = &mut self.line_buff[start.y];
             let start_idx = line
                 .char_indices()
                 .nth(start.x)
@@ -159,9 +163,7 @@ impl Buffer {
             // Multiple lines were selected
 
             let (start_line, remaining_lines) = self.line_buff.split_at_mut(start.y + 1);
-            let Some(end_line) = remaining_lines.get(end.y - (start.y + 1)) else {
-                unreachable!("Impossible to not contain the requested line");
-            };
+            let end_line = &remaining_lines[end.y - (start.y + 1)];
             let tail = {
                 let start_idx = end_line
                     .char_indices()
