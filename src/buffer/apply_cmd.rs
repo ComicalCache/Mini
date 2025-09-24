@@ -6,7 +6,7 @@ use crate::{
 use std::fs::OpenOptions;
 
 impl Buffer {
-    fn __quit(&mut self) -> CmdResult {
+    fn quit(&mut self) -> CmdResult {
         if !self.edited {
             return CmdResult::Quit;
         }
@@ -14,13 +14,13 @@ impl Buffer {
         self.cmd_pos.x = self.cmd_buff.chars().count();
         self.term_cmd_pos.x = self.cmd_buff.chars().count() + 1;
 
-        CmdResult::Info("There are unsafed changes, save or qq to force quit".to_string())
+        CmdResult::Info("There are unsaved changes, save or qq to force quit".to_string())
     }
 
-    fn __open(&mut self, args: &str, force: bool) -> CmdResult {
+    fn open(&mut self, args: &str, force: bool) -> CmdResult {
         if self.edited && !force {
             return CmdResult::Info(
-                "There are unsafed changes, save or oo to force open new".to_string(),
+                "There are unsaved changes, save or oo to force open new".to_string(),
             );
         }
 
@@ -56,7 +56,7 @@ impl Buffer {
         CmdResult::Continue
     }
 
-    fn __write(&mut self, args: &str) -> CmdResult {
+    fn write(&mut self, args: &str) -> CmdResult {
         if !args.is_empty() {
             self.file = match OpenOptions::new()
                 .read(true)
@@ -93,7 +93,7 @@ impl Buffer {
         };
 
         match cmd {
-            "q" => self.__quit(),
+            "q" => self.quit(),
             "qq" => CmdResult::Quit,
             "wq" => {
                 let res = match self.write_to_file() {
@@ -109,9 +109,9 @@ impl Buffer {
 
                 CmdResult::Quit
             }
-            "w" => self.__write(args),
-            "o" => self.__open(args, false),
-            "oo" => self.__open(args, true),
+            "w" => self.write(args),
+            "o" => self.open(args, false),
+            "oo" => self.open(args, true),
             "?" => CmdResult::Info(INFO_MSG.to_string()),
             _ => CmdResult::Info(format!("Unrecognized command: '{cmd}'")),
         }
