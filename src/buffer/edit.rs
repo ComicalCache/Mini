@@ -139,10 +139,7 @@ impl Buffer {
         };
 
         if inclusive {
-            let line = &self.line_buff[end.y];
-            if end.x < line.chars().count() {
-                end.x += 1;
-            }
+            end.x = (end.x + 1).min(self.line_buff[end.y].chars().count());
         }
 
         if start.y == end.y {

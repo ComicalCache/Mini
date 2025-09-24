@@ -23,12 +23,19 @@ macro_rules! r#move {
     }};
 }
 
-macro_rules! skip {
+macro_rules! rep_skip {
     ($repeat_buff:ident, $buffers:ident, $buffer:ident, $method:ident) => {{
         for _ in 0..$repeat_buff.parse::<usize>().unwrap_or(1) {
             $buffers[$buffer].$method();
         }
         $repeat_buff.clear();
+    }};
+}
+
+macro_rules! skip {
+    ($repeat_buff:ident, $buffers:ident, $buffer:ident, $method:ident) => {{
+        $repeat_buff.clear();
+        $buffers[$buffer].$method();
     }};
 }
 
@@ -115,8 +122,8 @@ fn main() -> Result<(), std::io::Error> {
                 Key::Char('j') => r#move!(repeat_buff, buffers, buffer, CursorMove::Down),
                 Key::Char('k') => r#move!(repeat_buff, buffers, buffer, CursorMove::Up),
                 Key::Char('l') => r#move!(repeat_buff, buffers, buffer, CursorMove::Right),
-                Key::Char('w') => skip!(repeat_buff, buffers, buffer, next_word),
-                Key::Char('b') => skip!(repeat_buff, buffers, buffer, prev_word),
+                Key::Char('w') => rep_skip!(repeat_buff, buffers, buffer, next_word),
+                Key::Char('b') => rep_skip!(repeat_buff, buffers, buffer, prev_word),
                 Key::Char('<') => skip!(repeat_buff, buffers, buffer, jump_to_start_of_line),
                 Key::Char('>') => skip!(repeat_buff, buffers, buffer, jump_to_end_of_line),
                 Key::Char('.') => skip!(repeat_buff, buffers, buffer, jump_to_matching_opposite),

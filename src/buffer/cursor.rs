@@ -13,22 +13,18 @@ impl Buffer {
                 self.txt_pos.x = self.txt_pos.x.saturating_sub(n);
             }
             CursorMove::Down => {
-                // Only move down if there is more text available
                 let text_bound = self.line_buff.len();
-                if self.txt_pos.y + n < text_bound {
-                    self.txt_pos.y = (self.txt_pos.y + n).min(text_bound.saturating_sub(1));
-                }
+                self.txt_pos.y = (self.txt_pos.y + n).min(text_bound.saturating_sub(1));
             }
             CursorMove::Up => {
                 self.txt_pos.y = self.txt_pos.y.saturating_sub(n);
             }
             CursorMove::Right => {
-                // Only move right if there is more text available
                 let line_bound = self.line_buff[self.txt_pos.y].chars().count();
-                if self.txt_pos.x + n <= line_bound {
-                    self.term_content_pos.x = (self.term_content_pos.x + n).min(self.screen_dims.w);
-                    self.txt_pos.x = (self.txt_pos.x + n).min(line_bound);
-                }
+                self.term_content_pos.x = (self.term_content_pos.x + n)
+                    .min(line_bound + 1)
+                    .min(self.screen_dims.w);
+                self.txt_pos.x = (self.txt_pos.x + n).min(line_bound);
             }
         }
 
