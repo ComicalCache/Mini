@@ -1,10 +1,11 @@
 [package]
 name = "mini"
-version = "1.0.0"
+version = "2.0.0"
 edition = "2024"
 
 [dependencies]
 termion = "4.0.5"
+polling = "3.11.0"
 
 [profile.release]
 strip = true
