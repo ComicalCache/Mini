@@ -1,3 +1,4 @@
+#[derive(Clone, Copy)]
 pub struct Cursor {
     pub x: usize,
     pub y: usize,

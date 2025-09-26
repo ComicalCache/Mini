@@ -1,3 +1,6 @@
+mod edit;
+mod r#move;
+
 use crate::{
     document::Document,
     traits::{Buffer, Render, Tick},
@@ -11,7 +14,7 @@ use std::{
 use termion::{event::Key, raw::RawTerminal};
 
 #[derive(Clone, Copy)]
-pub enum TextBufferMode {
+enum Mode {
     View,
     Write,
     Command,
@@ -21,7 +24,7 @@ pub struct TextBuffer {
     doc: Document,
     view: Viewport,
     file: Option<File>,
-    mode: TextBufferMode,
+    mode: Mode,
 }
 
 impl TextBuffer {
@@ -36,7 +39,7 @@ impl TextBuffer {
             doc: Document::new(content),
             view: Viewport::new(w, h, 0, h / 2),
             file,
-            mode: TextBufferMode::View,
+            mode: Mode::View,
         })
     }
 
@@ -46,9 +49,9 @@ impl TextBuffer {
         let mut info_line = String::new();
 
         let mode = match self.mode {
-            TextBufferMode::View => "V",
-            TextBufferMode::Write => "W",
-            TextBufferMode::Command => "C",
+            Mode::View => "V",
+            Mode::Write => "W",
+            Mode::Command => "C",
         };
         // Plus 1 since text coordinates are 0 indexed
         let line = self.doc.cursor.y + 1;
@@ -84,8 +87,8 @@ impl Buffer for TextBuffer {}
 impl Render for TextBuffer {
     fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
         let cursor_style = match self.mode {
-            TextBufferMode::View => CursorStyle::BlinkingBlock,
-            TextBufferMode::Write | TextBufferMode::Command => CursorStyle::BlinkingBar,
+            Mode::View => CursorStyle::BlinkingBlock,
+            Mode::Write | Mode::Command => CursorStyle::BlinkingBar,
         };
 
         // TODO: update for command line mode
@@ -108,49 +111,50 @@ impl Tick for TextBuffer {
             return CommandResult::Ok;
         };
 
-        match key {
-            Key::Char('q') => CommandResult::Quit,
-            Key::Char('h') => {
-                self.doc.cursor.left(1);
-                self.view.cursor.left(1);
-
-                CommandResult::Ok
-            }
-            Key::Char('j') => {
-                let bound = self.doc.lines.len().saturating_sub(1);
-                self.doc.cursor.down(1, bound);
-
-                // When moving down, handle case that new line contains less text than previous
-                let line_bound = self.doc.lines[self.doc.cursor.y].chars().count();
-                if self.doc.cursor.x >= line_bound {
-                    let diff = self.doc.cursor.x - line_bound;
-                    self.doc.cursor.left(diff);
-                    self.view.cursor.left(diff);
+        match self.mode {
+            Mode::View => match key {
+                Key::Char('q') => return CommandResult::Quit,
+                Key::Char('i') => self.mode = Mode::Write,
+                Key::Char('a') => {
+                    self.right(1);
+                    self.mode = Mode::Write;
                 }
-
-                CommandResult::Ok
-            }
-            Key::Char('k') => {
-                self.doc.cursor.up(1);
-
-                // When moving up, handle case that new line contains less text than previous
-                let line_bound = self.doc.lines[self.doc.cursor.y].chars().count();
-                if self.doc.cursor.x >= line_bound {
-                    let diff = self.doc.cursor.x - line_bound;
-                    self.doc.cursor.left(diff);
-                    self.view.cursor.left(diff);
+                Key::Char('o') => {
+                    self.insert_move_new_line_bellow();
+                    self.mode = Mode::Write;
                 }
-
-                CommandResult::Ok
-            }
-            Key::Char('l') => {
-                let line_bound = self.doc.lines[self.doc.cursor.y].chars().count();
-                self.doc.cursor.right(1, line_bound);
-                self.view.cursor.right(1, line_bound.min(self.view.w - 1));
-
-                CommandResult::Ok
-            }
-            _ => CommandResult::Ok,
+                Key::Char('O') => {
+                    self.insert_move_new_line_above();
+                    self.mode = Mode::Write;
+                }
+                Key::Char('h') => self.left(1),
+                Key::Char('j') => self.down(1),
+                Key::Char('k') => self.up(1),
+                Key::Char('l') => self.right(1),
+                Key::Char('w') => self.next_word(),
+                Key::Char('b') => self.prev_word(),
+                Key::Char('<') => self.jump_to_start_of_line(),
+                Key::Char('>') => self.jump_to_end_of_line(),
+                Key::Char('.') => self.jump_to_matching_opposite(),
+                Key::Char('g') => self.jump_to_end(),
+                Key::Char('G') => self.jump_to_start(),
+                _ => {}
+            },
+            Mode::Write => match key {
+                Key::Esc => self.mode = Mode::View,
+                Key::Left => self.left(1),
+                Key::Down => self.down(1),
+                Key::Up => self.up(1),
+                Key::Right => self.right(1),
+                Key::Char('\n') => self.write_new_line_char(),
+                Key::Char('\t') => self.write_tab(),
+                Key::Char(ch) => self.write_char(ch),
+                Key::Backspace => self.delete_char(),
+                _ => {}
+            },
+            Mode::Command => {}
         }
+
+        CommandResult::Ok
     }
 }

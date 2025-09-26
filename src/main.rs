@@ -79,7 +79,6 @@ fn main() -> Result<(), std::io::Error> {
         events.clear();
         poller.wait(&mut events, Some(Duration::from_millis(25)))?;
         if events.iter().any(|e| e.key == STDIN_EVENT_KEY) {
-            // num_events = events.iter().filter(|e| e.key == STDIN_EVENT_KEY).count();
             match buffs[curr_buff].tick(Some(stdin_keys.next().unwrap()?)) {
                 CommandResult::Ok => {}
                 CommandResult::Quit => quit = true,
