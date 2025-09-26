@@ -1,5 +1,6 @@
 use crate::{
     document::Document,
+    traits::{Buffer, Render, Tick},
     util::{CommandResult, CursorStyle, read_file_to_lines},
     viewport::Viewport,
 };
@@ -39,17 +40,6 @@ impl TextBuffer {
         })
     }
 
-    pub fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
-        let cursor_style = match self.mode {
-            TextBufferMode::View => CursorStyle::BlinkingBlock,
-            TextBufferMode::Write | TextBufferMode::Command => CursorStyle::BlinkingBar,
-        };
-
-        // TODO: update for command line mode
-        self.view
-            .render(stdout, &self.doc, &self.info_line(), None, cursor_style)
-    }
-
     fn info_line(&self) -> String {
         use std::fmt::Write;
 
@@ -87,8 +77,37 @@ impl TextBuffer {
 
         info_line
     }
+}
 
-    pub fn single_key_command(&mut self, key: Key) -> CommandResult {
+impl Buffer for TextBuffer {}
+
+impl Render for TextBuffer {
+    fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
+        let cursor_style = match self.mode {
+            TextBufferMode::View => CursorStyle::BlinkingBlock,
+            TextBufferMode::Write | TextBufferMode::Command => CursorStyle::BlinkingBar,
+        };
+
+        // TODO: update for command line mode
+        self.view
+            .render(stdout, &self.doc, &self.info_line(), None, cursor_style)
+    }
+
+    fn resize(&mut self, w: usize, h: usize) {
+        if self.view.w == w && self.view.h == h {
+            return;
+        }
+
+        self.view.resize(w, h, self.view.cursor.x.min(w), h / 2);
+    }
+}
+
+impl Tick for TextBuffer {
+    fn tick(&mut self, key: Option<Key>) -> CommandResult {
+        let Some(key) = key else {
+            return CommandResult::Ok;
+        };
+
         match key {
             Key::Char('q') => CommandResult::Quit,
             Key::Char('h') => {
@@ -131,7 +150,7 @@ impl TextBuffer {
 
                 CommandResult::Ok
             }
-            _ => CommandResult::NotFound,
+            _ => CommandResult::Ok,
         }
     }
 }

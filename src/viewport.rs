@@ -100,4 +100,14 @@ impl Viewport {
 
         stdout.flush()
     }
+
+    pub fn resize(&mut self, w: usize, h: usize, x: usize, y: usize) {
+        self.w = w;
+        self.h = h;
+
+        self.cursor.y = y;
+        self.cursor.x = x;
+
+        self.lines.resize(h, String::new());
+    }
 }

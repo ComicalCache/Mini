@@ -8,7 +8,6 @@ use std::{
 pub enum CommandResult {
     Ok,
     Quit,
-    NotFound,
 }
 
 #[derive(Clone, Copy)]
