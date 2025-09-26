@@ -1,8 +1,21 @@
 use std::{
     fs::{File, OpenOptions},
-    io::Error,
+    io::{BufRead, BufReader, Error},
     path::Path,
 };
+
+#[derive(PartialEq, Eq)]
+pub enum CommandResult {
+    Ok,
+    Quit,
+    NotFound,
+}
+
+#[derive(Clone, Copy)]
+pub enum CursorStyle {
+    BlinkingBar,
+    BlinkingBlock,
+}
 
 pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
     OpenOptions::new()
@@ -11,4 +24,10 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
         .create(true)
         .truncate(false)
         .open(path)
+}
+
+pub fn read_file_to_lines(file: &mut File) -> Result<Vec<String>, Error> {
+    BufReader::new(file)
+        .lines()
+        .collect::<Result<Vec<String>, _>>()
 }

@@ -1,4 +1,8 @@
+mod cursor;
+mod document;
+mod text_buffer;
 mod util;
+mod viewport;
 
 use polling::{Events, Poller};
 use std::{
@@ -13,8 +17,12 @@ use termion::{
     screen::{ToAlternateScreen, ToMainScreen},
 };
 
-use crate::util::open_file;
+use crate::{
+    text_buffer::TextBuffer,
+    util::{CommandResult, open_file},
+};
 
+// Random value chosen by me
 const STDIN_EVENT_KEY: usize = 25663;
 const INFO_MSG: &str = include_str!("info.txt");
 
@@ -23,7 +31,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut args = std::env::args();
     args.next();
 
-    let mut file = if let Some(path) = args.next() {
+    let file = if let Some(path) = args.next() {
         if path == "--help" {
             println!("{INFO_MSG}");
             return Ok(());
@@ -44,8 +52,12 @@ fn main() -> Result<(), std::io::Error> {
     let poller = Poller::new()?;
     unsafe { poller.add(&stdin_fd, polling::Event::readable(STDIN_EVENT_KEY))? };
 
+    let (w, h) = termion::terminal_size()?;
+    let mut txt_buff = TextBuffer::new(w as usize, h as usize, file)?;
+
     // Init terminal by switching to alternate screen
     write!(&mut stdout, "{ToAlternateScreen}")?;
+    txt_buff.render(&mut stdout)?;
     stdout.flush()?;
 
     let mut quit = false;
@@ -63,14 +75,20 @@ fn main() -> Result<(), std::io::Error> {
             if num_events != 0 {
                 let key = stdin_keys.next().unwrap()?;
 
+                // Buffer multi-key commands if not the first key or single key command doesn't exist
                 if keys.is_empty() {
-                    // Check if key is a valid single key command and submit
+                    match txt_buff.single_key_command(key) {
+                        CommandResult::Ok => {}
+                        CommandResult::Quit => quit = true,
+                        CommandResult::NotFound => keys.push(key),
+                    }
                 } else {
                     keys.push(key);
                 }
             }
         }
 
+        txt_buff.render(&mut stdout)?;
         poller.modify(stdin_fd, polling::Event::readable(STDIN_EVENT_KEY))?;
     }
 
