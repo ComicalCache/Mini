@@ -7,6 +7,7 @@ use std::{
 #[derive(PartialEq, Eq)]
 pub enum CommandResult {
     Ok,
+    Info(String),
     Quit,
 }
 

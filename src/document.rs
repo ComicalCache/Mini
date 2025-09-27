@@ -1,4 +1,8 @@
 use crate::cursor::Cursor;
+use std::{
+    fs::File,
+    io::{BufWriter, Error, Seek, SeekFrom, Write},
+};
 
 pub struct Document {
     pub lines: Vec<String>,
@@ -7,24 +11,63 @@ pub struct Document {
 }
 
 impl Document {
-    pub fn new(content: Option<Vec<String>>) -> Self {
+    pub fn new(content: Option<Vec<String>>, x: usize, y: usize) -> Self {
         let mut doc = Document {
             lines: vec![String::new()],
-            cursor: Cursor::new(0, 0),
+            cursor: Cursor::new(x, y),
             edited: false,
         };
 
-        let Some(content) = content else {
-            return doc;
-        };
-        if !content.is_empty() {
+        if let Some(content) = content
+            && !content.is_empty()
+        {
             doc.lines.resize(content.len(), String::new());
             for (idx, line) in content.iter().enumerate() {
-                doc.lines[idx].replace_range(.., line);
+                doc.lines[idx].clone_from(line);
             }
         }
 
         doc
+    }
+
+    /// Clears the document and sets the cursor to a specified position.
+    pub fn clear(&mut self, x: usize, y: usize) {
+        self.lines.truncate(1);
+        self.lines[0].clear();
+        self.cursor = Cursor::new(x, y);
+        self.edited = false;
+    }
+
+    /// Writes the document to a specified file.
+    pub fn write_to_file(&mut self, file: &mut File) -> Result<(), Error> {
+        if !self.edited {
+            return Ok(());
+        }
+
+        let size: u64 = self.lines.iter().map(|s| s.len() as u64 + 1).sum();
+        file.set_len(size.saturating_sub(1))?;
+
+        file.seek(SeekFrom::Start(0))?;
+        let mut writer = BufWriter::new(file);
+        for line in &self.lines {
+            writeln!(writer, "{line}")?;
+        }
+        writer.flush()?;
+
+        self.edited = false;
+        Ok(())
+    }
+
+    /// Replaces the document buffer and sets the cursor to a specified position.
+    pub fn replace_buffer(&mut self, lines: Vec<String>, x: usize, y: usize) {
+        if !lines.is_empty() {
+            self.lines.resize(lines.len(), String::new());
+            for (idx, line) in lines.iter().enumerate() {
+                self.lines[idx].clone_from(line);
+            }
+        }
+        self.cursor = Cursor::new(x, y);
+        self.edited = false;
     }
 
     /// Inserts a new line at the current cursor y position.

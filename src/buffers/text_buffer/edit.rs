@@ -1,4 +1,4 @@
-use crate::text_buffer::TextBuffer;
+use crate::buffers::text_buffer::TextBuffer;
 
 const TAB: &str = "    ";
 
@@ -25,6 +25,13 @@ impl TextBuffer {
         self.right(1);
     }
 
+    /// Writes a char into the command document.
+    /// The cursor will be after the new char.
+    pub(super) fn write_cmd_char(&mut self, ch: char) {
+        self.cmd.write_char(ch);
+        self.cmd_right(1);
+    }
+
     /// Writes a new line character at the current cursor position.
     /// The cursor will be at the beginning of the new line.
     pub(super) fn write_new_line_char(&mut self) {
@@ -48,7 +55,14 @@ impl TextBuffer {
         self.right(TAB.chars().count());
     }
 
-    /// Deletes a character from the buffer, joining two lines if necessary.
+    /// Writes a tab into the command document.
+    /// The cursor will be after the tab.
+    pub(super) fn write_cmd_tab(&mut self) {
+        self.cmd.write_str(TAB);
+        self.cmd_right(TAB.chars().count());
+    }
+
+    /// Deletes a character at the current cursor position, joining two lines if necessary.
     /// The cursor will be at the delete chars position.
     pub(super) fn delete_char(&mut self) {
         let cursor = self.doc.cursor;
@@ -65,6 +79,18 @@ impl TextBuffer {
 
             self.up(1);
             self.right(prev_line_len);
+        }
+    }
+
+    /// Deletes a character from the command document.
+    /// The cursor will be at the delete chars position.
+    pub(super) fn delete_cmd_char(&mut self) {
+        let cursor = self.cmd.cursor;
+
+        if cursor.x > 0 {
+            // If deleting a character in a line.
+            self.cmd.delete_char_at(cursor.x - 1, cursor.y);
+            self.cmd_left(1);
         }
     }
 

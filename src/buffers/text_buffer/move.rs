@@ -1,4 +1,4 @@
-use crate::text_buffer::TextBuffer;
+use crate::buffers::text_buffer::TextBuffer;
 
 impl TextBuffer {
     /// Moves the cursor to the left.
@@ -7,18 +7,22 @@ impl TextBuffer {
         self.view.cursor.left(n);
     }
 
-    /// Moves the cursor down.
-    pub(super) fn down(&mut self, n: usize) {
-        let bound = self.doc.lines.len().saturating_sub(1);
-        self.doc.cursor.down(n, bound);
+    pub(super) fn cmd_left(&mut self, n: usize) {
+        self.cmd.cursor.left(n);
+        self.view.cursor.left(n);
+    }
 
-        // When moving down, handle case that new line contains less text than previous.
+    /// Moves the cursor to the right
+    pub(super) fn right(&mut self, n: usize) {
         let line_bound = self.doc.lines[self.doc.cursor.y].chars().count();
-        if self.doc.cursor.x >= line_bound {
-            let diff = self.doc.cursor.x - line_bound;
-            self.doc.cursor.left(diff);
-            self.view.cursor.left(diff);
-        }
+        self.doc.cursor.right(n, line_bound);
+        self.view.cursor.right(n, line_bound.min(self.view.w - 1));
+    }
+
+    pub(super) fn cmd_right(&mut self, n: usize) {
+        let line_bound = self.cmd.lines[0].chars().count();
+        self.cmd.cursor.right(n, line_bound);
+        self.view.cursor.right(n, line_bound.min(self.view.w - 1));
     }
 
     /// Moves the cursor up.
@@ -34,11 +38,18 @@ impl TextBuffer {
         }
     }
 
-    /// Moves the cursor to the right
-    pub(super) fn right(&mut self, n: usize) {
+    /// Moves the cursor down.
+    pub(super) fn down(&mut self, n: usize) {
+        let bound = self.doc.lines.len().saturating_sub(1);
+        self.doc.cursor.down(n, bound);
+
+        // When moving down, handle case that new line contains less text than previous.
         let line_bound = self.doc.lines[self.doc.cursor.y].chars().count();
-        self.doc.cursor.right(n, line_bound);
-        self.view.cursor.right(n, line_bound.min(self.view.w - 1));
+        if self.doc.cursor.x >= line_bound {
+            let diff = self.doc.cursor.x - line_bound;
+            self.doc.cursor.left(diff);
+            self.view.cursor.left(diff);
+        }
     }
 
     /// Jumps to the next "word".

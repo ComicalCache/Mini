@@ -1,12 +1,12 @@
+mod buffers;
 mod cursor;
 mod document;
-mod text_buffer;
 mod traits;
 mod util;
 mod viewport;
 
 use crate::{
-    text_buffer::TextBuffer,
+    buffers::text_buffer::TextBuffer,
     traits::Buffer,
     util::{CommandResult, open_file},
 };
@@ -84,6 +84,7 @@ fn main() -> Result<(), std::io::Error> {
         if events.iter().any(|e| e.key == STDIN_EVENT_KEY) {
             match buffs[curr_buff].tick(Some(stdin_keys.next().unwrap()?)) {
                 CommandResult::Ok => {}
+                CommandResult::Info(_) => {}
                 CommandResult::Quit => quit = true,
             }
         }
@@ -91,6 +92,7 @@ fn main() -> Result<(), std::io::Error> {
         else {
             match buffs[curr_buff].tick(None) {
                 CommandResult::Ok => {}
+                CommandResult::Info(_) => {}
                 CommandResult::Quit => quit = true,
             }
         }

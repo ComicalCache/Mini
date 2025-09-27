@@ -1,7 +1,9 @@
+mod apply_cmd;
 mod edit;
 mod r#move;
 
 use crate::{
+    cursor::Cursor,
     document::Document,
     traits::{Buffer, Render, Tick},
     util::{CommandResult, CursorStyle, read_file_to_lines},
@@ -22,6 +24,7 @@ enum Mode {
 
 pub struct TextBuffer {
     doc: Document,
+    cmd: Document,
     view: Viewport,
     file: Option<File>,
     mode: Mode,
@@ -36,7 +39,8 @@ impl TextBuffer {
         };
 
         Ok(TextBuffer {
-            doc: Document::new(content),
+            doc: Document::new(content, 0, 0),
+            cmd: Document::new(None, 0, 0),
             view: Viewport::new(w, h, 0, h / 2),
             file,
             mode: Mode::View,
@@ -80,6 +84,39 @@ impl TextBuffer {
 
         info_line
     }
+
+    fn cmd_line(&self) -> Option<(String, Cursor)> {
+        match self.mode {
+            Mode::Command => Some((self.cmd.lines[0].clone(), self.cmd.cursor)),
+            _ => None,
+        }
+    }
+
+    fn change_mode(&mut self, mode: Mode) {
+        match self.mode {
+            Mode::Command => {
+                // Clear command line so its ready for next entry.
+                self.cmd.lines[0].clear();
+                self.cmd.cursor = Cursor::new(0, 0);
+
+                // Set cursor to the beginning of line so its always at a predictable position.
+                // TODO: restore prev position.
+                self.jump_to_beginning_of_line();
+            }
+            Mode::View | Mode::Write => {}
+        }
+
+        match mode {
+            Mode::Command => {
+                // Set cursor to the beginning of line to avoid weird scrolling behaviour.
+                // TODO: save curr position and restore.
+                self.jump_to_beginning_of_line();
+            }
+            Mode::View | Mode::Write => {}
+        }
+
+        self.mode = mode;
+    }
 }
 
 impl Buffer for TextBuffer {}
@@ -91,9 +128,13 @@ impl Render for TextBuffer {
             Mode::Write | Mode::Command => CursorStyle::BlinkingBar,
         };
 
-        // TODO: update for command line mode
-        self.view
-            .render(stdout, &self.doc, &self.info_line(), None, cursor_style)
+        self.view.render(
+            stdout,
+            &self.doc,
+            &self.info_line(),
+            self.cmd_line(),
+            cursor_style,
+        )
     }
 
     fn resize(&mut self, w: usize, h: usize) {
@@ -113,19 +154,18 @@ impl Tick for TextBuffer {
 
         match self.mode {
             Mode::View => match key {
-                Key::Char('q') => return CommandResult::Quit,
-                Key::Char('i') => self.mode = Mode::Write,
+                Key::Char('i') => self.change_mode(Mode::Write),
                 Key::Char('a') => {
                     self.right(1);
-                    self.mode = Mode::Write;
+                    self.change_mode(Mode::Write)
                 }
                 Key::Char('o') => {
                     self.insert_move_new_line_bellow();
-                    self.mode = Mode::Write;
+                    self.change_mode(Mode::Write);
                 }
                 Key::Char('O') => {
                     self.insert_move_new_line_above();
-                    self.mode = Mode::Write;
+                    self.change_mode(Mode::Write);
                 }
                 Key::Char('h') => self.left(1),
                 Key::Char('j') => self.down(1),
@@ -138,10 +178,11 @@ impl Tick for TextBuffer {
                 Key::Char('.') => self.jump_to_matching_opposite(),
                 Key::Char('g') => self.jump_to_end_of_file(),
                 Key::Char('G') => self.jump_to_beginning_of_file(),
+                Key::Char(' ') => self.change_mode(Mode::Command),
                 _ => {}
             },
             Mode::Write => match key {
-                Key::Esc => self.mode = Mode::View,
+                Key::Esc => self.change_mode(Mode::View),
                 Key::Left => self.left(1),
                 Key::Down => self.down(1),
                 Key::Up => self.up(1),
@@ -152,7 +193,21 @@ impl Tick for TextBuffer {
                 Key::Backspace => self.delete_char(),
                 _ => {}
             },
-            Mode::Command => {}
+            Mode::Command => match key {
+                Key::Esc => self.change_mode(Mode::View),
+                Key::Left => self.cmd_left(1),
+                Key::Right => self.cmd_right(1),
+                Key::Char('\n') => {
+                    let res = self.apply_cmd();
+                    self.change_mode(Mode::View);
+                    return res;
+                }
+                Key::Char('\t') => self.write_cmd_tab(),
+                Key::Char(ch) => self.write_cmd_char(ch),
+                // TODO: support Delete key in the future
+                Key::Backspace => self.delete_cmd_char(),
+                _ => {}
+            },
         }
 
         CommandResult::Ok
