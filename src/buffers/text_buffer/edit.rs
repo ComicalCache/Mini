@@ -94,25 +94,30 @@ impl TextBuffer {
         }
     }
 
-    /*pub(super) fn delete_selection(&mut self, inclusive: bool) {
-        let Some(pos) = self.select else {
+    /// Deletes contents between the selected position and current cursor position
+    pub(super) fn delete_selection(&mut self) {
+        let Some(pos) = self.selected_pos else {
             return;
         };
 
-        let (start, mut end) = if pos <= self.txt_pos {
-            (pos, self.txt_pos)
-        } else {
-            (self.txt_pos, pos)
-        };
+        let cursor = self.doc.cursor;
+        let (start, end) = if pos <= cursor {
+            // Include the character under the cursor.
+            let mut end = cursor;
+            end.x = (end.x + 1).min(self.doc.lines[end.y].chars().count());
 
-        if inclusive {
-            end.x = (end.x + 1).min(self.line_buff[end.y].chars().count());
-        }
+            (pos, end)
+        } else {
+            let mut end = pos;
+            // Include the end character when backwards.
+            end.x = (end.x + 1).min(self.doc.lines[pos.y].chars().count());
+            (cursor, end)
+        };
 
         if start.y == end.y {
             // Single line deletion
 
-            let line = &mut self.line_buff[start.y];
+            let line = &mut self.doc.lines[start.y];
             let start_idx = line
                 .char_indices()
                 .nth(start.x)
@@ -126,7 +131,7 @@ impl TextBuffer {
         } else {
             // Multiple lines were selected
 
-            let (start_line, remaining_lines) = self.line_buff.split_at_mut(start.y + 1);
+            let (start_line, remaining_lines) = self.doc.lines.split_at_mut(start.y + 1);
             let end_line = &remaining_lines[end.y - (start.y + 1)];
             let tail = {
                 let start_idx = end_line
@@ -144,21 +149,23 @@ impl TextBuffer {
             start_line[start.y].push_str(tail);
 
             // Remove the inbetween lines
-            self.line_buff.drain((start.y + 1)..=end.y);
+            self.doc.lines.drain((start.y + 1)..=end.y);
         }
-        self.select = None;
 
         // Allign the cursor
-        if self.txt_pos.y > start.y {
-            let diff = self.txt_pos.y - start.y;
-            self.move_cursor(CursorMove::Up, diff);
+        if cursor.y > start.y {
+            let diff = cursor.y - start.y;
+            self.up(diff);
         }
-        if self.txt_pos.x > start.x {
-            let diff = self.txt_pos.x - start.x;
-            self.move_cursor(CursorMove::Left, diff);
-        } else if self.txt_pos.x < start.x {
-            let diff = start.x - self.txt_pos.x;
-            self.move_cursor(CursorMove::Right, diff);
+        if cursor.x > start.x {
+            let diff = cursor.x - start.x;
+            self.left(diff);
+        } else if cursor.x < start.x {
+            let diff = start.x - cursor.x;
+            self.right(diff);
         }
-    }*/
+
+        self.selected_pos = None;
+        self.doc.edited = true;
+    }
 }

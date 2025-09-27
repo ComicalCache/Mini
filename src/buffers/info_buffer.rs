@@ -33,11 +33,10 @@ impl InfoBuffer {
         let col = self.doc.cursor.x + 1;
         let total = self.doc.lines.len();
         let percentage = 100 * line / total;
-        let size: usize = self.doc.lines.iter().map(String::len).sum();
 
         write!(
             &mut info_line,
-            "[Info] [{line}:{col}/{total} {percentage}%] [{size}B]",
+            "[Info] [{line}:{col}/{total} {percentage}%]",
         )
         .unwrap();
 

@@ -28,7 +28,9 @@ pub struct TextBuffer {
     cmd: Document,
     view: Viewport,
     file: Option<File>,
+    selected_pos: Option<Cursor>,
     mode: Mode,
+    motion_repeat: String,
 }
 
 impl TextBuffer {
@@ -44,7 +46,9 @@ impl TextBuffer {
             cmd: Document::new(None, 0, 0),
             view: Viewport::new(w, h, 0, h / 2),
             file,
+            selected_pos: None,
             mode: Mode::View,
+            motion_repeat: String::new(),
         })
     }
 
@@ -70,15 +74,12 @@ impl TextBuffer {
             "[Text] [{mode}] [{line}:{col}/{total} {percentage}%] [{size}B]",
         )
         .unwrap();
-        // if let Some(pos) = self.select {
-        //     // Plus 1 since text coordinates are 0 indexed
-        //     let line = pos.y + 1;
-        //     let col = pos.x + 1;
-        //     write!(
-        //         &mut self.screen_buff[screen_idx],
-        //         " [Selected {line}:{col}]"
-        //     )?;
-        // }
+        if let Some(pos) = self.selected_pos {
+            // Plus 1 since text coordinates are 0 indexed.
+            let line = pos.y + 1;
+            let col = pos.x + 1;
+            write!(&mut info_line, " [Selected {line}:{col}]").unwrap();
+        }
 
         let edited = if self.doc.edited { '*' } else { ' ' };
         write!(&mut info_line, " {edited}").unwrap();
@@ -168,19 +169,54 @@ impl Tick for TextBuffer {
                     self.insert_move_new_line_above();
                     self.change_mode(Mode::Write);
                 }
-                Key::Char('h') => self.left(1),
-                Key::Char('j') => self.down(1),
-                Key::Char('k') => self.up(1),
-                Key::Char('l') => self.right(1),
-                Key::Char('w') => self.next_word(),
-                Key::Char('b') => self.prev_word(),
-                Key::Char('<') => self.jump_to_beginning_of_line(),
-                Key::Char('>') => self.jump_to_end_of_line(),
-                Key::Char('.') => self.jump_to_matching_opposite(),
-                Key::Char('g') => self.jump_to_end_of_file(),
-                Key::Char('G') => self.jump_to_beginning_of_file(),
-                Key::Char('?') => return CommandResult::ChangeBuffer(INFO_BUFF_IDX),
+                Key::Char('h') => self.left(self.motion_repeat.parse::<usize>().unwrap_or(1)),
+                Key::Char('j') => self.down(self.motion_repeat.parse::<usize>().unwrap_or(1)),
+                Key::Char('k') => self.up(self.motion_repeat.parse::<usize>().unwrap_or(1)),
+                Key::Char('l') => self.right(self.motion_repeat.parse::<usize>().unwrap_or(1)),
+                Key::Char('w') => {
+                    for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
+                        self.next_word();
+                    }
+                }
+                Key::Char('b') => {
+                    for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
+                        self.prev_word();
+                    }
+                }
+                Key::Char('<') => {
+                    self.motion_repeat.clear();
+                    self.jump_to_beginning_of_line();
+                }
+                Key::Char('>') => {
+                    self.motion_repeat.clear();
+                    self.jump_to_end_of_line();
+                }
+                Key::Char('.') => {
+                    self.motion_repeat.clear();
+                    self.jump_to_matching_opposite();
+                }
+                Key::Char('g') => {
+                    self.motion_repeat.clear();
+                    self.jump_to_end_of_file();
+                }
+                Key::Char('G') => {
+                    self.motion_repeat.clear();
+                    self.jump_to_beginning_of_file();
+                }
+                Key::Char('?') => {
+                    self.motion_repeat.clear();
+                    return CommandResult::ChangeBuffer(INFO_BUFF_IDX);
+                }
                 Key::Char(' ') => self.change_mode(Mode::Command),
+                Key::Char('v') => self.selected_pos = Some(self.doc.cursor),
+                Key::Esc => self.selected_pos = None,
+                Key::Char('d') => self.delete_selection(),
+                Key::Char(ch) if ch.is_ascii_digit() => {
+                    self.motion_repeat.push(ch);
+
+                    // Skip resetting the motion repeat buffer while entering the amount.
+                    return CommandResult::Ok;
+                }
                 _ => {}
             },
             Mode::Write => match key {
@@ -189,6 +225,8 @@ impl Tick for TextBuffer {
                 Key::Down => self.down(1),
                 Key::Up => self.up(1),
                 Key::Right => self.right(1),
+                Key::AltLeft => self.prev_word(),
+                Key::AltRight => self.next_word(),
                 Key::Char('\n') => self.write_new_line_char(),
                 Key::Char('\t') => self.write_tab(),
                 Key::Char(ch) => self.write_char(ch),
@@ -212,6 +250,8 @@ impl Tick for TextBuffer {
             },
         }
 
+        // Rest motion repeat buffer after successful command.
+        self.motion_repeat.clear();
         CommandResult::Ok
     }
 }

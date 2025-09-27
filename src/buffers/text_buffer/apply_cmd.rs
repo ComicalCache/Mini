@@ -108,7 +108,7 @@ impl TextBuffer {
             "w" => self.write_cmd(args),
             "o" => self.open_cmd(args, false),
             "oo" => self.open_cmd(args, true),
-            "?" => CommandResult::Info(vec![INFO_MSG.to_string()]),
+            "?" => CommandResult::Info(INFO_MSG.lines().map(ToString::to_string).collect()),
             _ => CommandResult::Info(vec![format!("Unrecognized command: '{cmd}'")]),
         }
     }

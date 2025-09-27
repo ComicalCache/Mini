@@ -1,12 +1,12 @@
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Cursor {
-    pub x: usize,
     pub y: usize,
+    pub x: usize,
 }
 
 impl Cursor {
     pub fn new(x: usize, y: usize) -> Self {
-        Cursor { x, y }
+        Cursor { y, x }
     }
 
     /// Moves the cursor to the left.
