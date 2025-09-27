@@ -1,49 +1,33 @@
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     io::{BufRead, BufReader, Error},
+    path::Path,
 };
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Position {
-    pub y: usize,
-    pub x: usize,
-}
-
-impl Position {
-    pub fn new(y: usize, x: usize) -> Self {
-        Position { y, x }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Mode {
-    View,
-    Write,
-    Command,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum CursorMove {
-    Left,
-    Down,
-    Up,
-    Right,
-}
-
-#[derive(Clone, PartialEq, Eq)]
-pub enum CmdResult {
+#[derive(PartialEq, Eq)]
+pub enum CommandResult {
+    Ok,
+    Info(Vec<String>),
+    ChangeBuffer(usize),
     Quit,
-    Continue,
-    Info(String),
 }
 
-pub struct ScreenDimensions {
-    pub w: usize,
-    pub h: usize,
+#[derive(Clone, Copy)]
+pub enum CursorStyle {
+    BlinkingBar,
+    BlinkingBlock,
 }
 
-/// Reads a file to a vec of strings
-pub fn read_file(file: &mut File) -> Result<Vec<String>, Error> {
+pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)
+}
+
+pub fn read_file_to_lines(file: &mut File) -> Result<Vec<String>, Error> {
     BufReader::new(file)
         .lines()
         .collect::<Result<Vec<String>, _>>()

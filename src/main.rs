@@ -1,191 +1,119 @@
-mod buffer;
+mod buffers;
+mod cursor;
+mod document;
+mod traits;
 mod util;
+mod viewport;
 
 use crate::{
-    buffer::Buffer,
-    util::{CursorMove, Mode, read_file},
+    buffers::{info_buffer::InfoBuffer, text_buffer::TextBuffer},
+    traits::Buffer,
+    util::{CommandResult, open_file},
 };
+use polling::{Events, Poller};
 use std::{
-    fs::OpenOptions,
     io::{BufWriter, Write},
+    os::fd::AsFd,
+    time::Duration,
 };
 use termion::{
-    event::Key,
     input::TermRead,
     raw::IntoRawMode,
     screen::{ToAlternateScreen, ToMainScreen},
 };
 
-macro_rules! r#move {
-    ($repeat_buff:ident, $buffers:ident, $buffer:ident, $dir:expr) => {{
-        $buffers[$buffer].move_cursor($dir, $repeat_buff.parse::<usize>().unwrap_or(1));
-        $repeat_buff.clear();
-    }};
-}
-
-macro_rules! rep_skip {
-    ($repeat_buff:ident, $buffers:ident, $buffer:ident, $method:ident) => {{
-        for _ in 0..$repeat_buff.parse::<usize>().unwrap_or(1) {
-            $buffers[$buffer].$method();
-        }
-        $repeat_buff.clear();
-    }};
-}
-
-macro_rules! skip {
-    ($repeat_buff:ident, $buffers:ident, $buffer:ident, $method:ident) => {{
-        $repeat_buff.clear();
-        $buffers[$buffer].$method();
-    }};
-}
-
-const INFO_BUFF: usize = 0;
-const TXT_BUFF: usize = 1;
-
+// Random value chosen by dev-rng.
+const STDIN_EVENT_KEY: usize = 25663;
 const INFO_MSG: &str = include_str!("info.txt");
+
+// Indices of buffers.
+const TXT_BUFF_IDX: usize = 0;
+const INFO_BUFF_IDX: usize = 1;
 
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), std::io::Error> {
     let mut args = std::env::args();
     args.next();
 
-    let mut file = if let Some(path) = args.next() {
+    let file = if let Some(path) = args.next() {
         if path == "--help" {
             println!("{INFO_MSG}");
             return Ok(());
         }
 
-        Some(
-            OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .truncate(false)
-                .open(path)?,
-        )
+        Some(open_file(path)?)
     } else {
         None
     };
-    let line_buff = if let Some(file) = file.as_mut() {
-        read_file(file)?
-    } else {
-        vec![String::new()]
-    };
 
-    let stdin = std::io::stdin();
+    // Setup stdin and stdout.
     let mut stdout = BufWriter::new(std::io::stdout().into_raw_mode()?);
+    let stdin = std::io::stdin();
+    let stdin_fd = stdin.as_fd();
+    let mut stdin_keys = std::io::stdin().keys();
 
-    // Init buffers
-    let (width, height) = termion::terminal_size()?;
-    let (width, height) = (width as usize, height as usize);
-    let mut buffers = [
-        // Buffer 1 (Info)
-        Buffer::new("Info", width, height, vec![String::new()], None),
-        // Buffer 2 (Text)
-        Buffer::new("Text", width, height, line_buff, file),
+    // Use polling to periodically read stdin.
+    let poller = Poller::new()?;
+    unsafe { poller.add(&stdin_fd, polling::Event::readable(STDIN_EVENT_KEY))? };
+
+    let (w, h) = termion::terminal_size()?;
+
+    // Create array of buffers that can be switched to.
+    let mut buffs: [Box<dyn Buffer>; 2] = [
+        Box::new(TextBuffer::new(w as usize, h as usize, file)?),
+        Box::new(InfoBuffer::new(w as usize, h as usize)),
     ];
-    let mut buffer = TXT_BUFF;
+    let mut curr_buff = TXT_BUFF_IDX;
 
-    // Init terminal by switching to alternate screen
+    // Init terminal by switching to alternate screen.
     write!(&mut stdout, "{ToAlternateScreen}")?;
-    buffers[buffer].print_screen(&mut stdout)?;
+    buffs[curr_buff].render(&mut stdout)?;
     stdout.flush()?;
 
-    // Repeat buffer to execute motions multiple times
-    let mut repeat_buff = String::new();
-    for key in stdin.keys() {
-        let (width, height) = termion::terminal_size()?;
-        for buff in &mut buffers {
-            buff.update_screen_dimentions(width as usize, height as usize);
+    let mut quit = false;
+    let mut events = Events::new();
+    while !quit {
+        // Handle terminal resizing.
+        let (w, h) = termion::terminal_size()?;
+        for buff in &mut buffs {
+            buff.resize(w as usize, h as usize);
         }
 
-        let key = key?;
-        match buffers[buffer].mode() {
-            Mode::View => match key {
-                // Can't edit error buffer
-                Key::Char('i') if buffer != INFO_BUFF => buffers[buffer].change_mode(Mode::Write),
-                // Can't edit error buffer
-                Key::Char('a') if buffer != INFO_BUFF => {
-                    buffers[buffer].move_cursor(CursorMove::Right, 1);
-                    buffers[buffer].change_mode(Mode::Write);
-                }
-                // Can't edit error buffer
-                Key::Char('o') if buffer != INFO_BUFF => {
-                    buffers[buffer].insert_move_new_line_bellow();
-                    buffers[buffer].change_mode(Mode::Write);
-                }
-                // Can't edit error buffer
-                Key::Char('O') if buffer != INFO_BUFF => {
-                    buffers[buffer].insert_move_new_line_above();
-                    buffers[buffer].change_mode(Mode::Write);
-                }
-                Key::Char('h') => r#move!(repeat_buff, buffers, buffer, CursorMove::Left),
-                Key::Char('j') => r#move!(repeat_buff, buffers, buffer, CursorMove::Down),
-                Key::Char('k') => r#move!(repeat_buff, buffers, buffer, CursorMove::Up),
-                Key::Char('l') => r#move!(repeat_buff, buffers, buffer, CursorMove::Right),
-                Key::Char('w') => rep_skip!(repeat_buff, buffers, buffer, next_word),
-                Key::Char('b') => rep_skip!(repeat_buff, buffers, buffer, prev_word),
-                Key::Char('<') => skip!(repeat_buff, buffers, buffer, jump_to_start_of_line),
-                Key::Char('>') => skip!(repeat_buff, buffers, buffer, jump_to_end_of_line),
-                Key::Char('.') => skip!(repeat_buff, buffers, buffer, jump_to_matching_opposite),
-                Key::Char('g') => skip!(repeat_buff, buffers, buffer, jump_to_end),
-                Key::Char('G') => skip!(repeat_buff, buffers, buffer, jump_to_start),
-                // Can't command in error buffer
-                Key::Char(' ') if buffer != INFO_BUFF => buffers[buffer].change_mode(Mode::Command),
-                Key::Char('?') if buffer == INFO_BUFF => buffer = TXT_BUFF,
-                Key::Char('?') if buffer == TXT_BUFF => buffer = INFO_BUFF,
-                Key::Char(ch) if ch.is_ascii_digit() => repeat_buff.push(ch),
-                // Can't select in error buffer
-                Key::Char('v') if buffer != INFO_BUFF => buffers[buffer].set_select(),
-                Key::Esc => buffers[buffer].reset_select(),
-                // Can't delete in error buffer
-                Key::Char('d') if buffer != INFO_BUFF => buffers[buffer].delete_selection(false),
-                Key::Char('D') if buffer != INFO_BUFF => buffers[buffer].delete_selection(true),
-                _ => {}
-            },
-            Mode::Write => match key {
-                Key::Esc => buffers[buffer].change_mode(Mode::View),
-                Key::Left => buffers[buffer].move_cursor(CursorMove::Left, 1),
-                Key::Down => buffers[buffer].move_cursor(CursorMove::Down, 1),
-                Key::Up => buffers[buffer].move_cursor(CursorMove::Up, 1),
-                Key::Right => buffers[buffer].move_cursor(CursorMove::Right, 1),
-                Key::Char('\n') => buffers[buffer].write_new_line(),
-                Key::Char('\t') => buffers[buffer].write_tab(),
-                Key::Char(ch) => buffers[buffer].write_char(ch),
-                Key::Backspace => buffers[buffer].delete_char(),
-                _ => {}
-            },
-            Mode::Command => match key {
-                Key::Esc => buffers[buffer].change_mode(Mode::View),
-                Key::Left => buffers[buffer].move_cmd_cursor(CursorMove::Left, 1),
-                Key::Right => buffers[buffer].move_cmd_cursor(CursorMove::Right, 1),
-                Key::Char('\n') => {
-                    let res = buffers[buffer].apply_cmd();
-                    buffers[buffer].change_mode(Mode::View);
+        // Clear previous iterations events and fetch new ones.
+        events.clear();
+        poller.wait(&mut events, Some(Duration::from_millis(25)))?;
 
-                    match res {
-                        util::CmdResult::Quit => break,
-                        // Reset error buffer on successful command
-                        util::CmdResult::Continue => buffers[INFO_BUFF].set_line_buff(""),
-                        util::CmdResult::Info(err) => {
-                            // Write error to error buffer
-                            buffer = INFO_BUFF;
-                            buffers[buffer].set_line_buff(&err);
-                        }
-                    }
+        // If a new event exists, send a tick with the key immediately.
+        if events.iter().any(|e| e.key == STDIN_EVENT_KEY) {
+            match buffs[curr_buff].tick(Some(stdin_keys.next().unwrap()?)) {
+                CommandResult::Ok => {}
+                CommandResult::Info(info) => {
+                    buffs[INFO_BUFF_IDX].set_contents(&info);
+                    curr_buff = INFO_BUFF_IDX;
                 }
-                Key::Char('\t') => buffers[buffer].write_cmd_tab(),
-                Key::Char(ch) => buffers[buffer].write_cmd_char(ch),
-                // TODO: support Delete key in the future
-                Key::Backspace => buffers[buffer].delete_cmd_char(),
-                _ => {}
-            },
+                CommandResult::ChangeBuffer(idx) => curr_buff = idx,
+                CommandResult::Quit => quit = true,
+            }
+        }
+        // Otherwise send an empty tick after the timeout.
+        else {
+            match buffs[curr_buff].tick(None) {
+                CommandResult::Ok => {}
+                CommandResult::Info(info) => {
+                    buffs[INFO_BUFF_IDX].set_contents(&info);
+                    curr_buff = INFO_BUFF_IDX;
+                }
+                CommandResult::ChangeBuffer(idx) => curr_buff = idx,
+                CommandResult::Quit => quit = true,
+            }
         }
 
-        // Print new buffer after every input
-        buffers[buffer].print_screen(&mut stdout)?;
+        // Render the "new" state and re-enable polling.
+        buffs[curr_buff].render(&mut stdout)?;
+        poller.modify(stdin_fd, polling::Event::readable(STDIN_EVENT_KEY))?;
     }
 
+    // Switch back to the main screen before exiting.
     write!(stdout, "{ToMainScreen}")?;
     stdout.flush()
 }
