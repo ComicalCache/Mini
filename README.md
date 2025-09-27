@@ -1,7 +1,6 @@
 # Mini
 
 A mini terminal based file editor. It has VIm-like motions and should fully support unicode characters.
-> The editor only respects terminal resizing at the next input.
 
 ### Interface
 The editor features an info line containing information about the current buffer, editing mode, cursor position, etc..
@@ -46,7 +45,6 @@ Selection:
 Press 'v' to start selection at the current cursor position, move the cursor using all available motions
 Press esc to stop selection
 - 'd' to delete the selection
-- 'D' to delete the selection including the character under the cursor
 
 Write Mode:
 > Insert text into the buffer.
@@ -54,5 +52,7 @@ Press 'i' to enter write mode
 Press 'a' to enter write mode one character after the current
 Press 'o' to enter write mode one line under the current
 Press 'O' to enter write mode one line above the current
+- '←' | '↓' | '↑' | '→' to move the cursor
+- alt + '←' | '→' to go back one or skip to the next word
 Press 'esc' to exit write mode
 ```
