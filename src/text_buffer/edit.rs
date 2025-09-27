@@ -3,22 +3,30 @@ use crate::text_buffer::TextBuffer;
 const TAB: &str = "    ";
 
 impl TextBuffer {
+    /// Inserts a new line above the current cursor position.
+    /// The cursor will be on the new line.
     pub(super) fn insert_move_new_line_above(&mut self) {
         self.doc.insert_line(String::new());
-        // No need to move since the cursor pos stays the same
+        // No need to move since the cursor pos stays the same.
     }
 
+    /// Inserts a new line bellow the current cursor position.
+    /// The cursor will be on the new line.
     pub(super) fn insert_move_new_line_bellow(&mut self) {
         self.doc
             .insert_line_at(self.doc.cursor.y + 1, String::new());
         self.down(1);
     }
 
+    /// Writes a char at the current cursor position.
+    /// The cursor will be after the new char.
     pub(super) fn write_char(&mut self, ch: char) {
         self.doc.write_char(ch);
         self.right(1);
     }
 
+    /// Writes a new line character at the current cursor position.
+    /// The cursor will be at the beginning of the new line.
     pub(super) fn write_new_line_char(&mut self) {
         let line = &mut self.doc.lines[self.doc.cursor.y];
         let idx = line
@@ -33,21 +41,24 @@ impl TextBuffer {
         self.left(self.doc.cursor.x);
     }
 
+    /// Writes a tab at the current cursor position.
+    /// The cursor will be after the tab.
     pub(super) fn write_tab(&mut self) {
         self.doc.write_str(TAB);
         self.right(TAB.chars().count());
     }
 
-    /// Deletes a character from the buffer, joining two lines if necessary
+    /// Deletes a character from the buffer, joining two lines if necessary.
+    /// The cursor will be at the delete chars position.
     pub(super) fn delete_char(&mut self) {
         let cursor = self.doc.cursor;
 
         if cursor.x > 0 {
-            // If deleting a character in a line
+            // If deleting a character in a line.
             self.doc.delete_char_at(cursor.x - 1, cursor.y);
             self.left(1);
         } else if cursor.y > 0 {
-            // If deleting at the beginning of a line (don't delete the first line)
+            // If deleting at the beginning of a line (don't delete the first line).
             let prev_line_len = self.doc.lines[cursor.y - 1].chars().count();
             let line = self.doc.remove_line();
             self.doc.lines[cursor.y - 1].push_str(&line);

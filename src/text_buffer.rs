@@ -53,7 +53,7 @@ impl TextBuffer {
             Mode::Write => "W",
             Mode::Command => "C",
         };
-        // Plus 1 since text coordinates are 0 indexed
+        // Plus 1 since text coordinates are 0 indexed.
         let line = self.doc.cursor.y + 1;
         let col = self.doc.cursor.x + 1;
         let total = self.doc.lines.len();
@@ -133,11 +133,11 @@ impl Tick for TextBuffer {
                 Key::Char('l') => self.right(1),
                 Key::Char('w') => self.next_word(),
                 Key::Char('b') => self.prev_word(),
-                Key::Char('<') => self.jump_to_start_of_line(),
+                Key::Char('<') => self.jump_to_beginning_of_line(),
                 Key::Char('>') => self.jump_to_end_of_line(),
                 Key::Char('.') => self.jump_to_matching_opposite(),
-                Key::Char('g') => self.jump_to_end(),
-                Key::Char('G') => self.jump_to_start(),
+                Key::Char('g') => self.jump_to_end_of_file(),
+                Key::Char('G') => self.jump_to_beginning_of_file(),
                 _ => {}
             },
             Mode::Write => match key {
