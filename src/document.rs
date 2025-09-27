@@ -59,7 +59,7 @@ impl Document {
     }
 
     /// Replaces the document buffer and sets the cursor to a specified position.
-    pub fn replace_buffer(&mut self, lines: Vec<String>, x: usize, y: usize) {
+    pub fn set_contents(&mut self, lines: &[String], x: usize, y: usize) {
         if !lines.is_empty() {
             self.lines.resize(lines.len(), String::new());
             for (idx, line) in lines.iter().enumerate() {

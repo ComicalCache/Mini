@@ -3,9 +3,10 @@ mod edit;
 mod r#move;
 
 use crate::{
+    INFO_BUFF_IDX,
     cursor::Cursor,
     document::Document,
-    traits::{Buffer, Render, Tick},
+    traits::{Buffer, Contents, Render, Tick},
     util::{CommandResult, CursorStyle, read_file_to_lines},
     viewport::Viewport,
 };
@@ -131,7 +132,7 @@ impl Render for TextBuffer {
         self.view.render(
             stdout,
             &self.doc,
-            &self.info_line(),
+            self.info_line(),
             self.cmd_line(),
             cursor_style,
         )
@@ -157,7 +158,7 @@ impl Tick for TextBuffer {
                 Key::Char('i') => self.change_mode(Mode::Write),
                 Key::Char('a') => {
                     self.right(1);
-                    self.change_mode(Mode::Write)
+                    self.change_mode(Mode::Write);
                 }
                 Key::Char('o') => {
                     self.insert_move_new_line_bellow();
@@ -178,6 +179,7 @@ impl Tick for TextBuffer {
                 Key::Char('.') => self.jump_to_matching_opposite(),
                 Key::Char('g') => self.jump_to_end_of_file(),
                 Key::Char('G') => self.jump_to_beginning_of_file(),
+                Key::Char('?') => return CommandResult::ChangeBuffer(INFO_BUFF_IDX),
                 Key::Char(' ') => self.change_mode(Mode::Command),
                 _ => {}
             },
@@ -211,5 +213,11 @@ impl Tick for TextBuffer {
         }
 
         CommandResult::Ok
+    }
+}
+
+impl Contents for TextBuffer {
+    fn set_contents(&mut self, contents: &[String]) {
+        self.doc.set_contents(contents, 0, 0);
     }
 }

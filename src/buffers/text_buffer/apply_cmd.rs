@@ -21,16 +21,19 @@ impl TextBuffer {
             return CommandResult::Quit;
         }
 
-        CommandResult::Info("There are unsaved changes, save or qq to force quit".to_string())
+        CommandResult::Info(vec![
+            "There are unsaved changes, save or qq to force quit".to_string(),
+        ])
     }
 
     fn open_cmd(&mut self, args: &str, force: bool) -> CommandResult {
         if self.doc.edited && !force {
-            return CommandResult::Info(
+            return CommandResult::Info(vec![
                 "There are unsaved changes, save or oo to force open new".to_string(),
-            );
+            ]);
         }
 
+        // Reset state.
         self.doc.clear(0, 0);
         self.cmd.clear(0, 0);
         self.view
@@ -44,12 +47,12 @@ impl TextBuffer {
 
         self.file = match open_file(args) {
             Ok(file) => Some(file),
-            Err(err) => return CommandResult::Info(err.to_string()),
+            Err(err) => return CommandResult::Info(vec![err.to_string()]),
         };
 
         match read_file_to_lines(self.file.as_mut().unwrap()) {
-            Ok(lines) => self.doc.replace_buffer(lines, 0, 0),
-            Err(err) => return CommandResult::Info(err.to_string()),
+            Ok(lines) => self.doc.set_contents(&lines, 0, 0),
+            Err(err) => return CommandResult::Info(vec![err.to_string()]),
         }
 
         CommandResult::Ok
@@ -59,19 +62,19 @@ impl TextBuffer {
         if !args.is_empty() {
             self.file = match open_file(args) {
                 Ok(file) => Some(file),
-                Err(err) => return CommandResult::Info(err.to_string()),
+                Err(err) => return CommandResult::Info(vec![err.to_string()]),
             };
         }
 
         // Failed to write file.
         let res = match self.write_to_file() {
             Ok(res) => res,
-            Err(err) => return CommandResult::Info(err.to_string()),
+            Err(err) => return CommandResult::Info(vec![err.to_string()]),
         };
         if !res {
-            return CommandResult::Info(
+            return CommandResult::Info(vec![
                 "Please specify a file location using 'w <path>' to write the file to".to_string(),
-            );
+            ]);
         }
 
         CommandResult::Ok
@@ -91,13 +94,13 @@ impl TextBuffer {
             "wq" => {
                 let res = match self.write_to_file() {
                     Ok(res) => res,
-                    Err(err) => return CommandResult::Info(err.to_string()),
+                    Err(err) => return CommandResult::Info(vec![err.to_string()]),
                 };
                 if !res {
-                    return CommandResult::Info(
+                    return CommandResult::Info(vec![
                         "Please specify a file location using 'w <path>' to write the file to"
                             .to_string(),
-                    );
+                    ]);
                 }
 
                 CommandResult::Quit
@@ -105,8 +108,8 @@ impl TextBuffer {
             "w" => self.write_cmd(args),
             "o" => self.open_cmd(args, false),
             "oo" => self.open_cmd(args, true),
-            "?" => CommandResult::Info(INFO_MSG.to_string()),
-            _ => CommandResult::Info(format!("Unrecognized command: '{cmd}'")),
+            "?" => CommandResult::Info(vec![INFO_MSG.to_string()]),
+            _ => CommandResult::Info(vec![format!("Unrecognized command: '{cmd}'")]),
         }
     }
 }

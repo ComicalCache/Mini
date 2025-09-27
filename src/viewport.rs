@@ -59,12 +59,12 @@ impl Viewport {
         &mut self,
         stdout: &mut BufWriter<RawTerminal<Stdout>>,
         doc: &Document,
-        info_line: &String,
+        info_line: String,
         cmd_line: Option<(String, Cursor)>,
         cursor_style: CursorStyle,
     ) -> Result<(), Error> {
         // Set info line.
-        self.lines[0].clone_from(info_line);
+        self.lines[0] = info_line;
 
         // Calculate which line of text is visible at what line on the screen.
         #[allow(clippy::cast_possible_wrap)]
@@ -86,10 +86,22 @@ impl Viewport {
             self.set_line(&doc.lines[doc_idx as usize], doc.cursor.x, lines_idx);
         }
 
-        // Set command line.
-        if let Some((cmd_line, _)) = cmd_line.as_ref() {
-            self.lines[self.h - 1].clone_from(cmd_line);
-        }
+        // Set command line and cursor.
+        // Can never be larger than u16 since the width is used as upper bound and equal to the terminal size.
+        #[allow(clippy::cast_possible_truncation)]
+        let cursor = if let Some((cmd_line, cursor)) = cmd_line {
+            self.lines[self.h - 1] = cmd_line;
+
+            Goto(
+                (cursor.x as u16).saturating_add(1),
+                ((cursor.y + self.h) as u16).saturating_add(1),
+            )
+        } else {
+            Goto(
+                (self.cursor.x as u16).saturating_add(1),
+                (self.cursor.y as u16).saturating_add(1),
+            )
+        };
 
         // Write the new content.
         write!(stdout, "{All}{}", Goto(1, 1))?;
@@ -98,25 +110,9 @@ impl Viewport {
         }
         write!(stdout, "{}", self.lines[self.lines.len() - 1])?;
 
-        // Set cursor.
-        // Can never be larger than u16 since the width is used as upper bound and equal to the terminal size.
-        #[allow(clippy::cast_possible_truncation)]
-        let goto = {
-            if let Some((_, cursor)) = cmd_line {
-                Goto(
-                    (cursor.x as u16).saturating_add(1),
-                    ((cursor.y + self.h) as u16).saturating_add(1),
-                )
-            } else {
-                Goto(
-                    (self.cursor.x as u16).saturating_add(1),
-                    (self.cursor.y as u16).saturating_add(1),
-                )
-            }
-        };
         match cursor_style {
-            CursorStyle::BlinkingBar => write!(stdout, "{goto}{BlinkingBar}",)?,
-            CursorStyle::BlinkingBlock => write!(stdout, "{goto}{BlinkingBlock}",)?,
+            CursorStyle::BlinkingBar => write!(stdout, "{cursor}{BlinkingBar}",)?,
+            CursorStyle::BlinkingBlock => write!(stdout, "{cursor}{BlinkingBlock}",)?,
         }
 
         stdout.flush()

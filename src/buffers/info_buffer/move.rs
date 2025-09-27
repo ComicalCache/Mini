@@ -1,29 +1,16 @@
-use crate::buffers::text_buffer::TextBuffer;
+use crate::buffers::info_buffer::InfoBuffer;
 
-impl TextBuffer {
+impl InfoBuffer {
     /// Moves the cursor to the left.
     pub(super) fn left(&mut self, n: usize) {
         self.doc.cursor.left(n);
         self.view.cursor.left(n);
     }
 
-    /// Moves the command cursor to the left.
-    pub(super) fn cmd_left(&mut self, n: usize) {
-        self.cmd.cursor.left(n);
-        self.view.cursor.left(n);
-    }
-
-    /// Moves the cursor to the right.
+    /// Moves the cursor to the right
     pub(super) fn right(&mut self, n: usize) {
         let line_bound = self.doc.lines[self.doc.cursor.y].chars().count();
         self.doc.cursor.right(n, line_bound);
-        self.view.cursor.right(n, line_bound.min(self.view.w - 1));
-    }
-
-    /// Moves the command cursor to the right.
-    pub(super) fn cmd_right(&mut self, n: usize) {
-        let line_bound = self.cmd.lines[0].chars().count();
-        self.cmd.cursor.right(n, line_bound);
         self.view.cursor.right(n, line_bound.min(self.view.w - 1));
     }
 

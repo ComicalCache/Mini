@@ -6,7 +6,7 @@ mod util;
 mod viewport;
 
 use crate::{
-    buffers::text_buffer::TextBuffer,
+    buffers::{info_buffer::InfoBuffer, text_buffer::TextBuffer},
     traits::Buffer,
     util::{CommandResult, open_file},
 };
@@ -28,6 +28,7 @@ const INFO_MSG: &str = include_str!("info.txt");
 
 // Indices of buffers.
 const TXT_BUFF_IDX: usize = 0;
+const INFO_BUFF_IDX: usize = 1;
 
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), std::io::Error> {
@@ -58,9 +59,11 @@ fn main() -> Result<(), std::io::Error> {
     let (w, h) = termion::terminal_size()?;
 
     // Create array of buffers that can be switched to.
-    let mut buffs: [Box<dyn Buffer>; 1] =
-        [Box::new(TextBuffer::new(w as usize, h as usize, file)?)];
-    let curr_buff = TXT_BUFF_IDX;
+    let mut buffs: [Box<dyn Buffer>; 2] = [
+        Box::new(TextBuffer::new(w as usize, h as usize, file)?),
+        Box::new(InfoBuffer::new(w as usize, h as usize)),
+    ];
+    let mut curr_buff = TXT_BUFF_IDX;
 
     // Init terminal by switching to alternate screen.
     write!(&mut stdout, "{ToAlternateScreen}")?;
@@ -84,7 +87,11 @@ fn main() -> Result<(), std::io::Error> {
         if events.iter().any(|e| e.key == STDIN_EVENT_KEY) {
             match buffs[curr_buff].tick(Some(stdin_keys.next().unwrap()?)) {
                 CommandResult::Ok => {}
-                CommandResult::Info(_) => {}
+                CommandResult::Info(info) => {
+                    buffs[INFO_BUFF_IDX].set_contents(&info);
+                    curr_buff = INFO_BUFF_IDX;
+                }
+                CommandResult::ChangeBuffer(idx) => curr_buff = idx,
                 CommandResult::Quit => quit = true,
             }
         }
@@ -92,7 +99,11 @@ fn main() -> Result<(), std::io::Error> {
         else {
             match buffs[curr_buff].tick(None) {
                 CommandResult::Ok => {}
-                CommandResult::Info(_) => {}
+                CommandResult::Info(info) => {
+                    buffs[INFO_BUFF_IDX].set_contents(&info);
+                    curr_buff = INFO_BUFF_IDX;
+                }
+                CommandResult::ChangeBuffer(idx) => curr_buff = idx,
                 CommandResult::Quit => quit = true,
             }
         }
