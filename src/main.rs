@@ -7,7 +7,7 @@ mod viewport;
 
 use crate::{
     buffer::Buffer,
-    buffers::{info_buffer::InfoBuffer, text_buffer::TextBuffer},
+    buffers::{files_buffer::FilesBuffer, info_buffer::InfoBuffer, text_buffer::TextBuffer},
     util::{CommandResult, open_file},
 };
 use polling::{Events, Poller};
@@ -28,7 +28,8 @@ const INFO_MSG: &str = include_str!("info.txt");
 
 // Indices of buffers.
 const TXT_BUFF_IDX: usize = 0;
-const INFO_BUFF_IDX: usize = 1;
+const FILES_BUFF_IDX: usize = 1;
+const INFO_BUFF_IDX: usize = 2;
 
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), std::io::Error> {
@@ -56,11 +57,12 @@ fn main() -> Result<(), std::io::Error> {
     let poller = Poller::new()?;
     unsafe { poller.add(&stdin_fd, polling::Event::readable(STDIN_EVENT_KEY))? };
 
-    let (w, h) = termion::terminal_size()?;
-
     // Create array of buffers that can be switched to.
-    let mut buffs: [Box<dyn Buffer>; 2] = [
+    let (w, h) = termion::terminal_size()?;
+    let base = std::env::current_dir()?;
+    let mut buffs: [Box<dyn Buffer>; 3] = [
         Box::new(TextBuffer::new(w as usize, h as usize, file)?),
+        Box::new(FilesBuffer::new(w as usize, h as usize, base)?),
         Box::new(InfoBuffer::new(w as usize, h as usize)),
     ];
     let mut curr_buff = TXT_BUFF_IDX;

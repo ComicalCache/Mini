@@ -2,7 +2,7 @@ use crate::{cursor::Cursor, document::Document, util::CursorStyle};
 use std::io::{BufWriter, Error, Stdout, Write};
 use termion::{
     clear::All,
-    cursor::{BlinkingBar, BlinkingBlock, Goto},
+    cursor::{BlinkingBar, BlinkingBlock, Goto, SteadyBlock},
     raw::RawTerminal,
 };
 
@@ -113,6 +113,7 @@ impl Viewport {
         match cursor_style {
             CursorStyle::BlinkingBar => write!(stdout, "{cursor}{BlinkingBar}",)?,
             CursorStyle::BlinkingBlock => write!(stdout, "{cursor}{BlinkingBlock}",)?,
+            CursorStyle::SteadyBlock => write!(stdout, "{cursor}{SteadyBlock}")?,
         }
 
         stdout.flush()

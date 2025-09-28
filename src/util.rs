@@ -16,6 +16,7 @@ pub enum CommandResult {
 pub enum CursorStyle {
     BlinkingBar,
     BlinkingBlock,
+    SteadyBlock,
 }
 
 pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {

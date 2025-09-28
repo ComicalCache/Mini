@@ -3,7 +3,7 @@ mod edit;
 mod r#move;
 
 use crate::{
-    INFO_BUFF_IDX,
+    FILES_BUFF_IDX, INFO_BUFF_IDX,
     buffer::Buffer,
     cursor::Cursor,
     document::Document,
@@ -202,6 +202,10 @@ impl Buffer for TextBuffer {
                 Key::Char('?') => {
                     self.motion_repeat.clear();
                     return CommandResult::ChangeBuffer(INFO_BUFF_IDX);
+                }
+                Key::Char('e') => {
+                    self.motion_repeat.clear();
+                    return CommandResult::ChangeBuffer(FILES_BUFF_IDX);
                 }
                 Key::Char(' ') => self.change_mode(Mode::Command),
                 Key::Char('v') => self.selected_pos = Some(self.doc.cursor),
