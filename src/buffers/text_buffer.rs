@@ -4,9 +4,9 @@ mod r#move;
 
 use crate::{
     INFO_BUFF_IDX,
+    buffer::Buffer,
     cursor::Cursor,
     document::Document,
-    traits::{Buffer, Contents, Render, Tick},
     util::{CommandResult, CursorStyle, read_file_to_lines},
     viewport::Viewport,
 };
@@ -121,9 +121,7 @@ impl TextBuffer {
     }
 }
 
-impl Buffer for TextBuffer {}
-
-impl Render for TextBuffer {
+impl Buffer for TextBuffer {
     fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
         let cursor_style = match self.mode {
             Mode::View => CursorStyle::BlinkingBlock,
@@ -146,9 +144,7 @@ impl Render for TextBuffer {
 
         self.view.resize(w, h, self.view.cursor.x.min(w), h / 2);
     }
-}
 
-impl Tick for TextBuffer {
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
         let Some(key) = key else {
             return CommandResult::Ok;
@@ -254,9 +250,7 @@ impl Tick for TextBuffer {
         self.motion_repeat.clear();
         CommandResult::Ok
     }
-}
 
-impl Contents for TextBuffer {
     fn set_contents(&mut self, contents: &[String]) {
         self.doc.set_contents(contents, 0, 0);
     }

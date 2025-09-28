@@ -1,13 +1,13 @@
+mod buffer;
 mod buffers;
 mod cursor;
 mod document;
-mod traits;
 mod util;
 mod viewport;
 
 use crate::{
+    buffer::Buffer,
     buffers::{info_buffer::InfoBuffer, text_buffer::TextBuffer},
-    traits::Buffer,
     util::{CommandResult, open_file},
 };
 use polling::{Events, Poller};

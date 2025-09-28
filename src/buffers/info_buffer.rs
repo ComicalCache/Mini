@@ -2,8 +2,8 @@ mod r#move;
 
 use crate::{
     TXT_BUFF_IDX,
+    buffer::Buffer,
     document::Document,
-    traits::{Buffer, Contents, Render, Tick},
     util::{CommandResult, CursorStyle},
     viewport::Viewport,
 };
@@ -47,9 +47,7 @@ impl InfoBuffer {
     }
 }
 
-impl Buffer for InfoBuffer {}
-
-impl Render for InfoBuffer {
+impl Buffer for InfoBuffer {
     fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
         self.view.render(
             stdout,
@@ -67,9 +65,7 @@ impl Render for InfoBuffer {
 
         self.view.resize(w, h, self.view.cursor.x.min(w), h / 2);
     }
-}
 
-impl Tick for InfoBuffer {
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
         let Some(key) = key else {
             return CommandResult::Ok;
@@ -93,9 +89,7 @@ impl Tick for InfoBuffer {
 
         CommandResult::Ok
     }
-}
 
-impl Contents for InfoBuffer {
     fn set_contents(&mut self, contents: &[String]) {
         self.doc.set_contents(contents, 0, 0);
     }

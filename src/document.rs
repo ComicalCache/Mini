@@ -83,7 +83,7 @@ impl Document {
 
     /// Removes a line at the current cursor y position.
     pub fn remove_line(&mut self) -> String {
-        self.lines.remove(self.cursor.y)
+        self.remove_line_at(self.cursor.y)
     }
 
     /// Removes a line at a specified y position.

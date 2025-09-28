@@ -69,8 +69,8 @@ impl TextBuffer {
 
         if cursor.x > 0 {
             // If deleting a character in a line.
-            self.doc.delete_char_at(cursor.x - 1, cursor.y);
             self.left(1);
+            self.doc.delete_char();
         } else if cursor.y > 0 {
             // If deleting at the beginning of a line (don't delete the first line).
             let prev_line_len = self.doc.lines[cursor.y - 1].chars().count();
@@ -89,8 +89,8 @@ impl TextBuffer {
 
         if cursor.x > 0 {
             // If deleting a character in a line.
-            self.cmd.delete_char_at(cursor.x - 1, cursor.y);
             self.cmd_left(1);
+            self.cmd.delete_char();
         }
     }
 
