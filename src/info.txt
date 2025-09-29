@@ -9,11 +9,13 @@ Motions:
 - '.' to jump to the matching opposite bracket
 - 'g' to go to the end of the file
 - 'G' to go to the start of the file
+- 'x' to delete the character under the cursor
 
 Write Mode:
 > Insert text into the buffer.
 Press 'i' to enter write mode
 Press 'a' to enter write mode one character after the current
+Press 'A' to enter write mode at the end of the line
 Press 'o' to enter write mode one line under the current
 Press 'O' to enter write mode one line above the current
 - '←' | '↓' | '↑' | '→' to move the cursor
@@ -36,6 +38,9 @@ Selection:
 Press 'v' to start selection at the current cursor position, move the cursor using all available motions
 Press esc to stop selection
 - 'd' to delete the selection
+
+Files:
+Press enter to open the file or directory
 
 --- Buffers ---
 Text:

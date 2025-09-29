@@ -7,8 +7,8 @@ use std::{
 #[derive(PartialEq, Eq)]
 pub enum CommandResult {
     Ok,
-    Info(Vec<String>),
     ChangeBuffer(usize),
+    SetAndChangeBuffer(usize, Vec<String>),
     Quit,
 }
 

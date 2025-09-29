@@ -11,14 +11,14 @@ pub struct Document {
 }
 
 impl Document {
-    pub fn new(content: Option<Vec<String>>, x: usize, y: usize) -> Self {
+    pub fn new(contents: Option<Vec<String>>, x: usize, y: usize) -> Self {
         let mut doc = Document {
             lines: vec![String::new()],
             cursor: Cursor::new(x, y),
             edited: false,
         };
 
-        if let Some(content) = content
+        if let Some(content) = contents
             && !content.is_empty()
         {
             doc.lines.resize(content.len(), String::new());

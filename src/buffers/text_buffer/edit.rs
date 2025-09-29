@@ -6,8 +6,8 @@ impl TextBuffer {
     /// Inserts a new line above the current cursor position.
     /// The cursor will be on the new line.
     pub(super) fn insert_move_new_line_above(&mut self) {
+        self.jump_to_beginning_of_line();
         self.doc.insert_line(String::new());
-        // No need to move since the cursor pos stays the same.
     }
 
     /// Inserts a new line bellow the current cursor position.
@@ -102,16 +102,9 @@ impl TextBuffer {
 
         let cursor = self.doc.cursor;
         let (start, end) = if pos <= cursor {
-            // Include the character under the cursor.
-            let mut end = cursor;
-            end.x = (end.x + 1).min(self.doc.lines[end.y].chars().count());
-
-            (pos, end)
+            (pos, cursor)
         } else {
-            let mut end = pos;
-            // Include the end character when backwards.
-            end.x = (end.x + 1).min(self.doc.lines[pos.y].chars().count());
-            (cursor, end)
+            (cursor, pos)
         };
 
         if start.y == end.y {

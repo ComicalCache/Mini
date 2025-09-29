@@ -1,4 +1,0 @@
-- View mode:
-    [ ] "u" undo
-    [ ] "r" hot redo
-    [ ] selectable redo options if multiple are available

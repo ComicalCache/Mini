@@ -157,6 +157,11 @@ impl Buffer for TextBuffer {
                     self.right(1);
                     self.change_mode(Mode::Write);
                 }
+                Key::Char('A') => {
+                    self.jump_to_end_of_line();
+                    self.right(1);
+                    self.change_mode(Mode::Write);
+                }
                 Key::Char('o') => {
                     self.insert_move_new_line_bellow();
                     self.change_mode(Mode::Write);
@@ -211,6 +216,17 @@ impl Buffer for TextBuffer {
                 Key::Char('v') => self.selected_pos = Some(self.doc.cursor),
                 Key::Esc => self.selected_pos = None,
                 Key::Char('d') => self.delete_selection(),
+                Key::Char('x') => {
+                    for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
+                        if self.doc.lines[self.doc.cursor.y]
+                            .chars()
+                            .nth(self.doc.cursor.x)
+                            .is_some()
+                        {
+                            self.doc.delete_char();
+                        }
+                    }
+                }
                 Key::Char(ch) if ch.is_ascii_digit() => {
                     self.motion_repeat.push(ch);
 

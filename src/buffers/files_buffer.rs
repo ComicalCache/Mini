@@ -1,3 +1,4 @@
+mod interact;
 mod r#move;
 
 use crate::{
@@ -8,7 +9,6 @@ use crate::{
     viewport::Viewport,
 };
 use std::{
-    fs::read_dir,
     io::{BufWriter, Error, Stdout},
     path::PathBuf,
 };
@@ -18,29 +18,20 @@ pub struct FilesBuffer {
     doc: Document,
     view: Viewport,
     base: PathBuf,
-    files: Vec<PathBuf>,
+    entries: Vec<PathBuf>,
 }
 
 impl FilesBuffer {
     pub fn new(w: usize, h: usize, base: PathBuf) -> Result<Self, Error> {
-        let mut files = read_dir(&base)?
-            .map(|res| res.map(|e| e.path()))
-            .collect::<Result<Vec<_>, Error>>()?;
-        files.sort();
-
-        let mut content = vec!["..".to_string()];
-        content.append(
-            &mut files
-                .iter()
-                .map(|p| p.to_string_lossy().to_string())
-                .collect(),
-        );
+        let mut entries = Vec::new();
+        let mut contents = Vec::new();
+        FilesBuffer::load_dir(&base, &mut entries, &mut contents)?;
 
         Ok(FilesBuffer {
-            doc: Document::new(Some(content), 0, 0),
+            doc: Document::new(Some(contents), 0, 0),
             view: Viewport::new(w, h, 0, h / 2),
             base,
-            files,
+            entries,
         })
     }
 
@@ -53,16 +44,16 @@ impl FilesBuffer {
         let curr = self.doc.cursor.y;
         let curr_type = match curr {
             0 => "Parent Dir",
-            idx if self.files[idx - 1].is_symlink() => "Symlink",
-            idx if self.files[idx - 1].is_dir() => "Dir",
+            idx if self.entries[idx - 1].is_symlink() => "Symlink",
+            idx if self.entries[idx - 1].is_dir() => "Dir",
             _ => "File",
         };
-        let entries = self.files.len();
+        let entries = self.entries.len();
         let entries_label = if entries == 1 { "Entry" } else { "Entries" };
 
         write!(
             &mut info_line,
-            "[File Tree] [{curr_type}] [{curr}/{entries} {entries_label}]",
+            "[Files] [{curr_type}] [{curr}/{entries} {entries_label}]",
         )
         .unwrap();
 
@@ -106,6 +97,17 @@ impl Buffer for FilesBuffer {
             Key::Char('.') => self.jump_to_matching_opposite(),
             Key::Char('g') => self.jump_to_end_of_file(),
             Key::Char('G') => self.jump_to_beginning_of_file(),
+            Key::Char('\n') => {
+                return self
+                    .select_item()
+                    .or_else(|err| {
+                        Ok::<CommandResult, Error>(CommandResult::SetAndChangeBuffer(
+                            INFO_BUFF_IDX,
+                            vec![err.to_string()],
+                        ))
+                    })
+                    .unwrap();
+            }
             Key::Char('t') => return CommandResult::ChangeBuffer(TXT_BUFF_IDX),
             Key::Char('?') => return CommandResult::ChangeBuffer(INFO_BUFF_IDX),
             _ => {}

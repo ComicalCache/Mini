@@ -89,11 +89,11 @@ fn main() -> Result<(), std::io::Error> {
         if events.iter().any(|e| e.key == STDIN_EVENT_KEY) {
             match buffs[curr_buff].tick(Some(stdin_keys.next().unwrap()?)) {
                 CommandResult::Ok => {}
-                CommandResult::Info(info) => {
-                    buffs[INFO_BUFF_IDX].set_contents(&info);
-                    curr_buff = INFO_BUFF_IDX;
-                }
                 CommandResult::ChangeBuffer(idx) => curr_buff = idx,
+                CommandResult::SetAndChangeBuffer(idx, contents) => {
+                    buffs[idx].set_contents(&contents);
+                    curr_buff = idx;
+                }
                 CommandResult::Quit => quit = true,
             }
         }
@@ -101,11 +101,11 @@ fn main() -> Result<(), std::io::Error> {
         else {
             match buffs[curr_buff].tick(None) {
                 CommandResult::Ok => {}
-                CommandResult::Info(info) => {
-                    buffs[INFO_BUFF_IDX].set_contents(&info);
-                    curr_buff = INFO_BUFF_IDX;
-                }
                 CommandResult::ChangeBuffer(idx) => curr_buff = idx,
+                CommandResult::SetAndChangeBuffer(idx, contents) => {
+                    buffs[idx].set_contents(&contents);
+                    curr_buff = idx;
+                }
                 CommandResult::Quit => quit = true,
             }
         }
