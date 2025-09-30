@@ -1,7 +1,10 @@
+#![feature(trait_alias)]
+
 mod buffer;
 mod buffers;
 mod cursor;
 mod document;
+mod state_machine;
 mod util;
 mod viewport;
 
@@ -85,28 +88,38 @@ fn main() -> Result<(), std::io::Error> {
         events.clear();
         poller.wait(&mut events, Some(Duration::from_millis(25)))?;
 
-        // If a new event exists, send a tick with the key immediately.
-        if events.iter().any(|e| e.key == STDIN_EVENT_KEY) {
-            match buffs[curr_buff].tick(Some(stdin_keys.next().unwrap()?)) {
-                CommandResult::Ok => {}
-                CommandResult::ChangeBuffer(idx) => curr_buff = idx,
-                CommandResult::SetAndChangeBuffer(idx, contents) => {
+        let key = if events.iter().any(|e| e.key == STDIN_EVENT_KEY) {
+            // If a new event exists, send a tick with the key immediately.
+            Some(stdin_keys.next().unwrap()?)
+        } else {
+            // Otherwise send an empty tick after the timeout.
+            None
+        };
+
+        match buffs[curr_buff].tick(key) {
+            CommandResult::Ok => {}
+            CommandResult::ChangeBuffer(idx) => curr_buff = idx,
+            CommandResult::SetAndChangeBuffer(idx, contents) => {
+                if let Err(err) = buffs[idx].can_quit() {
+                    buffs[INFO_BUFF_IDX].set_contents(&err);
+                    curr_buff = INFO_BUFF_IDX;
+                } else {
                     buffs[idx].set_contents(&contents);
                     curr_buff = idx;
                 }
-                CommandResult::Quit => quit = true,
             }
-        }
-        // Otherwise send an empty tick after the timeout.
-        else {
-            match buffs[curr_buff].tick(None) {
-                CommandResult::Ok => {}
-                CommandResult::ChangeBuffer(idx) => curr_buff = idx,
-                CommandResult::SetAndChangeBuffer(idx, contents) => {
-                    buffs[idx].set_contents(&contents);
-                    curr_buff = idx;
+            CommandResult::Quit => {
+                quit = true;
+
+                for idx in 0..buffs.len() {
+                    if let Err(err) = buffs[idx].can_quit() {
+                        buffs[INFO_BUFF_IDX].set_contents(&err);
+                        curr_buff = INFO_BUFF_IDX;
+
+                        quit = false;
+                        break;
+                    }
                 }
-                CommandResult::Quit => quit = true,
             }
         }
 

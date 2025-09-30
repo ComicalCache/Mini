@@ -59,19 +59,20 @@ impl TextBuffer {
         let cursor = self.doc.cursor;
         let line = &self.doc.lines[cursor.y];
         // Return early if at end of line.
-        if line.chars().count() <= cursor.x + 1 {
+        if line.chars().count() < cursor.x {
             return;
         }
 
         let Some(curr) = line.chars().nth(cursor.x) else {
-            unreachable!("Character must exist under cursor");
+            return;
         };
 
         // Find next not alphanumeric character or alphanumeric character if the current character is not.
         let Some((idx, ch)) = line.chars().skip(cursor.x + 1).enumerate().find(|(_, ch)| {
             !ch.is_alphanumeric() || (!curr.is_alphanumeric() && ch.is_alphanumeric())
         }) else {
-            // Return early if no next "word" candidate exists.
+            // Jump to end of line if no next word candidate exists.
+            self.jump_to_end_of_line();
             return;
         };
 
@@ -145,7 +146,8 @@ impl TextBuffer {
             self.doc.lines[self.doc.cursor.y]
                 .chars()
                 .count()
-                .saturating_sub(self.doc.cursor.x + 1),
+                .saturating_sub(self.doc.cursor.x + 1)
+                + 1,
         );
     }
 

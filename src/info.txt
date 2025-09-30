@@ -10,6 +10,8 @@ Motions:
 - 'g' to go to the end of the file
 - 'G' to go to the start of the file
 - 'x' to delete the character under the cursor
+- 'd' + motion to delete characters that would be skipped by the motion
+- 'dd' to delete a line
 
 Write Mode:
 > Insert text into the buffer.
@@ -37,10 +39,11 @@ Selection:
 > Select text for deletion with the flexibility of all available motions.
 Press 'v' to start selection at the current cursor position, move the cursor using all available motions
 Press esc to stop selection
-- 'd' to delete the selection
+- 'dv' to delete the selection
 
 Files:
 Press enter to open the file or directory
+- 'r' to refresh the file list
 
 --- Buffers ---
 Text:

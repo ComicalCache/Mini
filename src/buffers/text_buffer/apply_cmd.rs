@@ -104,7 +104,10 @@ impl TextBuffer {
 
         match cmd {
             "q" => self.quit_cmd(),
-            "qq" => CommandResult::Quit,
+            "qq" => {
+                self.doc.edited = false;
+                CommandResult::Quit
+            }
             "wq" => {
                 let res = match self.write_to_file() {
                     Ok(res) => res,

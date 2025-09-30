@@ -7,7 +7,7 @@ use crate::{
 };
 
 impl FilesBuffer {
-    /// Loads a directories as PathBuf and Strings.
+    /// Loads a directory as path buffers and Strings.
     pub(super) fn load_dir(
         base: &PathBuf,
         entries: &mut Vec<PathBuf>,
@@ -37,21 +37,27 @@ impl FilesBuffer {
 
         // Move directory up.
         if idx == 0 && self.base.pop() {
+            self.jump_to_beginning_of_file();
+
             FilesBuffer::load_dir(&self.base, &mut self.entries, &mut self.doc.lines)?;
             return Ok(CommandResult::Ok);
-        } else {
-            let entry = &self.entries[idx - 1];
-            if entry.is_file() {
-                let contents = read_file_to_lines(&mut open_file(entry)?)?;
-                return Ok(CommandResult::SetAndChangeBuffer(TXT_BUFF_IDX, contents));
-            } else if entry.is_dir() {
-                self.base = entry.to_path_buf();
-                FilesBuffer::load_dir(&self.base, &mut self.entries, &mut self.doc.lines)?;
-                return Ok(CommandResult::Ok);
-            } else if entry.is_symlink() {
-                // TODO: handle Symlinks.
-                return Ok(CommandResult::Ok);
-            }
+        }
+
+        let entry = &self.entries[idx - 1].clone();
+        if entry.is_file() {
+            self.jump_to_beginning_of_file();
+            let contents = read_file_to_lines(&mut open_file(entry)?)?;
+
+            return Ok(CommandResult::SetAndChangeBuffer(TXT_BUFF_IDX, contents));
+        } else if entry.is_dir() {
+            self.jump_to_beginning_of_file();
+            self.base.clone_from(entry);
+
+            FilesBuffer::load_dir(&self.base, &mut self.entries, &mut self.doc.lines)?;
+            return Ok(CommandResult::Ok);
+        } else if entry.is_symlink() {
+            // TODO: handle Symlinks.
+            return Ok(CommandResult::Ok);
         }
 
         Ok(CommandResult::Ok)

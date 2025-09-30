@@ -51,7 +51,7 @@ impl InfoBuffer {
         }
 
         let Some(curr) = line.chars().nth(cursor.x) else {
-            unreachable!("Character must exist under cursor");
+            return;
         };
 
         // Find next not alphanumeric character or alphanumeric character if the current character is not.

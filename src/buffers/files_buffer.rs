@@ -5,20 +5,42 @@ use crate::{
     INFO_BUFF_IDX, TXT_BUFF_IDX,
     buffer::Buffer,
     document::Document,
+    state_machine::{CommandMap, StateMachine},
     util::{CommandResult, CursorStyle},
     viewport::Viewport,
 };
 use std::{
     io::{BufWriter, Error, Stdout},
     path::PathBuf,
+    time::Duration,
 };
 use termion::{event::Key, raw::RawTerminal};
+
+#[derive(Clone)]
+enum Action {
+    Left,
+    Down,
+    Up,
+    Right,
+    NextWord,
+    PrevWord,
+    JumpToBeginningOfLine,
+    JumpToEndOfLine,
+    JumpToMatchingOpposite,
+    JumpToBeginningOfFile,
+    JumpToEndOfFile,
+    Refresh,
+    SelectItem,
+    ChangeToTextBuffer,
+    ChangeToInfoBuffer,
+}
 
 pub struct FilesBuffer {
     doc: Document,
     view: Viewport,
     base: PathBuf,
     entries: Vec<PathBuf>,
+    input_state_machine: StateMachine<Action>,
 }
 
 impl FilesBuffer {
@@ -27,11 +49,30 @@ impl FilesBuffer {
         let mut contents = Vec::new();
         FilesBuffer::load_dir(&base, &mut entries, &mut contents)?;
 
+        let command_map = CommandMap::new()
+            .simple(Key::Char('h'), Action::Left)
+            .simple(Key::Char('j'), Action::Down)
+            .simple(Key::Char('k'), Action::Up)
+            .simple(Key::Char('l'), Action::Right)
+            .simple(Key::Char('w'), Action::NextWord)
+            .simple(Key::Char('b'), Action::PrevWord)
+            .simple(Key::Char('<'), Action::JumpToBeginningOfLine)
+            .simple(Key::Char('>'), Action::JumpToEndOfLine)
+            .simple(Key::Char('.'), Action::JumpToMatchingOpposite)
+            .simple(Key::Char('g'), Action::JumpToEndOfFile)
+            .simple(Key::Char('G'), Action::JumpToBeginningOfFile)
+            .simple(Key::Char('r'), Action::Refresh)
+            .simple(Key::Char('\n'), Action::SelectItem)
+            .simple(Key::Char('t'), Action::ChangeToTextBuffer)
+            .simple(Key::Char('?'), Action::ChangeToInfoBuffer);
+        let input_state_machine = StateMachine::new(command_map, Duration::from_secs(1));
+
         Ok(FilesBuffer {
             doc: Document::new(Some(contents), 0, 0),
             view: Viewport::new(w, h, 0, h / 2),
             base,
             entries,
+            input_state_machine,
         })
     }
 
@@ -81,23 +122,28 @@ impl Buffer for FilesBuffer {
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
-        let Some(key) = key else {
-            return CommandResult::Ok;
-        };
+        use crate::state_machine::StateMachineResult::{Action as A, Incomplete, Invalid};
 
-        match key {
-            Key::Char('h') => self.left(1),
-            Key::Char('j') => self.down(1),
-            Key::Char('k') => self.up(1),
-            Key::Char('l') => self.right(1),
-            Key::Char('w') => self.next_word(),
-            Key::Char('b') => self.prev_word(),
-            Key::Char('<') => self.jump_to_beginning_of_line(),
-            Key::Char('>') => self.jump_to_end_of_line(),
-            Key::Char('.') => self.jump_to_matching_opposite(),
-            Key::Char('g') => self.jump_to_end_of_file(),
-            Key::Char('G') => self.jump_to_beginning_of_file(),
-            Key::Char('\n') => {
+        match self.input_state_machine.tick(key.into()) {
+            A(Action::Left) => self.left(1),
+            A(Action::Down) => self.down(1),
+            A(Action::Up) => self.up(1),
+            A(Action::Right) => self.right(1),
+            A(Action::NextWord) => self.next_word(),
+            A(Action::PrevWord) => self.prev_word(),
+            A(Action::JumpToBeginningOfLine) => self.jump_to_beginning_of_line(),
+            A(Action::JumpToEndOfLine) => self.jump_to_end_of_line(),
+            A(Action::JumpToMatchingOpposite) => self.jump_to_matching_opposite(),
+            A(Action::JumpToEndOfFile) => self.jump_to_end_of_file(),
+            A(Action::JumpToBeginningOfFile) => self.jump_to_beginning_of_file(),
+            A(Action::Refresh) => {
+                if let Err(err) =
+                    FilesBuffer::load_dir(&self.base, &mut self.entries, &mut self.doc.lines)
+                {
+                    return CommandResult::SetAndChangeBuffer(INFO_BUFF_IDX, vec![err.to_string()]);
+                }
+            }
+            A(Action::SelectItem) => {
                 return self
                     .select_item()
                     .or_else(|err| {
@@ -108,15 +154,19 @@ impl Buffer for FilesBuffer {
                     })
                     .unwrap();
             }
-            Key::Char('t') => return CommandResult::ChangeBuffer(TXT_BUFF_IDX),
-            Key::Char('?') => return CommandResult::ChangeBuffer(INFO_BUFF_IDX),
-            _ => {}
+            A(Action::ChangeToTextBuffer) => return CommandResult::ChangeBuffer(TXT_BUFF_IDX),
+            A(Action::ChangeToInfoBuffer) => return CommandResult::ChangeBuffer(INFO_BUFF_IDX),
+            Incomplete | Invalid => {}
         }
 
         CommandResult::Ok
     }
 
     fn set_contents(&mut self, _: &[String]) {
-        unreachable!("Contents of FileTreeBuffer cannot be set")
+        unreachable!("Contents of FilesBuffer cannot be set")
+    }
+
+    fn can_quit(&self) -> Result<(), Vec<String>> {
+        Ok(())
     }
 }

@@ -18,4 +18,7 @@ pub trait Buffer {
 
     /// Sets the contents of a buffer.
     fn set_contents(&mut self, contents: &[String]);
+
+    /// Asks if the buffer is ready to quit.
+    fn can_quit(&self) -> Result<(), Vec<String>>;
 }
