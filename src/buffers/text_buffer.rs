@@ -55,6 +55,7 @@ enum ViewAction {
     DeleteToBeginningOfFile,
     DeleteToEndOfFile,
     DeleteChar,
+    ReplaceChar(char),
     Repeat(char),
 }
 
@@ -154,6 +155,10 @@ impl TextBuffer {
                     _ => None,
                 })
                 .simple(Key::Char('x'), ViewAction::DeleteChar)
+                .prefix(Key::Char('r'), |key| match key {
+                    Key::Char(ch) => Some(ChainResult::Action(ViewAction::ReplaceChar(ch))),
+                    _ => None,
+                })
                 .simple(Key::Char('0'), ViewAction::Repeat('0'))
                 .simple(Key::Char('1'), ViewAction::Repeat('1'))
                 .simple(Key::Char('2'), ViewAction::Repeat('2'))
@@ -254,11 +259,12 @@ impl TextBuffer {
             Mode::Command => {
                 // Clear command line so its ready for next entry.
                 self.cmd.lines[0].to_mut().clear();
-                self.cmd.cursor = Cursor::new(0, 0);
 
                 // Set cursor to the beginning of line so its always at a predictable position.
                 // TODO: restore prev position.
-                self.jump_to_beginning_of_line();
+                self.left(self.cmd.cursor.x);
+
+                self.cmd.cursor = Cursor::new(0, 0);
             }
             Mode::View | Mode::Write => {}
         }
@@ -409,6 +415,21 @@ impl TextBuffer {
                     }
                 }
             }
+            A(ViewAction::ReplaceChar(ch)) => {
+                if self.doc.lines[self.doc.cursor.y]
+                    .chars()
+                    .nth(self.doc.cursor.x)
+                    .is_some()
+                {
+                    self.doc.delete_char();
+
+                    match ch {
+                        '\n' => self.write_new_line_char(),
+                        '\t' => self.write_tab(),
+                        _ => self.doc.write_char(ch),
+                    }
+                }
+            }
             A(ViewAction::Repeat(ch)) => {
                 self.motion_repeat.push(ch);
 
@@ -485,7 +506,7 @@ impl Buffer for TextBuffer {
         self.view.render(
             stdout,
             &self.doc,
-            self.info_line(),
+            &self.info_line(),
             self.cmd_line(),
             cursor_style,
         )

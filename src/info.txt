@@ -12,6 +12,7 @@ Motions:
 - 'x' to delete the character under the cursor
 - 'd' + motion to delete characters that would be skipped by the motion
 - 'dd' to delete a line
+- 'r' + char to replace the character under the cursor
 
 Write Mode:
 > Insert text into the buffer.

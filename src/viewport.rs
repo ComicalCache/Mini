@@ -2,9 +2,17 @@ use crate::{cursor::Cursor, document::Document, util::CursorStyle};
 use std::io::{BufWriter, Error, Stdout, Write};
 use termion::{
     clear::All,
+    color::{self, Bg, Fg, Reset},
     cursor::{BlinkingBar, BlinkingBlock, Goto, SteadyBlock},
     raw::RawTerminal,
 };
+
+const BG: Bg<color::Rgb> = Bg(color::Rgb(41, 44, 51));
+const NO_BG: Bg<Reset> = Bg(Reset);
+const HIGHLIGHT: Bg<color::Rgb> = Bg(color::Rgb(51, 53, 59));
+const NO_HIGHLIGHT: Bg<Reset> = Bg(Reset);
+const TXT: Fg<color::Rgb> = Fg(color::Rgb(172, 178, 190));
+const NO_TXT: Fg<Reset> = Fg(Reset);
 
 pub struct Viewport {
     pub w: usize,
@@ -50,7 +58,7 @@ impl Viewport {
                 // Use all remaining bytes if they don't fill the entire line.
                 .map_or(content.len(), |(idx, _)| idx);
 
-            self.lines[line_idx].replace_range(.., &content[start..end]);
+            self.lines[line_idx].replace_range(0..(end - start), &content[start..end]);
         }
     }
 
@@ -59,12 +67,13 @@ impl Viewport {
         &mut self,
         stdout: &mut BufWriter<RawTerminal<Stdout>>,
         doc: &Document,
-        info_line: String,
+        info_line: &str,
         cmd_line: Option<(String, Cursor)>,
         cursor_style: CursorStyle,
     ) -> Result<(), Error> {
         // Set info line.
-        self.lines[0] = info_line;
+        self.lines[0] = " ".repeat(self.w);
+        self.lines[0].replace_range(0..info_line.len(), info_line);
 
         // Calculate which line of text is visible at what line on the screen.
         #[allow(clippy::cast_possible_wrap)]
@@ -72,7 +81,7 @@ impl Viewport {
 
         // Plus one for info line offset.
         for (lines_idx, doc_idx) in (1..self.h).zip(lines_offset + 1..) {
-            self.lines[lines_idx].clear();
+            self.lines[lines_idx] = " ".repeat(self.w);
 
             // Skip screen lines outside the text line bounds.
             // The value is guaranteed positive at that point.
@@ -104,11 +113,19 @@ impl Viewport {
         };
 
         // Write the new content.
-        write!(stdout, "{All}{}", Goto(1, 1))?;
-        for line in &self.lines[..self.lines.len() - 1] {
-            write!(stdout, "{line}\n\r")?;
+        write!(
+            stdout,
+            "{All}{}{HIGHLIGHT}{TXT}{}{NO_HIGHLIGHT}{NO_TXT}",
+            Goto(1, 1),
+            self.lines[0]
+        )?;
+        for (idx, line) in self.lines[..self.lines.len()].iter().skip(1).enumerate() {
+            if idx + 1 == usize::from(cursor.1 - 1) {
+                write!(stdout, "\n\r{HIGHLIGHT}{TXT}{line}{NO_HIGHLIGHT}{NO_TXT}")?;
+            } else {
+                write!(stdout, "\n\r{BG}{TXT}{line}{NO_BG}{NO_TXT}")?;
+            }
         }
-        write!(stdout, "{}", self.lines[self.lines.len() - 1])?;
 
         match cursor_style {
             CursorStyle::BlinkingBar => write!(stdout, "{cursor}{BlinkingBar}",)?,

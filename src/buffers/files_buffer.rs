@@ -108,7 +108,7 @@ impl Buffer for FilesBuffer {
         self.view.render(
             stdout,
             &self.doc,
-            self.info_line(),
+            &self.info_line(),
             None,
             CursorStyle::SteadyBlock,
         )

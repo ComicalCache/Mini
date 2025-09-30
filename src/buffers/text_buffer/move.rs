@@ -137,7 +137,7 @@ impl TextBuffer {
 
     /// Jumps the the beginning of a line.
     pub(super) fn jump_to_beginning_of_line(&mut self) {
-        self.left(self.doc.lines[self.doc.cursor.y].chars().count());
+        self.left(self.doc.cursor.x);
     }
 
     /// Jumps to the end of a line.
