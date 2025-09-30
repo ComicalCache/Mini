@@ -1,5 +1,9 @@
 use crate::util::CommandResult;
-use std::io::{BufWriter, Error, Stdout};
+use std::{
+    borrow::Cow,
+    io::{BufWriter, Error, Stdout},
+    path::PathBuf,
+};
 use termion::{event::Key, raw::RawTerminal};
 
 pub trait Buffer {
@@ -17,8 +21,8 @@ pub trait Buffer {
     fn tick(&mut self, key: Option<Key>) -> CommandResult;
 
     /// Sets the contents of a buffer.
-    fn set_contents(&mut self, contents: &[String]);
+    fn set_contents(&mut self, contents: &[Cow<'static, str>], path: Option<PathBuf>);
 
     /// Asks if the buffer is ready to quit.
-    fn can_quit(&self) -> Result<(), Vec<String>>;
+    fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>>;
 }

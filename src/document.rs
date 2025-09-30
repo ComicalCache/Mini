@@ -1,39 +1,33 @@
 use crate::cursor::Cursor;
 use std::{
+    borrow::Cow,
     fs::File,
     io::{BufWriter, Error, Seek, SeekFrom, Write},
 };
 
 pub struct Document {
-    pub lines: Vec<String>,
+    pub lines: Vec<Cow<'static, str>>,
     pub cursor: Cursor,
     pub edited: bool,
 }
 
 impl Document {
-    pub fn new(contents: Option<Vec<String>>, x: usize, y: usize) -> Self {
-        let mut doc = Document {
-            lines: vec![String::new()],
+    pub fn new(contents: Option<Vec<Cow<'static, str>>>, x: usize, y: usize) -> Self {
+        let lines = contents
+            .filter(|c| !c.is_empty())
+            .map_or_else(|| vec![Cow::from("")], |c| c.into_iter().collect());
+
+        Document {
+            lines,
             cursor: Cursor::new(x, y),
             edited: false,
-        };
-
-        if let Some(content) = contents
-            && !content.is_empty()
-        {
-            doc.lines.resize(content.len(), String::new());
-            for (idx, line) in content.iter().enumerate() {
-                doc.lines[idx].clone_from(line);
-            }
         }
-
-        doc
     }
 
     /// Clears the document and sets the cursor to a specified position.
     pub fn clear(&mut self, x: usize, y: usize) {
         self.lines.truncate(1);
-        self.lines[0].clear();
+        self.lines[0] = Cow::from("");
         self.cursor = Cursor::new(x, y);
         self.edited = false;
     }
@@ -59,9 +53,9 @@ impl Document {
     }
 
     /// Replaces the document buffer and sets the cursor to a specified position.
-    pub fn set_contents(&mut self, lines: &[String], x: usize, y: usize) {
+    pub fn set_contents(&mut self, lines: &[Cow<'static, str>], x: usize, y: usize) {
         if !lines.is_empty() {
-            self.lines.resize(lines.len(), String::new());
+            self.lines.resize(lines.len(), Cow::from(""));
             for (idx, line) in lines.iter().enumerate() {
                 self.lines[idx].clone_from(line);
             }
@@ -71,23 +65,23 @@ impl Document {
     }
 
     /// Inserts a new line at the current cursor y position.
-    pub fn insert_line(&mut self, line: String) {
+    pub fn insert_line(&mut self, line: Cow<'static, str>) {
         self.insert_line_at(self.cursor.y, line);
     }
 
     /// Inserts a new line at a specified y position.
-    pub fn insert_line_at(&mut self, y: usize, line: String) {
+    pub fn insert_line_at(&mut self, y: usize, line: Cow<'static, str>) {
         self.lines.insert(y, line);
         self.edited = true;
     }
 
     /// Removes a line at the current cursor y position.
-    pub fn remove_line(&mut self) -> String {
+    pub fn remove_line(&mut self) -> Cow<'static, str> {
         self.remove_line_at(self.cursor.y)
     }
 
     /// Removes a line at a specified y position.
-    pub fn remove_line_at(&mut self, y: usize) -> String {
+    pub fn remove_line_at(&mut self, y: usize) -> Cow<'static, str> {
         self.lines.remove(y)
     }
 
@@ -102,7 +96,7 @@ impl Document {
             .char_indices()
             .nth(x)
             .map_or(self.lines[y].len(), |(idx, _)| idx);
-        self.lines[y].insert(idx, ch);
+        self.lines[y].to_mut().insert(idx, ch);
         self.edited = true;
     }
 
@@ -121,7 +115,7 @@ impl Document {
             // Safe to unwrap
             .unwrap();
 
-        line.remove(idx);
+        line.to_mut().remove(idx);
         self.edited = true;
     }
 
@@ -138,7 +132,7 @@ impl Document {
             .nth(x)
             .map_or(line.len(), |(idx, _)| idx);
 
-        line.insert_str(idx, r#str);
+        line.to_mut().insert_str(idx, r#str);
         self.edited = true;
     }
 }

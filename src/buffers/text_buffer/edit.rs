@@ -1,4 +1,5 @@
 use crate::buffers::text_buffer::TextBuffer;
+use std::borrow::Cow;
 
 const TAB: &str = "    ";
 
@@ -7,14 +8,14 @@ impl TextBuffer {
     /// The cursor will be on the new line.
     pub(super) fn insert_move_new_line_above(&mut self) {
         self.jump_to_beginning_of_line();
-        self.doc.insert_line(String::new());
+        self.doc.insert_line(Cow::from(""));
     }
 
     /// Inserts a new line bellow the current cursor position.
     /// The cursor will be on the new line.
     pub(super) fn insert_move_new_line_bellow(&mut self) {
         self.doc
-            .insert_line_at(self.doc.cursor.y + 1, String::new());
+            .insert_line_at(self.doc.cursor.y + 1, Cow::from(""));
         self.down(1);
     }
 
@@ -41,8 +42,9 @@ impl TextBuffer {
             .nth(self.doc.cursor.x)
             .map_or(line.len(), |(idx, _)| idx);
 
-        let new_line = line.split_off(idx);
-        self.doc.insert_line_at(self.doc.cursor.y + 1, new_line);
+        let new_line = line.to_mut().split_off(idx);
+        self.doc
+            .insert_line_at(self.doc.cursor.y + 1, Cow::from(new_line));
 
         self.down(1);
         self.left(self.doc.cursor.x);
@@ -75,7 +77,7 @@ impl TextBuffer {
             // If deleting at the beginning of a line (don't delete the first line).
             let prev_line_len = self.doc.lines[cursor.y - 1].chars().count();
             let line = self.doc.remove_line();
-            self.doc.lines[cursor.y - 1].push_str(&line);
+            self.doc.lines[cursor.y - 1].to_mut().push_str(&line);
 
             self.up(1);
             self.right(prev_line_len);
@@ -120,7 +122,7 @@ impl TextBuffer {
                 .nth(end.x)
                 .map_or(line.len(), |(idx, _)| idx);
 
-            line.drain(start_idx..end_idx);
+            line.to_mut().drain(start_idx..end_idx);
         } else {
             // Multiple lines were selected
 
@@ -138,8 +140,8 @@ impl TextBuffer {
                 .char_indices()
                 .nth(start.x)
                 .map_or(start_line[start.y].len(), |(idx, _)| idx);
-            start_line[start.y].truncate(start_idx);
-            start_line[start.y].push_str(tail);
+            start_line[start.y].to_mut().truncate(start_idx);
+            start_line[start.y].to_mut().push_str(tail);
 
             // Remove the inbetween lines
             self.doc.lines.drain((start.y + 1)..=end.y);

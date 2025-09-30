@@ -10,6 +10,7 @@ use crate::{
     viewport::Viewport,
 };
 use std::{
+    borrow::Cow,
     io::{BufWriter, Error, Stdout},
     path::PathBuf,
     time::Duration,
@@ -140,7 +141,11 @@ impl Buffer for FilesBuffer {
                 if let Err(err) =
                     FilesBuffer::load_dir(&self.base, &mut self.entries, &mut self.doc.lines)
                 {
-                    return CommandResult::SetAndChangeBuffer(INFO_BUFF_IDX, vec![err.to_string()]);
+                    return CommandResult::SetAndChangeBuffer(
+                        INFO_BUFF_IDX,
+                        vec![Cow::from(err.to_string())],
+                        None,
+                    );
                 }
             }
             A(Action::SelectItem) => {
@@ -149,7 +154,8 @@ impl Buffer for FilesBuffer {
                     .or_else(|err| {
                         Ok::<CommandResult, Error>(CommandResult::SetAndChangeBuffer(
                             INFO_BUFF_IDX,
-                            vec![err.to_string()],
+                            vec![Cow::from(err.to_string())],
+                            None,
                         ))
                     })
                     .unwrap();
@@ -162,11 +168,13 @@ impl Buffer for FilesBuffer {
         CommandResult::Ok
     }
 
-    fn set_contents(&mut self, _: &[String]) {
-        unreachable!("Contents of FilesBuffer cannot be set")
+    fn set_contents(&mut self, _: &[Cow<'static, str>], path: Option<PathBuf>) {
+        if let Some(path) = path {
+            self.base = path;
+        }
     }
 
-    fn can_quit(&self) -> Result<(), Vec<String>> {
+    fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>> {
         Ok(())
     }
 }

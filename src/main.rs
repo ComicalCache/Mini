@@ -1,4 +1,5 @@
 #![feature(trait_alias)]
+#![feature(str_as_str)]
 
 mod buffer;
 mod buffers;
@@ -99,12 +100,12 @@ fn main() -> Result<(), std::io::Error> {
         match buffs[curr_buff].tick(key) {
             CommandResult::Ok => {}
             CommandResult::ChangeBuffer(idx) => curr_buff = idx,
-            CommandResult::SetAndChangeBuffer(idx, contents) => {
+            CommandResult::SetAndChangeBuffer(idx, contents, path) => {
                 if let Err(err) = buffs[idx].can_quit() {
-                    buffs[INFO_BUFF_IDX].set_contents(&err);
+                    buffs[INFO_BUFF_IDX].set_contents(&err, path);
                     curr_buff = INFO_BUFF_IDX;
                 } else {
-                    buffs[idx].set_contents(&contents);
+                    buffs[idx].set_contents(&contents, path);
                     curr_buff = idx;
                 }
             }
@@ -113,7 +114,7 @@ fn main() -> Result<(), std::io::Error> {
 
                 for idx in 0..buffs.len() {
                     if let Err(err) = buffs[idx].can_quit() {
-                        buffs[INFO_BUFF_IDX].set_contents(&err);
+                        buffs[INFO_BUFF_IDX].set_contents(&err, None);
                         curr_buff = INFO_BUFF_IDX;
 
                         quit = false;

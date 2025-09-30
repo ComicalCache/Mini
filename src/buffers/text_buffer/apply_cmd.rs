@@ -3,7 +3,7 @@ use crate::{
     buffers::text_buffer::TextBuffer,
     util::{CommandResult, open_file, read_file_to_lines},
 };
-use std::io::Error;
+use std::{borrow::Cow, io::Error};
 
 impl TextBuffer {
     fn write_to_file(&mut self) -> Result<bool, Error> {
@@ -23,7 +23,10 @@ impl TextBuffer {
 
         CommandResult::SetAndChangeBuffer(
             INFO_BUFF_IDX,
-            vec!["There are unsaved changes, save or qq to force quit".to_string()],
+            vec![Cow::from(
+                "There are unsaved changes, save or qq to force quit",
+            )],
+            None,
         )
     }
 
@@ -31,7 +34,10 @@ impl TextBuffer {
         if self.doc.edited && !force {
             return CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
-                vec!["There are unsaved changes, save or oo to force open new".to_string()],
+                vec![Cow::from(
+                    "There are unsaved changes, save or oo to force open new",
+                )],
+                None,
             );
         }
 
@@ -50,14 +56,22 @@ impl TextBuffer {
         self.file = match open_file(args) {
             Ok(file) => Some(file),
             Err(err) => {
-                return CommandResult::SetAndChangeBuffer(INFO_BUFF_IDX, vec![err.to_string()]);
+                return CommandResult::SetAndChangeBuffer(
+                    INFO_BUFF_IDX,
+                    vec![Cow::from(err.to_string())],
+                    None,
+                );
             }
         };
 
         match read_file_to_lines(self.file.as_mut().unwrap()) {
             Ok(lines) => self.doc.set_contents(&lines, 0, 0),
             Err(err) => {
-                return CommandResult::SetAndChangeBuffer(INFO_BUFF_IDX, vec![err.to_string()]);
+                return CommandResult::SetAndChangeBuffer(
+                    INFO_BUFF_IDX,
+                    vec![Cow::from(err.to_string())],
+                    None,
+                );
             }
         }
 
@@ -69,7 +83,11 @@ impl TextBuffer {
             self.file = match open_file(args) {
                 Ok(file) => Some(file),
                 Err(err) => {
-                    return CommandResult::SetAndChangeBuffer(INFO_BUFF_IDX, vec![err.to_string()]);
+                    return CommandResult::SetAndChangeBuffer(
+                        INFO_BUFF_IDX,
+                        vec![Cow::from(err.to_string())],
+                        None,
+                    );
                 }
             };
         }
@@ -78,16 +96,20 @@ impl TextBuffer {
         let res = match self.write_to_file() {
             Ok(res) => res,
             Err(err) => {
-                return CommandResult::SetAndChangeBuffer(INFO_BUFF_IDX, vec![err.to_string()]);
+                return CommandResult::SetAndChangeBuffer(
+                    INFO_BUFF_IDX,
+                    vec![Cow::from(err.to_string())],
+                    None,
+                );
             }
         };
         if !res {
             return CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
-                vec![
-                    "Please specify a file location using 'w <path>' to write the file to"
-                        .to_string(),
-                ],
+                vec![Cow::from(
+                    "Please specify a file location using 'w <path>' to write the file to",
+                )],
+                None,
             );
         }
 
@@ -114,17 +136,18 @@ impl TextBuffer {
                     Err(err) => {
                         return CommandResult::SetAndChangeBuffer(
                             INFO_BUFF_IDX,
-                            vec![err.to_string()],
+                            vec![Cow::from(err.to_string())],
+                            None,
                         );
                     }
                 };
                 if !res {
                     return CommandResult::SetAndChangeBuffer(
                         INFO_BUFF_IDX,
-                        vec![
-                            "Please specify a file location using 'w <path>' to write the file to"
-                                .to_string(),
-                        ],
+                        vec![Cow::from(
+                            "Please specify a file location using 'w <path>' to write the file to",
+                        )],
+                        None,
                     );
                 }
 
@@ -135,11 +158,13 @@ impl TextBuffer {
             "oo" => self.open_cmd(args, true),
             "?" => CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
-                INFO_MSG.lines().map(ToString::to_string).collect(),
+                INFO_MSG.lines().map(Cow::from).collect(),
+                None,
             ),
             _ => CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
-                vec![format!("Unrecognized command: '{cmd}'")],
+                vec![Cow::from(format!("Unrecognized command: '{cmd}'"))],
+                None,
             ),
         }
     }

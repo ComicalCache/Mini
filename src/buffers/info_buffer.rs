@@ -9,7 +9,9 @@ use crate::{
     viewport::Viewport,
 };
 use std::{
+    borrow::Cow,
     io::{BufWriter, Error, Stdout},
+    path::PathBuf,
     time::Duration,
 };
 use termion::{event::Key, raw::RawTerminal};
@@ -128,11 +130,11 @@ impl Buffer for InfoBuffer {
         CommandResult::Ok
     }
 
-    fn set_contents(&mut self, contents: &[String]) {
+    fn set_contents(&mut self, contents: &[Cow<'static, str>], _: Option<PathBuf>) {
         self.doc.set_contents(contents, 0, 0);
     }
 
-    fn can_quit(&self) -> Result<(), Vec<String>> {
+    fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>> {
         Ok(())
     }
 }

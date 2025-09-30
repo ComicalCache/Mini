@@ -1,4 +1,4 @@
-use std::{fs::read_dir, io::Error, path::PathBuf};
+use std::{borrow::Cow, fs::read_dir, io::Error, path::PathBuf};
 
 use crate::{
     TXT_BUFF_IDX,
@@ -11,7 +11,7 @@ impl FilesBuffer {
     pub(super) fn load_dir(
         base: &PathBuf,
         entries: &mut Vec<PathBuf>,
-        contents: &mut Vec<String>,
+        contents: &mut Vec<Cow<'static, str>>,
     ) -> Result<(), Error> {
         let mut tmp_entries = read_dir(base)?
             .map(|res| res.map(|e| e.path()))
@@ -19,11 +19,11 @@ impl FilesBuffer {
         tmp_entries.sort();
         *entries = tmp_entries;
 
-        let mut tmp_contents = vec!["..".to_string()];
+        let mut tmp_contents = vec![Cow::from("..")];
         tmp_contents.append(
             &mut entries
                 .iter()
-                .map(|p| p.to_string_lossy().to_string())
+                .map(|p| Cow::from(p.to_string_lossy().to_string()))
                 .collect(),
         );
         *contents = tmp_contents;
@@ -47,8 +47,13 @@ impl FilesBuffer {
         if entry.is_file() {
             self.jump_to_beginning_of_file();
             let contents = read_file_to_lines(&mut open_file(entry)?)?;
+            self.base.clone_from(entry);
 
-            return Ok(CommandResult::SetAndChangeBuffer(TXT_BUFF_IDX, contents));
+            return Ok(CommandResult::SetAndChangeBuffer(
+                TXT_BUFF_IDX,
+                contents,
+                Some(self.base.clone()),
+            ));
         } else if entry.is_dir() {
             self.jump_to_beginning_of_file();
             self.base.clone_from(entry);

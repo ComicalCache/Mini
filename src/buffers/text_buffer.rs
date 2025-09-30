@@ -8,12 +8,14 @@ use crate::{
     cursor::Cursor,
     document::Document,
     state_machine::{ChainResult, CommandMap, StateMachine},
-    util::{CommandResult, CursorStyle, read_file_to_lines},
+    util::{CommandResult, CursorStyle, open_file, read_file_to_lines},
     viewport::Viewport,
 };
 use std::{
+    borrow::Cow,
     fs::File,
     io::{BufWriter, Error, Stdout},
+    path::PathBuf,
     time::Duration,
 };
 use termion::{event::Key, raw::RawTerminal};
@@ -220,7 +222,7 @@ impl TextBuffer {
         let col = self.doc.cursor.x + 1;
         let total = self.doc.lines.len();
         let percentage = 100 * line / total;
-        let size: usize = self.doc.lines.iter().map(String::len).sum();
+        let size: usize = self.doc.lines.iter().map(|l| l.len()).sum();
 
         write!(
             &mut info_line,
@@ -242,7 +244,7 @@ impl TextBuffer {
 
     fn cmd_line(&self) -> Option<(String, Cursor)> {
         match self.mode {
-            Mode::Command => Some((self.cmd.lines[0].clone(), self.cmd.cursor)),
+            Mode::Command => Some((self.cmd.lines[0].to_string(), self.cmd.cursor)),
             _ => None,
         }
     }
@@ -251,7 +253,7 @@ impl TextBuffer {
         match self.mode {
             Mode::Command => {
                 // Clear command line so its ready for next entry.
-                self.cmd.lines[0].clear();
+                self.cmd.lines[0].to_mut().clear();
                 self.cmd.cursor = Cursor::new(0, 0);
 
                 // Set cursor to the beginning of line so its always at a predictable position.
@@ -326,7 +328,7 @@ impl TextBuffer {
                     self.jump_to_beginning_of_line();
                     self.doc.remove_line();
                     if self.doc.lines.is_empty() {
-                        self.doc.insert_line(String::new());
+                        self.doc.insert_line(Cow::from(""));
                     }
                     if self.doc.cursor.y == self.doc.lines.len() {
                         self.up(1);
@@ -505,15 +507,18 @@ impl Buffer for TextBuffer {
         }
     }
 
-    fn set_contents(&mut self, contents: &[String]) {
+    fn set_contents(&mut self, contents: &[Cow<'static, str>], path: Option<PathBuf>) {
         self.doc.set_contents(contents, 0, 0);
+        if let Some(path) = path {
+            self.file = open_file(path).ok();
+        }
     }
 
-    fn can_quit(&self) -> Result<(), Vec<String>> {
+    fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>> {
         if !self.doc.edited {
             return Ok(());
         }
 
-        Err(vec!["There are unsaved changes".to_string()])
+        Err(vec![Cow::from("There are unsaved changes")])
     }
 }
