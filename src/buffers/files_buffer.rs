@@ -1,9 +1,9 @@
 mod interact;
-mod r#move;
 
 use crate::{
     INFO_BUFF_IDX, TXT_BUFF_IDX,
     buffer::Buffer,
+    cursor_move as cm,
     document::Document,
     state_machine::{CommandMap, StateMachine},
     util::{CommandResult, CursorStyle},
@@ -50,26 +50,31 @@ impl FilesBuffer {
         let mut contents = Vec::new();
         FilesBuffer::load_dir(&base, &mut entries, &mut contents)?;
 
-        let command_map = CommandMap::new()
-            .simple(Key::Char('h'), Action::Left)
-            .simple(Key::Char('j'), Action::Down)
-            .simple(Key::Char('k'), Action::Up)
-            .simple(Key::Char('l'), Action::Right)
-            .simple(Key::Char('w'), Action::NextWord)
-            .simple(Key::Char('b'), Action::PrevWord)
-            .simple(Key::Char('<'), Action::JumpToBeginningOfLine)
-            .simple(Key::Char('>'), Action::JumpToEndOfLine)
-            .simple(Key::Char('.'), Action::JumpToMatchingOpposite)
-            .simple(Key::Char('g'), Action::JumpToEndOfFile)
-            .simple(Key::Char('G'), Action::JumpToBeginningOfFile)
-            .simple(Key::Char('r'), Action::Refresh)
-            .simple(Key::Char('\n'), Action::SelectItem)
-            .simple(Key::Char('t'), Action::ChangeToTextBuffer)
-            .simple(Key::Char('?'), Action::ChangeToInfoBuffer);
-        let input_state_machine = StateMachine::new(command_map, Duration::from_secs(1));
+        let input_state_machine = {
+            #[allow(clippy::enum_glob_use)]
+            use Action::*;
+
+            let command_map = CommandMap::new()
+                .simple(Key::Char('h'), Left)
+                .simple(Key::Char('j'), Down)
+                .simple(Key::Char('k'), Up)
+                .simple(Key::Char('l'), Right)
+                .simple(Key::Char('w'), NextWord)
+                .simple(Key::Char('b'), PrevWord)
+                .simple(Key::Char('<'), JumpToBeginningOfLine)
+                .simple(Key::Char('>'), JumpToEndOfLine)
+                .simple(Key::Char('.'), JumpToMatchingOpposite)
+                .simple(Key::Char('g'), JumpToEndOfFile)
+                .simple(Key::Char('G'), JumpToBeginningOfFile)
+                .simple(Key::Char('r'), Refresh)
+                .simple(Key::Char('\n'), SelectItem)
+                .simple(Key::Char('t'), ChangeToTextBuffer)
+                .simple(Key::Char('?'), ChangeToInfoBuffer);
+            StateMachine::new(command_map, Duration::from_secs(1))
+        };
 
         Ok(FilesBuffer {
-            doc: Document::new(Some(contents), 0, 0),
+            doc: Document::new(0, 0, Some(contents)),
             view: Viewport::new(w, h, 0, h / 2),
             base,
             entries,
@@ -77,13 +82,13 @@ impl FilesBuffer {
         })
     }
 
-    fn info_line(&self) -> String {
+    fn info_line(&mut self) {
         use std::fmt::Write;
 
-        let mut info_line = String::new();
+        self.view.info_line.clear();
 
         // No plus 1 since the first entry is always ".." and not really a directory entry.
-        let curr = self.doc.cursor.y;
+        let curr = self.doc.cur.y;
         let curr_type = match curr {
             0 => "Parent Dir",
             idx if self.entries[idx - 1].is_symlink() => "Symlink",
@@ -94,24 +99,19 @@ impl FilesBuffer {
         let entries_label = if entries == 1 { "Entry" } else { "Entries" };
 
         write!(
-            &mut info_line,
+            &mut self.view.info_line,
             "[Files] [{curr_type}] [{curr}/{entries} {entries_label}]",
         )
         .unwrap();
-
-        info_line
     }
 }
 
 impl Buffer for FilesBuffer {
     fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
-        self.view.render(
-            stdout,
-            &self.doc,
-            &self.info_line(),
-            None,
-            CursorStyle::SteadyBlock,
-        )
+        self.info_line();
+        self.view.cmd = None;
+        self.view
+            .render(stdout, &self.doc, CursorStyle::SteadyBlock)
     }
 
     fn resize(&mut self, w: usize, h: usize) {
@@ -119,27 +119,35 @@ impl Buffer for FilesBuffer {
             return;
         }
 
-        self.view.resize(w, h, self.view.cursor.x.min(w), h / 2);
+        self.view.resize(w, h, self.view.cur.x.min(w), h / 2);
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
         use crate::state_machine::StateMachineResult::{Action as A, Incomplete, Invalid};
+        #[allow(clippy::enum_glob_use)]
+        use Action::*;
 
         match self.input_state_machine.tick(key.into()) {
-            A(Action::Left) => self.left(1),
-            A(Action::Down) => self.down(1),
-            A(Action::Up) => self.up(1),
-            A(Action::Right) => self.right(1),
-            A(Action::NextWord) => self.next_word(),
-            A(Action::PrevWord) => self.prev_word(),
-            A(Action::JumpToBeginningOfLine) => self.jump_to_beginning_of_line(),
-            A(Action::JumpToEndOfLine) => self.jump_to_end_of_line(),
-            A(Action::JumpToMatchingOpposite) => self.jump_to_matching_opposite(),
-            A(Action::JumpToEndOfFile) => self.jump_to_end_of_file(),
-            A(Action::JumpToBeginningOfFile) => self.jump_to_beginning_of_file(),
-            A(Action::Refresh) => {
+            A(Left) => cm::left(&mut self.doc, &mut self.view, 1),
+            A(Down) => cm::down(&mut self.doc, &mut self.view, 1),
+            A(Up) => cm::up(&mut self.doc, &mut self.view, 1),
+            A(Right) => cm::right(&mut self.doc, &mut self.view, 1),
+            A(NextWord) => cm::next_word(&mut self.doc, &mut self.view),
+            A(PrevWord) => cm::prev_word(&mut self.doc, &mut self.view),
+            A(JumpToBeginningOfLine) => {
+                cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
+            }
+            A(JumpToEndOfLine) => cm::jump_to_end_of_line(&mut self.doc, &mut self.view),
+            A(JumpToMatchingOpposite) => {
+                cm::jump_to_matching_opposite(&mut self.doc, &mut self.view);
+            }
+            A(JumpToEndOfFile) => cm::jump_to_end_of_file(&mut self.doc, &mut self.view),
+            A(JumpToBeginningOfFile) => {
+                cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
+            }
+            A(Refresh) => {
                 if let Err(err) =
-                    FilesBuffer::load_dir(&self.base, &mut self.entries, &mut self.doc.lines)
+                    FilesBuffer::load_dir(&self.base, &mut self.entries, &mut self.doc.buff)
                 {
                     return CommandResult::SetAndChangeBuffer(
                         INFO_BUFF_IDX,
@@ -148,7 +156,7 @@ impl Buffer for FilesBuffer {
                     );
                 }
             }
-            A(Action::SelectItem) => {
+            A(SelectItem) => {
                 return self
                     .select_item()
                     .or_else(|err| {
@@ -160,8 +168,8 @@ impl Buffer for FilesBuffer {
                     })
                     .unwrap();
             }
-            A(Action::ChangeToTextBuffer) => return CommandResult::ChangeBuffer(TXT_BUFF_IDX),
-            A(Action::ChangeToInfoBuffer) => return CommandResult::ChangeBuffer(INFO_BUFF_IDX),
+            A(ChangeToTextBuffer) => return CommandResult::ChangeBuffer(TXT_BUFF_IDX),
+            A(ChangeToInfoBuffer) => return CommandResult::ChangeBuffer(INFO_BUFF_IDX),
             Incomplete | Invalid => {}
         }
 

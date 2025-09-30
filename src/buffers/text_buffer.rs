@@ -1,4 +1,4 @@
-mod apply_cmd;
+mod apply_command;
 mod edit;
 mod r#move;
 
@@ -6,6 +6,7 @@ use crate::{
     FILES_BUFF_IDX, INFO_BUFF_IDX,
     buffer::Buffer,
     cursor::Cursor,
+    cursor_move as cm,
     document::Document,
     state_machine::{ChainResult, CommandMap, StateMachine},
     util::{CommandResult, CursorStyle, open_file, read_file_to_lines},
@@ -95,7 +96,7 @@ pub struct TextBuffer {
     cmd: Document,
     view: Viewport,
     file: Option<File>,
-    selected_pos: Option<Cursor>,
+    selection: Option<Cursor>,
     mode: Mode,
     motion_repeat: String,
     view_state_machine: StateMachine<ViewAction>,
@@ -112,98 +113,101 @@ impl TextBuffer {
         };
 
         let view_state_machine = {
+            #[allow(clippy::enum_glob_use)]
+            use ViewAction::*;
+
             let command_map = CommandMap::new()
-                .simple(Key::Char('i'), ViewAction::Insert)
-                .simple(Key::Char('a'), ViewAction::Append)
-                .simple(Key::Char('A'), ViewAction::AppendEndOfLine)
-                .simple(Key::Char('o'), ViewAction::InsertBellow)
-                .simple(Key::Char('O'), ViewAction::InsertAbove)
-                .simple(Key::Char('h'), ViewAction::Left)
-                .simple(Key::Char('j'), ViewAction::Down)
-                .simple(Key::Char('k'), ViewAction::Up)
-                .simple(Key::Char('l'), ViewAction::Right)
-                .simple(Key::Char('w'), ViewAction::NextWord)
-                .simple(Key::Char('b'), ViewAction::PrevWord)
-                .simple(Key::Char('<'), ViewAction::JumpToBeginningOfLine)
-                .simple(Key::Char('>'), ViewAction::JumpToEndOfLine)
-                .simple(Key::Char('.'), ViewAction::JumpToMatchingOpposite)
-                .simple(Key::Char('g'), ViewAction::JumpToEndOfFile)
-                .simple(Key::Char('G'), ViewAction::JumpToBeginningOfFile)
-                .simple(Key::Char('?'), ViewAction::ChangeToInfoBuffer)
-                .simple(Key::Char('e'), ViewAction::ChangeToFilesBuffer)
-                .simple(Key::Char(' '), ViewAction::CommandMode)
-                .simple(Key::Char('v'), ViewAction::SelectMode)
-                .simple(Key::Esc, ViewAction::ExitSelectMode)
+                .simple(Key::Char('i'), Insert)
+                .simple(Key::Char('a'), Append)
+                .simple(Key::Char('A'), AppendEndOfLine)
+                .simple(Key::Char('o'), InsertBellow)
+                .simple(Key::Char('O'), InsertAbove)
+                .simple(Key::Char('h'), Left)
+                .simple(Key::Char('j'), Down)
+                .simple(Key::Char('k'), Up)
+                .simple(Key::Char('l'), Right)
+                .simple(Key::Char('w'), NextWord)
+                .simple(Key::Char('b'), PrevWord)
+                .simple(Key::Char('<'), JumpToBeginningOfLine)
+                .simple(Key::Char('>'), JumpToEndOfLine)
+                .simple(Key::Char('.'), JumpToMatchingOpposite)
+                .simple(Key::Char('g'), JumpToEndOfFile)
+                .simple(Key::Char('G'), JumpToBeginningOfFile)
+                .simple(Key::Char('?'), ChangeToInfoBuffer)
+                .simple(Key::Char('e'), ChangeToFilesBuffer)
+                .simple(Key::Char(' '), CommandMode)
+                .simple(Key::Char('v'), SelectMode)
+                .simple(Key::Esc, ExitSelectMode)
                 .operator(Key::Char('d'), |key| match key {
-                    Key::Char('v') => Some(ChainResult::Action(ViewAction::DeleteSelection)),
-                    Key::Char('d') => Some(ChainResult::Action(ViewAction::DeleteLine)),
-                    Key::Char('h') => Some(ChainResult::Action(ViewAction::DeleteLeft)),
-                    Key::Char('l') => Some(ChainResult::Action(ViewAction::DeleteRight)),
-                    Key::Char('w') => Some(ChainResult::Action(ViewAction::DeleteNextWord)),
-                    Key::Char('b') => Some(ChainResult::Action(ViewAction::DeletePrevWord)),
-                    Key::Char('<') => {
-                        Some(ChainResult::Action(ViewAction::DeleteToBeginningOfLine))
-                    }
-                    Key::Char('>') => Some(ChainResult::Action(ViewAction::DeleteToEndOfLine)),
-                    Key::Char('.') => {
-                        Some(ChainResult::Action(ViewAction::DeleteToMatchingOpposite))
-                    }
-                    Key::Char('g') => Some(ChainResult::Action(ViewAction::DeleteToEndOfFile)),
-                    Key::Char('G') => {
-                        Some(ChainResult::Action(ViewAction::DeleteToBeginningOfFile))
-                    }
+                    Key::Char('v') => Some(ChainResult::Action(DeleteSelection)),
+                    Key::Char('d') => Some(ChainResult::Action(DeleteLine)),
+                    Key::Char('h') => Some(ChainResult::Action(DeleteLeft)),
+                    Key::Char('l') => Some(ChainResult::Action(DeleteRight)),
+                    Key::Char('w') => Some(ChainResult::Action(DeleteNextWord)),
+                    Key::Char('b') => Some(ChainResult::Action(DeletePrevWord)),
+                    Key::Char('<') => Some(ChainResult::Action(DeleteToBeginningOfLine)),
+                    Key::Char('>') => Some(ChainResult::Action(DeleteToEndOfLine)),
+                    Key::Char('.') => Some(ChainResult::Action(DeleteToMatchingOpposite)),
+                    Key::Char('g') => Some(ChainResult::Action(DeleteToEndOfFile)),
+                    Key::Char('G') => Some(ChainResult::Action(DeleteToBeginningOfFile)),
                     _ => None,
                 })
-                .simple(Key::Char('x'), ViewAction::DeleteChar)
+                .simple(Key::Char('x'), DeleteChar)
                 .prefix(Key::Char('r'), |key| match key {
-                    Key::Char(ch) => Some(ChainResult::Action(ViewAction::ReplaceChar(ch))),
+                    Key::Char(ch) => Some(ChainResult::Action(ReplaceChar(ch))),
                     _ => None,
                 })
-                .simple(Key::Char('0'), ViewAction::Repeat('0'))
-                .simple(Key::Char('1'), ViewAction::Repeat('1'))
-                .simple(Key::Char('2'), ViewAction::Repeat('2'))
-                .simple(Key::Char('3'), ViewAction::Repeat('3'))
-                .simple(Key::Char('4'), ViewAction::Repeat('4'))
-                .simple(Key::Char('5'), ViewAction::Repeat('5'))
-                .simple(Key::Char('6'), ViewAction::Repeat('6'))
-                .simple(Key::Char('7'), ViewAction::Repeat('7'))
-                .simple(Key::Char('8'), ViewAction::Repeat('8'))
-                .simple(Key::Char('9'), ViewAction::Repeat('9'));
+                .simple(Key::Char('0'), Repeat('0'))
+                .simple(Key::Char('1'), Repeat('1'))
+                .simple(Key::Char('2'), Repeat('2'))
+                .simple(Key::Char('3'), Repeat('3'))
+                .simple(Key::Char('4'), Repeat('4'))
+                .simple(Key::Char('5'), Repeat('5'))
+                .simple(Key::Char('6'), Repeat('6'))
+                .simple(Key::Char('7'), Repeat('7'))
+                .simple(Key::Char('8'), Repeat('8'))
+                .simple(Key::Char('9'), Repeat('9'));
             StateMachine::new(command_map, Duration::from_secs(1))
         };
 
         let write_state_machine = {
+            #[allow(clippy::enum_glob_use)]
+            use WriteAction::*;
+
             let command_map = CommandMap::new()
-                .simple(Key::Esc, WriteAction::ViewMode)
-                .simple(Key::Left, WriteAction::Left)
-                .simple(Key::Down, WriteAction::Down)
-                .simple(Key::Up, WriteAction::Up)
-                .simple(Key::Right, WriteAction::Right)
-                .simple(Key::AltRight, WriteAction::NextWord)
-                .simple(Key::AltLeft, WriteAction::PrevWord)
-                .simple(Key::Char('\n'), WriteAction::Newline)
-                .simple(Key::Char('\t'), WriteAction::Tab)
-                .simple(Key::Backspace, WriteAction::DeleteChar);
+                .simple(Key::Esc, ViewMode)
+                .simple(Key::Left, Left)
+                .simple(Key::Down, Down)
+                .simple(Key::Up, Up)
+                .simple(Key::Right, Right)
+                .simple(Key::AltRight, NextWord)
+                .simple(Key::AltLeft, PrevWord)
+                .simple(Key::Char('\n'), Newline)
+                .simple(Key::Char('\t'), Tab)
+                .simple(Key::Backspace, DeleteChar);
             StateMachine::new(command_map, Duration::from_secs(1))
         };
 
         let cmd_state_machine = {
+            #[allow(clippy::enum_glob_use)]
+            use CommandAction::*;
+
             let command_map = CommandMap::new()
-                .simple(Key::Esc, CommandAction::ViewMode)
-                .simple(Key::Left, CommandAction::Left)
-                .simple(Key::Right, CommandAction::Right)
-                .simple(Key::Char('\n'), CommandAction::Newline)
-                .simple(Key::Char('\t'), CommandAction::Tab)
-                .simple(Key::Backspace, CommandAction::DeleteChar);
+                .simple(Key::Esc, ViewMode)
+                .simple(Key::Left, Left)
+                .simple(Key::Right, Right)
+                .simple(Key::Char('\n'), Newline)
+                .simple(Key::Char('\t'), Tab)
+                .simple(Key::Backspace, DeleteChar);
             StateMachine::new(command_map, Duration::from_secs(1))
         };
 
         Ok(TextBuffer {
-            doc: Document::new(content, 0, 0),
-            cmd: Document::new(None, 0, 0),
+            doc: Document::new(0, 0, content),
+            cmd: Document::new(0, 0, None),
             view: Viewport::new(w, h, 0, h / 2),
             file,
-            selected_pos: None,
+            selection: None,
             mode: Mode::View,
             motion_repeat: String::new(),
             view_state_machine,
@@ -212,10 +216,10 @@ impl TextBuffer {
         })
     }
 
-    fn info_line(&self) -> String {
+    fn info_line(&mut self) {
         use std::fmt::Write;
 
-        let mut info_line = String::new();
+        self.view.info_line.clear();
 
         let mode = match self.mode {
             Mode::View => "V",
@@ -223,33 +227,31 @@ impl TextBuffer {
             Mode::Command => "C",
         };
         // Plus 1 since text coordinates are 0 indexed.
-        let line = self.doc.cursor.y + 1;
-        let col = self.doc.cursor.x + 1;
-        let total = self.doc.lines.len();
+        let line = self.doc.cur.y + 1;
+        let col = self.doc.cur.x + 1;
+        let total = self.doc.buff.len();
         let percentage = 100 * line / total;
-        let size: usize = self.doc.lines.iter().map(|l| l.len()).sum();
+        let size: usize = self.doc.buff.iter().map(|l| l.len()).sum();
 
         write!(
-            &mut info_line,
+            &mut self.view.info_line,
             "[Text] [{mode}] [{line}:{col}/{total} {percentage}%] [{size}B]",
         )
         .unwrap();
-        if let Some(pos) = self.selected_pos {
+        if let Some(pos) = self.selection {
             // Plus 1 since text coordinates are 0 indexed.
             let line = pos.y + 1;
             let col = pos.x + 1;
-            write!(&mut info_line, " [Selected {line}:{col}]").unwrap();
+            write!(&mut self.view.info_line, " [Selected {line}:{col}]").unwrap();
         }
 
         let edited = if self.doc.edited { '*' } else { ' ' };
-        write!(&mut info_line, " {edited}").unwrap();
-
-        info_line
+        write!(&mut self.view.info_line, " {edited}").unwrap();
     }
 
     fn cmd_line(&self) -> Option<(String, Cursor)> {
         match self.mode {
-            Mode::Command => Some((self.cmd.lines[0].to_string(), self.cmd.cursor)),
+            Mode::Command => Some((self.cmd.buff[0].to_string(), self.cmd.cur)),
             _ => None,
         }
     }
@@ -258,13 +260,13 @@ impl TextBuffer {
         match self.mode {
             Mode::Command => {
                 // Clear command line so its ready for next entry.
-                self.cmd.lines[0].to_mut().clear();
+                self.cmd.buff[0].to_mut().clear();
 
                 // Set cursor to the beginning of line so its always at a predictable position.
                 // TODO: restore prev position.
-                self.left(self.cmd.cursor.x);
+                cm::left(&mut self.doc, &mut self.view, self.cmd.cur.x);
 
-                self.cmd.cursor = Cursor::new(0, 0);
+                self.cmd.cur = Cursor::new(0, 0);
             }
             Mode::View | Mode::Write => {}
         }
@@ -273,7 +275,7 @@ impl TextBuffer {
             Mode::Command => {
                 // Set cursor to the beginning of line to avoid weird scrolling behaviour.
                 // TODO: save curr position and restore.
-                self.jump_to_beginning_of_line();
+                cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
             }
             Mode::View | Mode::Write => {}
         }
@@ -283,142 +285,166 @@ impl TextBuffer {
 
     fn view_tick(&mut self, key: Option<Key>) -> CommandResult {
         use crate::state_machine::StateMachineResult::{Action as A, Incomplete, Invalid};
+        #[allow(clippy::enum_glob_use)]
+        use ViewAction::*;
 
         match self.view_state_machine.tick(key.into()) {
-            A(ViewAction::Insert) => self.change_mode(Mode::Write),
-            A(ViewAction::Append) => {
-                self.right(1);
+            A(Insert) => self.change_mode(Mode::Write),
+            A(Append) => {
+                cm::right(&mut self.doc, &mut self.view, 1);
                 self.change_mode(Mode::Write);
             }
-            A(ViewAction::AppendEndOfLine) => {
-                self.jump_to_end_of_line();
+            A(AppendEndOfLine) => {
+                cm::jump_to_end_of_line(&mut self.doc, &mut self.view);
                 self.change_mode(Mode::Write);
             }
-            A(ViewAction::InsertBellow) => {
+            A(InsertBellow) => {
                 self.insert_move_new_line_bellow();
                 self.change_mode(Mode::Write);
             }
-            A(ViewAction::InsertAbove) => {
+            A(InsertAbove) => {
                 self.insert_move_new_line_above();
                 self.change_mode(Mode::Write);
             }
-            A(ViewAction::Left) => self.left(self.motion_repeat.parse::<usize>().unwrap_or(1)),
-            A(ViewAction::Down) => self.down(self.motion_repeat.parse::<usize>().unwrap_or(1)),
-            A(ViewAction::Up) => self.up(self.motion_repeat.parse::<usize>().unwrap_or(1)),
-            A(ViewAction::Right) => self.right(self.motion_repeat.parse::<usize>().unwrap_or(1)),
-            A(ViewAction::NextWord) => {
+            A(Left) => cm::left(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(Down) => cm::down(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(Up) => cm::up(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(Right) => cm::right(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(NextWord) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.next_word();
+                    cm::next_word(&mut self.doc, &mut self.view);
                 }
             }
-            A(ViewAction::PrevWord) => {
+            A(PrevWord) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.prev_word();
+                    cm::prev_word(&mut self.doc, &mut self.view);
                 }
             }
-            A(ViewAction::JumpToBeginningOfLine) => self.jump_to_beginning_of_line(),
-            A(ViewAction::JumpToEndOfLine) => self.jump_to_end_of_line(),
-            A(ViewAction::JumpToMatchingOpposite) => self.jump_to_matching_opposite(),
-            A(ViewAction::JumpToEndOfFile) => self.jump_to_end_of_file(),
-            A(ViewAction::JumpToBeginningOfFile) => self.jump_to_beginning_of_file(),
-            A(ViewAction::ChangeToInfoBuffer) => return CommandResult::ChangeBuffer(INFO_BUFF_IDX),
-            A(ViewAction::ChangeToFilesBuffer) => {
+            A(JumpToBeginningOfLine) => {
+                cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
+            }
+            A(JumpToEndOfLine) => cm::jump_to_end_of_line(&mut self.doc, &mut self.view),
+            A(JumpToMatchingOpposite) => {
+                cm::jump_to_matching_opposite(&mut self.doc, &mut self.view);
+            }
+            A(JumpToEndOfFile) => cm::jump_to_end_of_file(&mut self.doc, &mut self.view),
+            A(JumpToBeginningOfFile) => {
+                cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
+            }
+            A(ChangeToInfoBuffer) => return CommandResult::ChangeBuffer(INFO_BUFF_IDX),
+            A(ChangeToFilesBuffer) => {
                 return CommandResult::ChangeBuffer(FILES_BUFF_IDX);
             }
-            A(ViewAction::CommandMode) => self.change_mode(Mode::Command),
-            A(ViewAction::SelectMode) => self.selected_pos = Some(self.doc.cursor),
-            A(ViewAction::ExitSelectMode) => self.selected_pos = None,
-            A(ViewAction::DeleteSelection) => self.delete_selection(),
-            A(ViewAction::DeleteLine) => {
+            A(CommandMode) => self.change_mode(Mode::Command),
+            A(SelectMode) => self.selection = Some(self.doc.cur),
+            A(ExitSelectMode) => self.selection = None,
+            A(DeleteSelection) => self.delete_selection(),
+            A(DeleteLine) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.jump_to_beginning_of_line();
+                    cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
                     self.doc.remove_line();
-                    if self.doc.lines.is_empty() {
+                    if self.doc.buff.is_empty() {
                         self.doc.insert_line(Cow::from(""));
                     }
-                    if self.doc.cursor.y == self.doc.lines.len() {
-                        self.up(1);
+                    if self.doc.cur.y == self.doc.buff.len() {
+                        cm::up(&mut self.doc, &mut self.view, 1);
                     }
                 }
             }
-            A(ViewAction::DeleteLeft) => {
+            A(DeleteLeft) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selected_pos = Some(self.doc.cursor);
-                    self.left(1);
+                    self.selection = Some(self.doc.cur);
+                    cm::left(&mut self.doc, &mut self.view, 1);
                     self.delete_selection();
                 }
             }
-            A(ViewAction::DeleteRight) => {
+            A(DeleteRight) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selected_pos = Some(self.doc.cursor);
-                    self.right(1);
+                    self.selection = Some(self.doc.cur);
+                    cm::right(&mut self.doc, &mut self.view, 1);
                     self.delete_selection();
                 }
             }
-            A(ViewAction::DeleteNextWord) => {
+            A(DeleteNextWord) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selected_pos = Some(self.doc.cursor);
-                    self.next_word();
+                    self.selection = Some(self.doc.cur);
+                    cm::next_word(&mut self.doc, &mut self.view);
                     self.delete_selection();
                 }
             }
-            A(ViewAction::DeletePrevWord) => {
+            A(DeletePrevWord) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selected_pos = Some(self.doc.cursor);
-                    self.prev_word();
+                    self.selection = Some(self.doc.cur);
+                    cm::prev_word(&mut self.doc, &mut self.view);
                     self.delete_selection();
                 }
             }
-            A(ViewAction::DeleteToBeginningOfLine) => {
+            A(DeleteToBeginningOfLine) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selected_pos = Some(self.doc.cursor);
-                    self.jump_to_beginning_of_line();
+                    self.selection = Some(self.doc.cur);
+                    cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
                     self.delete_selection();
                 }
             }
-            A(ViewAction::DeleteToEndOfLine) => {
+            A(DeleteToEndOfLine) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selected_pos = Some(self.doc.cursor);
-                    self.jump_to_end_of_line();
+                    self.selection = Some(self.doc.cur);
+                    cm::jump_to_end_of_line(&mut self.doc, &mut self.view);
                     self.delete_selection();
                 }
             }
-            A(ViewAction::DeleteToMatchingOpposite) => {
+            A(DeleteToMatchingOpposite) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selected_pos = Some(self.doc.cursor);
-                    self.jump_to_matching_opposite();
+                    self.selection = Some(self.doc.cur);
+                    cm::jump_to_matching_opposite(&mut self.doc, &mut self.view);
                     self.delete_selection();
                 }
             }
-            A(ViewAction::DeleteToBeginningOfFile) => {
+            A(DeleteToBeginningOfFile) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selected_pos = Some(self.doc.cursor);
-                    self.jump_to_beginning_of_file();
+                    self.selection = Some(self.doc.cur);
+                    cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
                     self.delete_selection();
                 }
             }
-            A(ViewAction::DeleteToEndOfFile) => {
+            A(DeleteToEndOfFile) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selected_pos = Some(self.doc.cursor);
-                    self.jump_to_end_of_file();
+                    self.selection = Some(self.doc.cur);
+                    cm::jump_to_end_of_file(&mut self.doc, &mut self.view);
                     self.delete_selection();
                 }
             }
-            A(ViewAction::DeleteChar) => {
+            A(DeleteChar) => {
                 for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    if self.doc.lines[self.doc.cursor.y]
+                    if self.doc.buff[self.doc.cur.y]
                         .chars()
-                        .nth(self.doc.cursor.x)
+                        .nth(self.doc.cur.x)
                         .is_some()
                     {
                         self.doc.delete_char();
                     }
                 }
             }
-            A(ViewAction::ReplaceChar(ch)) => {
-                if self.doc.lines[self.doc.cursor.y]
+            A(ReplaceChar(ch)) => {
+                if self.doc.buff[self.doc.cur.y]
                     .chars()
-                    .nth(self.doc.cursor.x)
+                    .nth(self.doc.cur.x)
                     .is_some()
                 {
                     self.doc.delete_char();
@@ -430,7 +456,7 @@ impl TextBuffer {
                     }
                 }
             }
-            A(ViewAction::Repeat(ch)) => {
+            A(Repeat(ch)) => {
                 self.motion_repeat.push(ch);
 
                 // Skip resetting motion repeat buffer when new repeat was issued.
@@ -447,18 +473,20 @@ impl TextBuffer {
 
     fn write_tick(&mut self, key: Option<Key>) -> CommandResult {
         use crate::state_machine::StateMachineResult::{Action as A, Incomplete, Invalid};
+        #[allow(clippy::enum_glob_use)]
+        use WriteAction::*;
 
         match self.write_state_machine.tick(key.into()) {
-            A(WriteAction::ViewMode) => self.change_mode(Mode::View),
-            A(WriteAction::Left) => self.left(1),
-            A(WriteAction::Down) => self.down(1),
-            A(WriteAction::Up) => self.up(1),
-            A(WriteAction::Right) => self.right(1),
-            A(WriteAction::NextWord) => self.next_word(),
-            A(WriteAction::PrevWord) => self.prev_word(),
-            A(WriteAction::Newline) => self.write_new_line_char(),
-            A(WriteAction::Tab) => self.write_tab(),
-            A(WriteAction::DeleteChar) => self.delete_char(),
+            A(ViewMode) => self.change_mode(Mode::View),
+            A(Left) => cm::left(&mut self.doc, &mut self.view, 1),
+            A(Down) => cm::down(&mut self.doc, &mut self.view, 1),
+            A(Up) => cm::up(&mut self.doc, &mut self.view, 1),
+            A(Right) => cm::right(&mut self.doc, &mut self.view, 1),
+            A(NextWord) => cm::next_word(&mut self.doc, &mut self.view),
+            A(PrevWord) => cm::prev_word(&mut self.doc, &mut self.view),
+            A(Newline) => self.write_new_line_char(),
+            A(Tab) => self.write_tab(),
+            A(DeleteChar) => self.delete_char(),
             Invalid => {
                 if let Some(Key::Char(ch)) = key {
                     self.write_char(ch);
@@ -472,18 +500,20 @@ impl TextBuffer {
 
     fn command_tick(&mut self, key: Option<Key>) -> CommandResult {
         use crate::state_machine::StateMachineResult::{Action as A, Incomplete, Invalid};
+        #[allow(clippy::enum_glob_use)]
+        use CommandAction::*;
 
         match self.cmd_state_machine.tick(key.into()) {
-            A(CommandAction::ViewMode) => self.change_mode(Mode::View),
-            A(CommandAction::Left) => self.cmd_left(1),
-            A(CommandAction::Right) => self.cmd_right(1),
-            A(CommandAction::Newline) => {
-                let res = self.apply_cmd();
+            A(ViewMode) => self.change_mode(Mode::View),
+            A(Left) => self.cmd_left(1),
+            A(Right) => self.cmd_right(1),
+            A(Newline) => {
+                let res = self.apply_command();
                 self.change_mode(Mode::View);
                 return res;
             }
-            A(CommandAction::Tab) => self.write_cmd_tab(),
-            A(CommandAction::DeleteChar) => self.delete_cmd_char(),
+            A(Tab) => self.write_cmd_tab(),
+            A(DeleteChar) => self.delete_cmd_char(),
             Invalid => {
                 if let Some(Key::Char(ch)) = key {
                     self.write_cmd_char(ch);
@@ -498,18 +528,14 @@ impl TextBuffer {
 
 impl Buffer for TextBuffer {
     fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
+        self.info_line();
+
         let cursor_style = match self.mode {
             Mode::View => CursorStyle::BlinkingBlock,
             Mode::Write | Mode::Command => CursorStyle::BlinkingBar,
         };
-
-        self.view.render(
-            stdout,
-            &self.doc,
-            &self.info_line(),
-            self.cmd_line(),
-            cursor_style,
-        )
+        self.view.cmd = self.cmd_line();
+        self.view.render(stdout, &self.doc, cursor_style)
     }
 
     fn resize(&mut self, w: usize, h: usize) {
@@ -517,7 +543,7 @@ impl Buffer for TextBuffer {
             return;
         }
 
-        self.view.resize(w, h, self.view.cursor.x.min(w), h / 2);
+        self.view.resize(w, h, self.view.cur.x.min(w), h / 2);
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {

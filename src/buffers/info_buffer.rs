@@ -1,8 +1,7 @@
-mod r#move;
-
 use crate::{
     FILES_BUFF_IDX, TXT_BUFF_IDX,
     buffer::Buffer,
+    cursor_move as cm,
     document::Document,
     state_machine::{CommandMap, StateMachine},
     util::{CommandResult, CursorStyle},
@@ -41,62 +40,60 @@ pub struct InfoBuffer {
 
 impl InfoBuffer {
     pub fn new(w: usize, h: usize) -> Self {
+        #[allow(clippy::enum_glob_use)]
+        use Action::*;
+
         let command_map = CommandMap::new()
-            .simple(Key::Char('h'), Action::Left)
-            .simple(Key::Char('j'), Action::Down)
-            .simple(Key::Char('k'), Action::Up)
-            .simple(Key::Char('l'), Action::Right)
-            .simple(Key::Char('w'), Action::NextWord)
-            .simple(Key::Char('b'), Action::PrevWord)
-            .simple(Key::Char('<'), Action::JumpToBeginningOfLine)
-            .simple(Key::Char('>'), Action::JumpToEndOfLine)
-            .simple(Key::Char('.'), Action::JumpToMatchingOpposite)
-            .simple(Key::Char('g'), Action::JumpToEndOfFile)
-            .simple(Key::Char('G'), Action::JumpToBeginningOfFile)
-            .simple(Key::Char('t'), Action::ChangeToTextBuffer)
-            .simple(Key::Char('e'), Action::ChangeToFilesBuffer);
+            .simple(Key::Char('h'), Left)
+            .simple(Key::Char('j'), Down)
+            .simple(Key::Char('k'), Up)
+            .simple(Key::Char('l'), Right)
+            .simple(Key::Char('w'), NextWord)
+            .simple(Key::Char('b'), PrevWord)
+            .simple(Key::Char('<'), JumpToBeginningOfLine)
+            .simple(Key::Char('>'), JumpToEndOfLine)
+            .simple(Key::Char('.'), JumpToMatchingOpposite)
+            .simple(Key::Char('g'), JumpToEndOfFile)
+            .simple(Key::Char('G'), JumpToBeginningOfFile)
+            .simple(Key::Char('t'), ChangeToTextBuffer)
+            .simple(Key::Char('e'), ChangeToFilesBuffer);
         let input_state_machine = StateMachine::new(command_map, Duration::from_secs(1));
 
         InfoBuffer {
-            doc: Document::new(None, 0, 0),
+            doc: Document::new(0, 0, None),
             view: Viewport::new(w, h, 0, h / 2),
             input_state_machine,
         }
     }
 
-    fn info_line(&self) -> String {
+    fn info_line(&mut self) {
         use std::fmt::Write;
 
-        let mut info_line = String::new();
+        self.view.info_line.clear();
 
         // Plus 1 since text coordinates are 0 indexed.
-        let line = self.doc.cursor.y + 1;
-        let col = self.doc.cursor.x + 1;
-        let total = self.doc.lines.len();
+        let line = self.doc.cur.y + 1;
+        let col = self.doc.cur.x + 1;
+        let total = self.doc.buff.len();
         let percentage = 100 * line / total;
 
         write!(
-            &mut info_line,
+            &mut self.view.info_line,
             "[Info] [{line}:{col}/{total} {percentage}%]",
         )
         .unwrap();
 
         let edited = if self.doc.edited { '*' } else { ' ' };
-        write!(&mut info_line, " {edited}").unwrap();
-
-        info_line
+        write!(&mut self.view.info_line, " {edited}").unwrap();
     }
 }
 
 impl Buffer for InfoBuffer {
     fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
-        self.view.render(
-            stdout,
-            &self.doc,
-            &self.info_line(),
-            None,
-            CursorStyle::BlinkingBlock,
-        )
+        self.info_line();
+        self.view.cmd = None;
+        self.view
+            .render(stdout, &self.doc, CursorStyle::BlinkingBlock)
     }
 
     fn resize(&mut self, w: usize, h: usize) {
@@ -104,26 +101,34 @@ impl Buffer for InfoBuffer {
             return;
         }
 
-        self.view.resize(w, h, self.view.cursor.x.min(w), h / 2);
+        self.view.resize(w, h, self.view.cur.x.min(w), h / 2);
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
         use crate::state_machine::StateMachineResult::{Action as A, Incomplete, Invalid};
+        #[allow(clippy::enum_glob_use)]
+        use Action::*;
 
         match self.input_state_machine.tick(key.into()) {
-            A(Action::Left) => self.left(1),
-            A(Action::Down) => self.down(1),
-            A(Action::Up) => self.up(1),
-            A(Action::Right) => self.right(1),
-            A(Action::NextWord) => self.next_word(),
-            A(Action::PrevWord) => self.prev_word(),
-            A(Action::JumpToBeginningOfLine) => self.jump_to_beginning_of_line(),
-            A(Action::JumpToEndOfLine) => self.jump_to_end_of_line(),
-            A(Action::JumpToMatchingOpposite) => self.jump_to_matching_opposite(),
-            A(Action::JumpToEndOfFile) => self.jump_to_end_of_file(),
-            A(Action::JumpToBeginningOfFile) => self.jump_to_beginning_of_file(),
-            A(Action::ChangeToTextBuffer) => return CommandResult::ChangeBuffer(TXT_BUFF_IDX),
-            A(Action::ChangeToFilesBuffer) => return CommandResult::ChangeBuffer(FILES_BUFF_IDX),
+            A(Left) => cm::left(&mut self.doc, &mut self.view, 1),
+            A(Down) => cm::down(&mut self.doc, &mut self.view, 1),
+            A(Up) => cm::up(&mut self.doc, &mut self.view, 1),
+            A(Right) => cm::right(&mut self.doc, &mut self.view, 1),
+            A(NextWord) => cm::next_word(&mut self.doc, &mut self.view),
+            A(PrevWord) => cm::prev_word(&mut self.doc, &mut self.view),
+            A(JumpToBeginningOfLine) => {
+                cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
+            }
+            A(JumpToEndOfLine) => cm::jump_to_end_of_line(&mut self.doc, &mut self.view),
+            A(JumpToMatchingOpposite) => {
+                cm::jump_to_matching_opposite(&mut self.doc, &mut self.view);
+            }
+            A(JumpToEndOfFile) => cm::jump_to_end_of_file(&mut self.doc, &mut self.view),
+            A(JumpToBeginningOfFile) => {
+                cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
+            }
+            A(ChangeToTextBuffer) => return CommandResult::ChangeBuffer(TXT_BUFF_IDX),
+            A(ChangeToFilesBuffer) => return CommandResult::ChangeBuffer(FILES_BUFF_IDX),
             Incomplete | Invalid => {}
         }
 

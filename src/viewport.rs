@@ -17,8 +17,11 @@ const NO_TXT: Fg<Reset> = Fg(Reset);
 pub struct Viewport {
     pub w: usize,
     pub h: usize,
-    pub cursor: Cursor,
-    lines: Vec<String>,
+    pub cur: Cursor,
+
+    pub info_line: String,
+    buff: Vec<String>,
+    pub cmd: Option<(String, Cursor)>,
 }
 
 impl Viewport {
@@ -26,8 +29,10 @@ impl Viewport {
         Viewport {
             w,
             h,
-            cursor: Cursor::new(x, y),
-            lines: vec![String::new(); h],
+            cur: Cursor::new(x, y),
+            info_line: String::with_capacity(w),
+            buff: vec![String::with_capacity(w); h - 1],
+            cmd: None,
         }
     }
 
@@ -35,15 +40,18 @@ impl Viewport {
     pub fn clear(&mut self, w: usize, h: usize, x: usize, y: usize) {
         self.w = w;
         self.h = h;
-        self.cursor = Cursor::new(x, y);
-        self.lines.resize(h, String::new());
-        for line in &mut self.lines {
+        self.cur = Cursor::new(x, y);
+
+        self.info_line.clear();
+        self.buff.resize(h - 1, String::new());
+        for line in &mut self.buff {
             line.clear();
         }
+        self.cmd = None;
     }
 
     fn set_line(&mut self, content: &str, offset: usize, line_idx: usize) {
-        let lower = offset.saturating_sub(self.cursor.x);
+        let lower = offset.saturating_sub(self.cur.x);
         // Only print lines if their content is visible on the screen (horizontal movement).
         if content.chars().count() > lower {
             let upper = (lower + self.w).min(content.chars().count());
@@ -58,7 +66,7 @@ impl Viewport {
                 // Use all remaining bytes if they don't fill the entire line.
                 .map_or(content.len(), |(idx, _)| idx);
 
-            self.lines[line_idx].replace_range(0..(end - start), &content[start..end]);
+            self.buff[line_idx].replace_range(0..(end - start), &content[start..end]);
         }
     }
 
@@ -67,39 +75,41 @@ impl Viewport {
         &mut self,
         stdout: &mut BufWriter<RawTerminal<Stdout>>,
         doc: &Document,
-        info_line: &str,
-        cmd_line: Option<(String, Cursor)>,
         cursor_style: CursorStyle,
     ) -> Result<(), Error> {
-        // Set info line.
-        self.lines[0] = " ".repeat(self.w);
-        self.lines[0].replace_range(0..info_line.len(), info_line);
+        // Make sure that info line is stretched to window width.
+        if self.info_line.len() < self.w {
+            self.info_line
+                .push_str(&" ".repeat(self.w - self.info_line.len()));
+        }
 
         // Calculate which line of text is visible at what line on the screen.
         #[allow(clippy::cast_possible_wrap)]
-        let lines_offset = doc.cursor.y as isize - self.cursor.y as isize;
-
-        // Plus one for info line offset.
-        for (lines_idx, doc_idx) in (1..self.h).zip(lines_offset + 1..) {
-            self.lines[lines_idx] = " ".repeat(self.w);
+        let lines_offset = doc.cur.y as isize - self.cur.y as isize;
+        for (lines_idx, doc_idx) in (0..self.h - 1).zip(lines_offset + 1..) {
+            self.buff[lines_idx] = " ".repeat(self.w);
 
             // Skip screen lines outside the text line bounds.
             // The value is guaranteed positive at that point.
             #[allow(clippy::cast_sign_loss)]
-            if doc_idx < 0 || (doc_idx as usize) >= doc.lines.len() {
+            if doc_idx < 0 || (doc_idx as usize) >= doc.buff.len() {
                 continue;
             }
 
             // The value is guaranteed positive at that point.
             #[allow(clippy::cast_sign_loss)]
-            self.set_line(&doc.lines[doc_idx as usize], doc.cursor.x, lines_idx);
+            self.set_line(&doc.buff[doc_idx as usize], doc.cur.x, lines_idx);
         }
 
         // Set command line and cursor.
         // Can never be larger than u16 since the width is used as upper bound and equal to the terminal size.
         #[allow(clippy::cast_possible_truncation)]
-        let cursor = if let Some((cmd_line, cursor)) = cmd_line {
-            self.lines[self.h - 1] = cmd_line;
+        let cursor = if let Some((cmd_line, cursor)) = &self.cmd {
+            // Copy command line and stretch to window width.
+            self.buff[self.h - 2].clone_from(cmd_line);
+            if cmd_line.len() < self.w {
+                self.buff[self.h - 2].push_str(&" ".repeat(self.w - cmd_line.len()));
+            }
 
             Goto(
                 (cursor.x as u16).saturating_add(1),
@@ -107,8 +117,8 @@ impl Viewport {
             )
         } else {
             Goto(
-                (self.cursor.x as u16).saturating_add(1),
-                (self.cursor.y as u16).saturating_add(1),
+                (self.cur.x as u16).saturating_add(1),
+                (self.cur.y as u16).saturating_add(1),
             )
         };
 
@@ -117,9 +127,9 @@ impl Viewport {
             stdout,
             "{All}{}{HIGHLIGHT}{TXT}{}{NO_HIGHLIGHT}{NO_TXT}",
             Goto(1, 1),
-            self.lines[0]
+            self.info_line
         )?;
-        for (idx, line) in self.lines[..self.lines.len()].iter().skip(1).enumerate() {
+        for (idx, line) in self.buff[..self.buff.len()].iter().enumerate() {
             if idx + 1 == usize::from(cursor.1 - 1) {
                 write!(stdout, "\n\r{HIGHLIGHT}{TXT}{line}{NO_HIGHLIGHT}{NO_TXT}")?;
             } else {
@@ -139,13 +149,13 @@ impl Viewport {
     /// Resizes the viewport.
     pub fn resize(&mut self, w: usize, h: usize, x: usize, y: usize) {
         if h != self.h {
-            self.lines.resize(h, String::new());
+            self.buff.resize(h - 1, String::new());
         }
 
         self.w = w;
         self.h = h;
 
-        self.cursor.y = y;
-        self.cursor.x = x;
+        self.cur.y = y;
+        self.cur.x = x;
     }
 }

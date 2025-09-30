@@ -4,6 +4,7 @@
 mod buffer;
 mod buffers;
 mod cursor;
+mod cursor_move;
 mod document;
 mod state_machine;
 mod util;

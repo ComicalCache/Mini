@@ -16,7 +16,7 @@ impl TextBuffer {
         Ok(true)
     }
 
-    fn quit_cmd(&mut self) -> CommandResult {
+    fn quit_command(&mut self) -> CommandResult {
         if !self.doc.edited {
             return CommandResult::Quit;
         }
@@ -30,7 +30,7 @@ impl TextBuffer {
         )
     }
 
-    fn open_cmd(&mut self, args: &str, force: bool) -> CommandResult {
+    fn open_command(&mut self, args: &str, force: bool) -> CommandResult {
         if self.doc.edited && !force {
             return CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
@@ -78,7 +78,7 @@ impl TextBuffer {
         CommandResult::Ok
     }
 
-    fn write_cmd(&mut self, args: &str) -> CommandResult {
+    fn write_command(&mut self, args: &str) -> CommandResult {
         if !args.is_empty() {
             self.file = match open_file(args) {
                 Ok(file) => Some(file),
@@ -117,15 +117,15 @@ impl TextBuffer {
     }
 
     /// Applies the command entered during command mode.
-    pub fn apply_cmd(&mut self) -> CommandResult {
-        let cmd_buff = self.cmd.lines[0].clone();
+    pub fn apply_command(&mut self) -> CommandResult {
+        let cmd_buff = self.cmd.buff[0].clone();
         let (cmd, args) = match cmd_buff.split_once(char::is_whitespace) {
             Some((cmd, args)) => (cmd, args),
             None => (cmd_buff.as_str(), ""),
         };
 
         match cmd {
-            "q" => self.quit_cmd(),
+            "q" => self.quit_command(),
             "qq" => {
                 self.doc.edited = false;
                 CommandResult::Quit
@@ -153,9 +153,9 @@ impl TextBuffer {
 
                 CommandResult::Quit
             }
-            "w" => self.write_cmd(args),
-            "o" => self.open_cmd(args, false),
-            "oo" => self.open_cmd(args, true),
+            "w" => self.write_command(args),
+            "o" => self.open_command(args, false),
+            "oo" => self.open_command(args, true),
             "?" => CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
                 INFO_MSG.lines().map(Cow::from).collect(),
