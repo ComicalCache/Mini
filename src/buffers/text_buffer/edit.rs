@@ -110,8 +110,6 @@ impl TextBuffer {
         };
 
         if start.y == end.y {
-            // Single line deletion
-
             let line = &mut self.doc.buff[start.y];
             let start_idx = line
                 .char_indices()
@@ -124,8 +122,6 @@ impl TextBuffer {
 
             line.to_mut().drain(start_idx..end_idx);
         } else {
-            // Multiple lines were selected
-
             let (start_line, remaining_lines) = self.doc.buff.split_at_mut(start.y + 1);
             let end_line = &remaining_lines[end.y - (start.y + 1)];
             let tail = {

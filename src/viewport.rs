@@ -50,26 +50,6 @@ impl Viewport {
         self.cmd = None;
     }
 
-    fn set_line(&mut self, content: &str, offset: usize, line_idx: usize) {
-        let lower = offset.saturating_sub(self.cur.x);
-        // Only print lines if their content is visible on the screen (horizontal movement).
-        if content.chars().count() > lower {
-            let upper = (lower + self.w).min(content.chars().count());
-            let start = content
-                .char_indices()
-                .nth(lower)
-                .map(|(idx, _)| idx)
-                .unwrap();
-            let end = content
-                .char_indices()
-                .nth(upper)
-                // Use all remaining bytes if they don't fill the entire line.
-                .map_or(content.len(), |(idx, _)| idx);
-
-            self.buff[line_idx].replace_range(0..(end - start), &content[start..end]);
-        }
-    }
-
     /// Renders a document to the viewport.
     pub fn render(
         &mut self,
@@ -78,9 +58,9 @@ impl Viewport {
         cursor_style: CursorStyle,
     ) -> Result<(), Error> {
         // Make sure that info line is stretched to window width.
-        if self.info_line.len() < self.w {
+        if self.info_line.chars().count() < self.w {
             self.info_line
-                .push_str(&" ".repeat(self.w - self.info_line.len()));
+                .push_str(&" ".repeat(self.w - self.info_line.chars().count()));
         }
 
         // Calculate which line of text is visible at what line on the screen.
@@ -98,7 +78,24 @@ impl Viewport {
 
             // The value is guaranteed positive at that point.
             #[allow(clippy::cast_sign_loss)]
-            self.set_line(&doc.buff[doc_idx as usize], doc.cur.x, lines_idx);
+            let content = &doc.buff[doc_idx as usize];
+            let lower = doc.cur.x.saturating_sub(self.cur.x);
+            // Only print lines if their content is visible on the screen (horizontal movement).
+            if content.chars().count() > lower {
+                let upper = (lower + self.w).min(content.chars().count());
+                let start = content
+                    .char_indices()
+                    .nth(lower)
+                    .map(|(idx, _)| idx)
+                    .unwrap();
+                let end = content
+                    .char_indices()
+                    .nth(upper)
+                    // Use all remaining bytes if they don't fill the entire line.
+                    .map_or(content.len(), |(idx, _)| idx);
+
+                self.buff[lines_idx].replace_range(0..(end - start), &content[start..end]);
+            }
         }
 
         // Set command line and cursor.
@@ -107,8 +104,8 @@ impl Viewport {
         let cursor = if let Some((cmd_line, cursor)) = &self.cmd {
             // Copy command line and stretch to window width.
             self.buff[self.h - 2].clone_from(cmd_line);
-            if cmd_line.len() < self.w {
-                self.buff[self.h - 2].push_str(&" ".repeat(self.w - cmd_line.len()));
+            if cmd_line.chars().count() < self.w {
+                self.buff[self.h - 2].push_str(&" ".repeat(self.w - cmd_line.chars().count()));
             }
 
             Goto(

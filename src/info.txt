@@ -12,7 +12,12 @@ Motions:
 - 'x' to delete the character under the cursor
 - 'd' + motion to delete characters that would be skipped by the motion
 - 'dd' to delete a line
+- 'c' + motion to change characters that would be skipped by the motion
+- 'cc' to change a line
 - 'r' + char to replace the character under the cursor
+- 'y' + motion to yank characters that would be skipped by the motion to the clipboard
+- 'yy' to yank a line to the clipboard
+- 'p' to paste the clipboard at the cursor
 
 Write Mode:
 > Insert text into the buffer.

@@ -141,4 +141,54 @@ impl Document {
         line.to_mut().insert_str(idx, r#str);
         self.edited = true;
     }
+
+    /// Copies a range of text from the document.
+    pub fn get_range(&self, pos1: Cursor, pos2: Cursor) -> Cow<'static, str> {
+        let (start, end) = if pos1 <= pos2 {
+            (pos1, pos2)
+        } else {
+            (pos2, pos1)
+        };
+
+        if start.y == end.y {
+            let line = &self.buff[start.y];
+            let start_idx = line
+                .char_indices()
+                .nth(start.x)
+                .map_or(line.len(), |(idx, _)| idx);
+            let end_idx = line
+                .char_indices()
+                .nth(end.x)
+                .map_or(line.len(), |(idx, _)| idx);
+
+            return Cow::from(line[start_idx..end_idx].to_string());
+        }
+
+        let mut result = String::new();
+
+        // First line
+        let first_line = &self.buff[start.y];
+        let start_idx = first_line
+            .char_indices()
+            .nth(start.x)
+            .map_or(first_line.len(), |(idx, _)| idx);
+        result.push_str(&first_line[start_idx..]);
+        result.push('\n');
+
+        // Lines between first and last line
+        for line in self.buff.iter().skip(start.y + 1).take(end.y - start.y - 1) {
+            result.push_str(line);
+            result.push('\n');
+        }
+
+        // Last line
+        let last_line = &self.buff[end.y];
+        let end_idx = last_line
+            .char_indices()
+            .nth(end.x)
+            .map_or(last_line.len(), |(idx, _)| idx);
+        result.push_str(&last_line[..end_idx]);
+
+        Cow::from(result)
+    }
 }

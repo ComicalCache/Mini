@@ -1,2 +1,5 @@
 - Symlink in file browser
 - Line numbers
+- Yanking (y + motion)
+- Pasting (p to paste)
+- Find (?)
