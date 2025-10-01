@@ -118,6 +118,10 @@ impl TextBuffer {
 
     /// Applies the command entered during command mode.
     pub fn apply_command(&mut self) -> CommandResult {
+        if self.cmd.buff[0].is_empty() {
+            return CommandResult::Ok;
+        }
+
         let cmd_buff = self.cmd.buff[0].clone();
         let (cmd, args) = match cmd_buff.split_once(char::is_whitespace) {
             Some((cmd, args)) => (cmd, args),

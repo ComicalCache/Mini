@@ -68,7 +68,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut buffs: [Box<dyn Buffer>; 3] = [
         Box::new(TextBuffer::new(w as usize, h as usize, file)?),
         Box::new(FilesBuffer::new(w as usize, h as usize, base)?),
-        Box::new(InfoBuffer::new(w as usize, h as usize)),
+        Box::new(InfoBuffer::new(w as usize, h as usize)?),
     ];
     let mut curr_buff = TXT_BUFF_IDX;
 

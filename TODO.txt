@@ -2,3 +2,4 @@
 - Diff based rendering
 - Line numbers
 - Find (?)
+- Remove code duplication
