@@ -1,9 +1,8 @@
 use std::{borrow::Cow, fs::read_dir, io::Error, path::PathBuf};
 
 use crate::{
-    TXT_BUFF_IDX,
-    buffers::files_buffer::FilesBuffer,
-    cursor_move as cm,
+    TXT_BUFF_IDX, cursor,
+    custom_buffers::files_buffer::FilesBuffer,
     util::{CommandResult, open_file, read_file_to_lines},
 };
 
@@ -38,7 +37,7 @@ impl FilesBuffer {
 
         // Move directory up.
         if idx == 0 && self.base.pop() {
-            cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
+            cursor::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
 
             FilesBuffer::load_dir(&self.base, &mut self.entries, &mut self.doc.buff)?;
             return Ok(CommandResult::Ok);
@@ -46,7 +45,7 @@ impl FilesBuffer {
 
         let entry = &self.entries[idx - 1].clone();
         if entry.is_file() {
-            cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
+            cursor::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
             let contents = read_file_to_lines(&mut open_file(entry)?)?;
             self.base.clone_from(entry);
 
@@ -56,12 +55,12 @@ impl FilesBuffer {
                 Some(self.base.clone()),
             ));
         } else if entry.is_dir() {
-            cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
+            cursor::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
             self.base.clone_from(entry);
 
             FilesBuffer::load_dir(&self.base, &mut self.entries, &mut self.doc.buff)?;
             return Ok(CommandResult::Ok);
-        } else if entry.is_symlink() {
+        } else if entry.is_symlink() && entry.exists() {
             // TODO: handle Symlinks.
             return Ok(CommandResult::Ok);
         }

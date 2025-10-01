@@ -1,12 +1,10 @@
 mod apply_command;
 mod edit;
-mod r#move;
 
 use crate::{
     FILES_BUFF_IDX, INFO_BUFF_IDX,
-    buffer::Buffer,
-    cursor::Cursor,
-    cursor_move as cm,
+    buffer::{Buffer, delete, yank},
+    cursor::{self, Cursor},
     document::Document,
     state_machine::{ChainResult, CommandMap, StateMachine},
     util::{CommandResult, CursorStyle, open_file, read_file_to_lines},
@@ -319,7 +317,7 @@ impl TextBuffer {
 
                 // Set cursor to the beginning of line so its always at a predictable position.
                 // TODO: restore prev position.
-                cm::left(&mut self.doc, &mut self.view, self.cmd.cur.x);
+                cursor::left(&mut self.doc, &mut self.view, self.cmd.cur.x);
 
                 self.cmd.cur = Cursor::new(0, 0);
             }
@@ -330,7 +328,7 @@ impl TextBuffer {
             Mode::Command => {
                 // Set cursor to the beginning of line to avoid weird scrolling behaviour.
                 // TODO: save curr position and restore.
-                cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
+                cursor::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
             }
             Mode::View | Mode::Write => {}
         }
@@ -346,11 +344,11 @@ impl TextBuffer {
         match self.view_state_machine.tick(key.into()) {
             A(Insert) => self.change_mode(Mode::Write),
             A(Append) => {
-                cm::right(&mut self.doc, &mut self.view, 1);
+                cursor::right(&mut self.doc, &mut self.view, 1);
                 self.change_mode(Mode::Write);
             }
             A(AppendEndOfLine) => {
-                cm::jump_to_end_of_line(&mut self.doc, &mut self.view);
+                cursor::jump_to_end_of_line(&mut self.doc, &mut self.view);
                 self.change_mode(Mode::Write);
             }
             A(InsertBellow) => {
@@ -361,46 +359,46 @@ impl TextBuffer {
                 self.insert_move_new_line_above();
                 self.change_mode(Mode::Write);
             }
-            A(Left) => cm::left(
+            A(Left) => cursor::left(
                 &mut self.doc,
                 &mut self.view,
                 self.motion_repeat.parse::<usize>().unwrap_or(1),
             ),
-            A(Down) => cm::down(
+            A(Down) => cursor::down(
                 &mut self.doc,
                 &mut self.view,
                 self.motion_repeat.parse::<usize>().unwrap_or(1),
             ),
-            A(Up) => cm::up(
+            A(Up) => cursor::up(
                 &mut self.doc,
                 &mut self.view,
                 self.motion_repeat.parse::<usize>().unwrap_or(1),
             ),
-            A(Right) => cm::right(
+            A(Right) => cursor::right(
                 &mut self.doc,
                 &mut self.view,
                 self.motion_repeat.parse::<usize>().unwrap_or(1),
             ),
-            A(NextWord) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    cm::next_word(&mut self.doc, &mut self.view);
-                }
-            }
-            A(PrevWord) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    cm::prev_word(&mut self.doc, &mut self.view);
-                }
-            }
+            A(NextWord) => cursor::next_word(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(PrevWord) => cursor::prev_word(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
             A(JumpToBeginningOfLine) => {
-                cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
+                cursor::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
             }
-            A(JumpToEndOfLine) => cm::jump_to_end_of_line(&mut self.doc, &mut self.view),
+            A(JumpToEndOfLine) => cursor::jump_to_end_of_line(&mut self.doc, &mut self.view),
             A(JumpToMatchingOpposite) => {
-                cm::jump_to_matching_opposite(&mut self.doc, &mut self.view);
+                cursor::jump_to_matching_opposite(&mut self.doc, &mut self.view);
             }
-            A(JumpToEndOfFile) => cm::jump_to_end_of_file(&mut self.doc, &mut self.view),
+            A(JumpToEndOfFile) => cursor::jump_to_end_of_file(&mut self.doc, &mut self.view),
             A(JumpToBeginningOfFile) => {
-                cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
+                cursor::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
             }
             A(ChangeToInfoBuffer) => return CommandResult::ChangeBuffer(INFO_BUFF_IDX),
             A(ChangeToFilesBuffer) => {
@@ -409,373 +407,163 @@ impl TextBuffer {
             A(CommandMode) => self.change_mode(Mode::Command),
             A(SelectMode) => self.selection = Some(self.doc.cur),
             A(ExitSelectMode) => self.selection = None,
-            A(DeleteSelection) => self.delete_selection(),
-            A(DeleteLine) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
-                    self.doc.remove_line();
-                    if self.doc.buff.is_empty() {
-                        self.doc.insert_line(Cow::from(""));
-                    }
-                    if self.doc.cur.y == self.doc.buff.len() {
-                        cm::up(&mut self.doc, &mut self.view, 1);
-                    }
-                }
+            A(DeleteSelection) => {
+                delete::selection(&mut self.doc, &mut self.view, &mut self.selection);
             }
-            A(DeleteLeft) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selection = Some(self.doc.cur);
-                    cm::left(&mut self.doc, &mut self.view, 1);
-                    self.delete_selection();
-                }
-            }
-            A(DeleteRight) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selection = Some(self.doc.cur);
-                    cm::right(&mut self.doc, &mut self.view, 1);
-                    self.delete_selection();
-                }
-            }
-            A(DeleteNextWord) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selection = Some(self.doc.cur);
-                    cm::next_word(&mut self.doc, &mut self.view);
-                    self.delete_selection();
-                }
-            }
-            A(DeletePrevWord) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selection = Some(self.doc.cur);
-                    cm::prev_word(&mut self.doc, &mut self.view);
-                    self.delete_selection();
-                }
-            }
-            A(DeleteToBeginningOfLine) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selection = Some(self.doc.cur);
-                    cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
-                    self.delete_selection();
-                }
-            }
-            A(DeleteToEndOfLine) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selection = Some(self.doc.cur);
-                    cm::jump_to_end_of_line(&mut self.doc, &mut self.view);
-                    self.delete_selection();
-                }
-            }
-            A(DeleteToMatchingOpposite) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selection = Some(self.doc.cur);
-                    cm::jump_to_matching_opposite(&mut self.doc, &mut self.view);
-                    self.delete_selection();
-                }
-            }
-            A(DeleteToBeginningOfFile) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selection = Some(self.doc.cur);
-                    cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
-                    self.delete_selection();
-                }
-            }
-            A(DeleteToEndOfFile) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    self.selection = Some(self.doc.cur);
-                    cm::jump_to_end_of_file(&mut self.doc, &mut self.view);
-                    self.delete_selection();
-                }
-            }
-            A(DeleteChar) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    if self.doc.buff[self.doc.cur.y]
-                        .chars()
-                        .nth(self.doc.cur.x)
-                        .is_some()
-                    {
-                        self.doc.delete_char();
-                    }
-                }
-            }
+            A(DeleteLine) => delete::line(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(DeleteLeft) => delete::left(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(DeleteRight) => delete::right(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(DeleteNextWord) => delete::next_word(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(DeletePrevWord) => delete::prev_word(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(DeleteToBeginningOfLine) => delete::beginning_of_line(&mut self.doc, &mut self.view),
+            A(DeleteToEndOfLine) => delete::end_of_line(&mut self.doc, &mut self.view),
+            A(DeleteToMatchingOpposite) => delete::matching_opposite(&mut self.doc, &mut self.view),
+            A(DeleteToBeginningOfFile) => delete::beginning_of_file(&mut self.doc, &mut self.view),
+            A(DeleteToEndOfFile) => delete::end_of_file(&mut self.doc, &mut self.view),
+            A(DeleteChar) => delete::left(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
             A(ChangeSelection) => {
-                self.delete_selection();
+                delete::selection(&mut self.doc, &mut self.view, &mut self.selection);
                 self.change_mode(Mode::Write);
             }
             A(ChangeLine) => {
-                cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
+                cursor::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
                 self.doc.buff[self.doc.cur.y].to_mut().clear();
                 self.change_mode(Mode::Write);
             }
             A(ChangeLeft) => {
-                self.selection = Some(self.doc.cur);
-                cm::left(&mut self.doc, &mut self.view, 1);
-                self.delete_selection();
+                delete::left(
+                    &mut self.doc,
+                    &mut self.view,
+                    self.motion_repeat.parse::<usize>().unwrap_or(1),
+                );
                 self.change_mode(Mode::Write);
             }
             A(ChangeRight) => {
-                self.selection = Some(self.doc.cur);
-                cm::right(&mut self.doc, &mut self.view, 1);
-                self.delete_selection();
+                delete::right(
+                    &mut self.doc,
+                    &mut self.view,
+                    self.motion_repeat.parse::<usize>().unwrap_or(1),
+                );
                 self.change_mode(Mode::Write);
             }
             A(ChangeNextWord) => {
-                self.selection = Some(self.doc.cur);
-                cm::next_word(&mut self.doc, &mut self.view);
-                self.delete_selection();
+                delete::next_word(
+                    &mut self.doc,
+                    &mut self.view,
+                    self.motion_repeat.parse::<usize>().unwrap_or(1),
+                );
                 self.change_mode(Mode::Write);
             }
             A(ChangePrevWord) => {
-                self.selection = Some(self.doc.cur);
-                cm::prev_word(&mut self.doc, &mut self.view);
-                self.delete_selection();
+                delete::prev_word(
+                    &mut self.doc,
+                    &mut self.view,
+                    self.motion_repeat.parse::<usize>().unwrap_or(1),
+                );
                 self.change_mode(Mode::Write);
             }
             A(ChangeToBeginningOfLine) => {
-                self.selection = Some(self.doc.cur);
-                cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
-                self.delete_selection();
+                delete::beginning_of_line(&mut self.doc, &mut self.view);
                 self.change_mode(Mode::Write);
             }
             A(ChangeToEndOfLine) => {
-                self.selection = Some(self.doc.cur);
-                cm::jump_to_end_of_line(&mut self.doc, &mut self.view);
-                self.delete_selection();
+                delete::end_of_line(&mut self.doc, &mut self.view);
                 self.change_mode(Mode::Write);
             }
             A(ChangeToMatchingOpposite) => {
-                self.selection = Some(self.doc.cur);
-                cm::jump_to_matching_opposite(&mut self.doc, &mut self.view);
-                self.delete_selection();
+                delete::matching_opposite(&mut self.doc, &mut self.view);
                 self.change_mode(Mode::Write);
             }
             A(ChangeToBeginningOfFile) => {
-                self.selection = Some(self.doc.cur);
-                cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
-                self.delete_selection();
+                delete::beginning_of_file(&mut self.doc, &mut self.view);
                 self.change_mode(Mode::Write);
             }
             A(ChangeToEndOfFile) => {
-                self.selection = Some(self.doc.cur);
-                cm::jump_to_end_of_file(&mut self.doc, &mut self.view);
-                self.delete_selection();
+                delete::end_of_file(&mut self.doc, &mut self.view);
                 self.change_mode(Mode::Write);
             }
             A(YankSelection) => {
-                if let Some(pos) = self.selection {
-                    let res = self
-                        .clipboard
-                        .set_text(self.doc.get_range(self.doc.cur, pos));
-
-                    self.selection = None;
-
-                    if let Err(err) = res {
-                        return CommandResult::SetAndChangeBuffer(
-                            INFO_BUFF_IDX,
-                            vec![Cow::from(err.to_string())],
-                            None,
-                        );
-                    }
+                match yank::selection(&mut self.doc, &mut self.selection, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
-            A(YankLine) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                let start = Cursor::new(0, self.doc.cur.y);
-                cm::jump_to_end_of_line(&mut self.doc, &mut self.view);
-                cm::right(&mut self.doc, &mut self.view, 1);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(start, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
-                }
-            }
-            A(YankLeft) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::left(&mut self.doc, &mut self.view, 1);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
-                }
-            }
-            A(YankRight) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::right(&mut self.doc, &mut self.view, 1);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
-                }
-            }
+            A(YankLine) => match yank::line(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                Ok(()) => {}
+                Err(err) => return err,
+            },
+            A(YankLeft) => match yank::left(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                Ok(()) => {}
+                Err(err) => return err,
+            },
+            A(YankRight) => match yank::right(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                Ok(()) => {}
+                Err(err) => return err,
+            },
             A(YankNextWord) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::next_word(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::next_word(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(YankPrevWord) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::prev_word(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::prev_word(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(YankToBeginningOfLine) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::beginning_of_line(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(YankToEndOfLine) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::jump_to_end_of_line(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::end_of_line(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(YankToMatchingOpposite) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::jump_to_matching_opposite(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::matching_opposite(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(YankToBeginningOfFile) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::beginning_of_file(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(YankToEndOfFile) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::jump_to_end_of_file(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::end_of_file(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(Paste) => {
@@ -829,12 +617,12 @@ impl TextBuffer {
 
         match self.write_state_machine.tick(key.into()) {
             A(ViewMode) => self.change_mode(Mode::View),
-            A(Left) => cm::left(&mut self.doc, &mut self.view, 1),
-            A(Down) => cm::down(&mut self.doc, &mut self.view, 1),
-            A(Up) => cm::up(&mut self.doc, &mut self.view, 1),
-            A(Right) => cm::right(&mut self.doc, &mut self.view, 1),
-            A(NextWord) => cm::next_word(&mut self.doc, &mut self.view),
-            A(PrevWord) => cm::prev_word(&mut self.doc, &mut self.view),
+            A(Left) => cursor::left(&mut self.doc, &mut self.view, 1),
+            A(Down) => cursor::down(&mut self.doc, &mut self.view, 1),
+            A(Up) => cursor::up(&mut self.doc, &mut self.view, 1),
+            A(Right) => cursor::right(&mut self.doc, &mut self.view, 1),
+            A(NextWord) => cursor::next_word(&mut self.doc, &mut self.view, 1),
+            A(PrevWord) => cursor::prev_word(&mut self.doc, &mut self.view, 1),
             A(Newline) => self.write_new_line_char(),
             A(Tab) => self.write_tab(),
             A(DeleteChar) => self.delete_char(),
@@ -856,8 +644,8 @@ impl TextBuffer {
 
         match self.cmd_state_machine.tick(key.into()) {
             A(ViewMode) => self.change_mode(Mode::View),
-            A(Left) => self.cmd_left(1),
-            A(Right) => self.cmd_right(1),
+            A(Left) => cursor::left(&mut self.cmd, &mut self.view, 1),
+            A(Right) => cursor::right(&mut self.cmd, &mut self.view, 1),
             A(Newline) => {
                 let res = self.apply_command();
                 self.change_mode(Mode::View);

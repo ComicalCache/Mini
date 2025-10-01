@@ -1,6 +1,6 @@
 use crate::{
     INFO_BUFF_IDX, INFO_MSG,
-    buffers::text_buffer::TextBuffer,
+    custom_buffers::text_buffer::TextBuffer,
     util::{CommandResult, open_file, read_file_to_lines},
 };
 use std::{borrow::Cow, io::Error};
@@ -134,29 +134,21 @@ impl TextBuffer {
                 self.doc.edited = false;
                 CommandResult::Quit
             }
-            "wq" => {
-                let res = match self.write_to_file() {
-                    Ok(res) => res,
-                    Err(err) => {
-                        return CommandResult::SetAndChangeBuffer(
-                            INFO_BUFF_IDX,
-                            vec![Cow::from(err.to_string())],
-                            None,
-                        );
-                    }
-                };
-                if !res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(
-                            "Please specify a file location using 'w <path>' to write the file to",
-                        )],
-                        None,
-                    );
-                }
-
-                CommandResult::Quit
-            }
+            "wq" => match self.write_to_file() {
+                Ok(res) if !res => CommandResult::SetAndChangeBuffer(
+                    INFO_BUFF_IDX,
+                    vec![Cow::from(
+                        "Please specify a file location using 'w <path>' to write the file to",
+                    )],
+                    None,
+                ),
+                Err(err) => CommandResult::SetAndChangeBuffer(
+                    INFO_BUFF_IDX,
+                    vec![Cow::from(err.to_string())],
+                    None,
+                ),
+                _ => CommandResult::Quit,
+            },
             "w" => self.write_command(args),
             "o" => self.open_command(args, false),
             "oo" => self.open_command(args, true),

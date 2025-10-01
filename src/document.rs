@@ -33,8 +33,8 @@ impl Document {
     }
 
     /// Returns the count of chars in a line.
-    pub fn line_count(&self, y: usize) -> usize {
-        self.buff[y].chars().count()
+    pub fn line_count(&self, y: usize) -> Option<usize> {
+        self.buff.get(y).map(|l| l.chars().count())
     }
 
     /// Writes the document to a specified file.
@@ -77,18 +77,31 @@ impl Document {
 
     /// Inserts a new line at a specified y position.
     pub fn insert_line_at(&mut self, y: usize, line: Cow<'static, str>) {
+        if y > self.buff.len() {
+            return;
+        }
+
         self.buff.insert(y, line);
         self.edited = true;
     }
 
     /// Removes a line at the current cursor y position.
-    pub fn remove_line(&mut self) -> Cow<'static, str> {
+    pub fn remove_line(&mut self) -> Option<Cow<'static, str>> {
         self.remove_line_at(self.cur.y)
     }
 
     /// Removes a line at a specified y position.
-    pub fn remove_line_at(&mut self, y: usize) -> Cow<'static, str> {
-        self.buff.remove(y)
+    pub fn remove_line_at(&mut self, y: usize) -> Option<Cow<'static, str>> {
+        if y >= self.buff.len() {
+            return None;
+        }
+
+        let line = self.buff.remove(y);
+        if self.buff.is_empty() {
+            self.buff.push(Cow::from(""));
+        }
+
+        Some(line)
     }
 
     /// Writes a char at the current cursor position.
@@ -98,10 +111,18 @@ impl Document {
 
     /// Writes a char at a specified position.
     pub fn write_char_at(&mut self, x: usize, y: usize, ch: char) {
+        let Some(count) = self.line_count(y) else {
+            return;
+        };
+        if x > count {
+            return;
+        }
+
         let idx = self.buff[y]
             .char_indices()
             .nth(x)
             .map_or(self.buff[y].len(), |(idx, _)| idx);
+
         self.buff[y].to_mut().insert(idx, ch);
         self.edited = true;
     }
@@ -113,14 +134,14 @@ impl Document {
 
     /// Deletes a char at a specified position.
     pub fn delete_char_at(&mut self, x: usize, y: usize) {
-        let line = &mut self.buff[y];
-        let idx = line
-            .char_indices()
-            .nth(x)
-            .map(|(idx, _)| idx)
-            // Safe to unwrap
-            .unwrap();
+        if y >= self.buff.len() {
+            return;
+        }
 
+        let line = &mut self.buff[y];
+        let Some((idx, _)) = line.char_indices().nth(x) else {
+            return;
+        };
         line.to_mut().remove(idx);
         self.edited = true;
     }
@@ -132,6 +153,13 @@ impl Document {
 
     /// Writes a str at a specified position.
     pub fn write_str_at(&mut self, x: usize, y: usize, r#str: &str) {
+        let Some(count) = self.line_count(y) else {
+            return;
+        };
+        if x > count {
+            return;
+        }
+
         let line = &mut self.buff[y];
         let idx = line
             .char_indices()
@@ -143,25 +171,31 @@ impl Document {
     }
 
     /// Copies a range of text from the document.
-    pub fn get_range(&self, pos1: Cursor, pos2: Cursor) -> Cow<'static, str> {
+    pub fn get_range(&self, pos1: Cursor, pos2: Cursor) -> Option<Cow<'static, str>> {
         let (start, end) = if pos1 <= pos2 {
             (pos1, pos2)
         } else {
             (pos2, pos1)
         };
 
+        let start_len = self.line_count(start.y)?;
+        let end_len = self.line_count(end.y)?;
+        if start_len < start.x || end_len < end.x {
+            return None;
+        }
+
         if start.y == end.y {
             let line = &self.buff[start.y];
             let start_idx = line
                 .char_indices()
                 .nth(start.x)
-                .map_or(line.len(), |(idx, _)| idx);
+                .map_or(start_len, |(idx, _)| idx);
             let end_idx = line
                 .char_indices()
                 .nth(end.x)
-                .map_or(line.len(), |(idx, _)| idx);
+                .map_or(end_len, |(idx, _)| idx);
 
-            return Cow::from(line[start_idx..end_idx].to_string());
+            return Some(Cow::from(line[start_idx..end_idx].to_string()));
         }
 
         let mut result = String::new();
@@ -171,7 +205,7 @@ impl Document {
         let start_idx = first_line
             .char_indices()
             .nth(start.x)
-            .map_or(first_line.len(), |(idx, _)| idx);
+            .map_or(start_len, |(idx, _)| idx);
         result.push_str(&first_line[start_idx..]);
         result.push('\n');
 
@@ -186,9 +220,9 @@ impl Document {
         let end_idx = last_line
             .char_indices()
             .nth(end.x)
-            .map_or(last_line.len(), |(idx, _)| idx);
+            .map_or(end_len, |(idx, _)| idx);
         result.push_str(&last_line[..end_idx]);
 
-        Cow::from(result)
+        Some(Cow::from(result))
     }
 }

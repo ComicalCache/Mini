@@ -2,9 +2,8 @@
 #![feature(str_as_str)]
 
 mod buffer;
-mod buffers;
 mod cursor;
-mod cursor_move;
+mod custom_buffers;
 mod document;
 mod state_machine;
 mod util;
@@ -12,7 +11,7 @@ mod viewport;
 
 use crate::{
     buffer::Buffer,
-    buffers::{files_buffer::FilesBuffer, info_buffer::InfoBuffer, text_buffer::TextBuffer},
+    custom_buffers::{files_buffer::FilesBuffer, info_buffer::InfoBuffer, text_buffer::TextBuffer},
     util::{CommandResult, open_file},
 };
 use polling::{Events, Poller};

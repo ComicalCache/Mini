@@ -35,6 +35,7 @@ Command Mode:
 Press space to enter command mode
 Press esc to exit command mode
 - 'q' to quit
+- 'qq' to force quit, discarding unsaved changes
 - '?' to see this message
 - 'w' to write the buffer to file
 - 'w <path>' to write this/all future writes to the specified path

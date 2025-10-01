@@ -2,9 +2,8 @@ mod interact;
 
 use crate::{
     INFO_BUFF_IDX, TXT_BUFF_IDX,
-    buffer::Buffer,
-    cursor::Cursor,
-    cursor_move as cm,
+    buffer::{Buffer, yank},
+    cursor::{self, Cursor},
     document::Document,
     state_machine::{ChainResult, CommandMap, StateMachine},
     util::{CommandResult, CursorStyle},
@@ -184,46 +183,46 @@ impl Buffer for FilesBuffer {
         use Action::*;
 
         match self.input_state_machine.tick(key.into()) {
-            A(Left) => cm::left(
+            A(Left) => cursor::left(
                 &mut self.doc,
                 &mut self.view,
                 self.motion_repeat.parse::<usize>().unwrap_or(1),
             ),
-            A(Down) => cm::down(
+            A(Down) => cursor::down(
                 &mut self.doc,
                 &mut self.view,
                 self.motion_repeat.parse::<usize>().unwrap_or(1),
             ),
-            A(Up) => cm::up(
+            A(Up) => cursor::up(
                 &mut self.doc,
                 &mut self.view,
                 self.motion_repeat.parse::<usize>().unwrap_or(1),
             ),
-            A(Right) => cm::right(
+            A(Right) => cursor::right(
                 &mut self.doc,
                 &mut self.view,
                 self.motion_repeat.parse::<usize>().unwrap_or(1),
             ),
-            A(NextWord) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    cm::next_word(&mut self.doc, &mut self.view);
-                }
-            }
-            A(PrevWord) => {
-                for _ in 0..self.motion_repeat.parse::<usize>().unwrap_or(1) {
-                    cm::prev_word(&mut self.doc, &mut self.view);
-                }
-            }
+            A(NextWord) => cursor::next_word(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(PrevWord) => cursor::prev_word(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
             A(JumpToBeginningOfLine) => {
-                cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
+                cursor::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
             }
-            A(JumpToEndOfLine) => cm::jump_to_end_of_line(&mut self.doc, &mut self.view),
+            A(JumpToEndOfLine) => cursor::jump_to_end_of_line(&mut self.doc, &mut self.view),
             A(JumpToMatchingOpposite) => {
-                cm::jump_to_matching_opposite(&mut self.doc, &mut self.view);
+                cursor::jump_to_matching_opposite(&mut self.doc, &mut self.view);
             }
-            A(JumpToEndOfFile) => cm::jump_to_end_of_file(&mut self.doc, &mut self.view),
+            A(JumpToEndOfFile) => cursor::jump_to_end_of_file(&mut self.doc, &mut self.view),
             A(JumpToBeginningOfFile) => {
-                cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
+                cursor::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
             }
             A(Refresh) => {
                 if let Err(err) =
@@ -251,222 +250,63 @@ impl Buffer for FilesBuffer {
             A(SelectMode) => self.selection = Some(self.doc.cur),
             A(ExitSelectMode) => self.selection = None,
             A(YankSelection) => {
-                if let Some(pos) = self.selection {
-                    let res = self
-                        .clipboard
-                        .set_text(self.doc.get_range(self.doc.cur, pos));
-
-                    self.selection = None;
-
-                    if let Err(err) = res {
-                        return CommandResult::SetAndChangeBuffer(
-                            INFO_BUFF_IDX,
-                            vec![Cow::from(err.to_string())],
-                            None,
-                        );
-                    }
+                match yank::selection(&mut self.doc, &mut self.selection, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
-            A(YankLine) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                let start = Cursor::new(0, self.doc.cur.y);
-                cm::jump_to_end_of_line(&mut self.doc, &mut self.view);
-                cm::right(&mut self.doc, &mut self.view, 1);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(start, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
-                }
-            }
-            A(YankLeft) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::left(&mut self.doc, &mut self.view, 1);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
-                }
-            }
-            A(YankRight) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::right(&mut self.doc, &mut self.view, 1);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
-                }
-            }
+            A(YankLine) => match yank::line(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                Ok(()) => {}
+                Err(err) => return err,
+            },
+            A(YankLeft) => match yank::left(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                Ok(()) => {}
+                Err(err) => return err,
+            },
+            A(YankRight) => match yank::right(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                Ok(()) => {}
+                Err(err) => return err,
+            },
             A(YankNextWord) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::next_word(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::next_word(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(YankPrevWord) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::prev_word(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::prev_word(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(YankToBeginningOfLine) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::beginning_of_line(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(YankToEndOfLine) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::jump_to_end_of_line(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::end_of_line(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(YankToMatchingOpposite) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::jump_to_matching_opposite(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::matching_opposite(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(YankToBeginningOfFile) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::beginning_of_file(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(YankToEndOfFile) => {
-                let tmp_view_cur = self.view.cur;
-                let tmp_doc_cur = self.doc.cur;
-
-                cm::jump_to_end_of_file(&mut self.doc, &mut self.view);
-                let res = self
-                    .clipboard
-                    .set_text(self.doc.get_range(tmp_doc_cur, self.doc.cur));
-
-                self.view.cur = tmp_view_cur;
-                self.doc.cur = tmp_doc_cur;
-
-                if let Err(err) = res {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
-                        None,
-                    );
+                match yank::end_of_file(&mut self.doc, &mut self.view, &mut self.clipboard) {
+                    Ok(()) => {}
+                    Err(err) => return err,
                 }
             }
             A(ChangeToTextBuffer) => return CommandResult::ChangeBuffer(TXT_BUFF_IDX),

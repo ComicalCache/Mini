@@ -101,7 +101,7 @@ impl Viewport {
         // Set command line and cursor.
         // Can never be larger than u16 since the width is used as upper bound and equal to the terminal size.
         #[allow(clippy::cast_possible_truncation)]
-        let cursor = if let Some((cmd_line, cursor)) = &self.cmd {
+        let cur = if let Some((cmd_line, cur)) = &self.cmd {
             // Copy command line and stretch to window width.
             self.buff[self.h - 2].clone_from(cmd_line);
             if cmd_line.chars().count() < self.w {
@@ -109,8 +109,8 @@ impl Viewport {
             }
 
             Goto(
-                (cursor.x as u16).saturating_add(1),
-                ((cursor.y + self.h) as u16).saturating_add(1),
+                (cur.x as u16).saturating_add(1),
+                ((cur.y + self.h) as u16).saturating_add(1),
             )
         } else {
             Goto(
@@ -127,7 +127,7 @@ impl Viewport {
             self.info_line
         )?;
         for (idx, line) in self.buff[..self.buff.len()].iter().enumerate() {
-            if idx + 1 == usize::from(cursor.1 - 1) {
+            if idx + 1 == usize::from(cur.1 - 1) {
                 // Fill the cursor line with spaces so the highlight is shown.
                 write!(
                     stdout,
@@ -140,9 +140,9 @@ impl Viewport {
         }
 
         match cursor_style {
-            CursorStyle::BlinkingBar => write!(stdout, "{cursor}{BlinkingBar}{NO_TXT}{Show}",)?,
-            CursorStyle::BlinkingBlock => write!(stdout, "{cursor}{BlinkingBlock}{NO_TXT}{Show}",)?,
-            CursorStyle::SteadyBlock => write!(stdout, "{cursor}{SteadyBlock}{NO_TXT}{Show}")?,
+            CursorStyle::BlinkingBar => write!(stdout, "{cur}{BlinkingBar}{NO_TXT}{Show}",)?,
+            CursorStyle::BlinkingBlock => write!(stdout, "{cur}{BlinkingBlock}{NO_TXT}{Show}",)?,
+            CursorStyle::SteadyBlock => write!(stdout, "{cur}{SteadyBlock}{NO_TXT}{Show}")?,
         }
 
         stdout.flush()

@@ -1,3 +1,6 @@
+pub mod delete;
+pub mod yank;
+
 use crate::util::CommandResult;
 use std::{
     borrow::Cow,
