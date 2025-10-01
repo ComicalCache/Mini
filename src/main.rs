@@ -88,7 +88,7 @@ fn main() -> Result<(), std::io::Error> {
 
         // Clear previous iterations events and fetch new ones.
         events.clear();
-        poller.wait(&mut events, Some(Duration::from_millis(25)))?;
+        poller.wait(&mut events, Some(Duration::from_millis(50)))?;
 
         let key = if events.iter().any(|e| e.key == STDIN_EVENT_KEY) {
             // If a new event exists, send a tick with the key immediately.

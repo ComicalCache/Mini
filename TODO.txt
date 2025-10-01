@@ -1,5 +1,4 @@
 - Symlink in file browser
+- Diff based rendering
 - Line numbers
-- Yanking (y + motion)
-- Pasting (p to paste)
 - Find (?)

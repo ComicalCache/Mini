@@ -3,7 +3,7 @@ use std::io::{BufWriter, Error, Stdout, Write};
 use termion::{
     clear::All,
     color::{self, Bg, Fg, Reset},
-    cursor::{BlinkingBar, BlinkingBlock, Goto, SteadyBlock},
+    cursor::{BlinkingBar, BlinkingBlock, Goto, Hide, Show, SteadyBlock},
     raw::RawTerminal,
 };
 
@@ -67,7 +67,7 @@ impl Viewport {
         #[allow(clippy::cast_possible_wrap)]
         let lines_offset = doc.cur.y as isize - self.cur.y as isize;
         for (lines_idx, doc_idx) in (0..self.h - 1).zip(lines_offset + 1..) {
-            self.buff[lines_idx] = " ".repeat(self.w);
+            self.buff[lines_idx].clear();
 
             // Skip screen lines outside the text line bounds.
             // The value is guaranteed positive at that point.
@@ -94,7 +94,7 @@ impl Viewport {
                     // Use all remaining bytes if they don't fill the entire line.
                     .map_or(content.len(), |(idx, _)| idx);
 
-                self.buff[lines_idx].replace_range(0..(end - start), &content[start..end]);
+                self.buff[lines_idx].replace_range(.., &content[start..end]);
             }
         }
 
@@ -122,22 +122,27 @@ impl Viewport {
         // Write the new content.
         write!(
             stdout,
-            "{All}{}{HIGHLIGHT}{TXT}{}{NO_HIGHLIGHT}{NO_TXT}",
+            "{All}{Hide}{}{HIGHLIGHT}{TXT}{}{NO_HIGHLIGHT}",
             Goto(1, 1),
             self.info_line
         )?;
         for (idx, line) in self.buff[..self.buff.len()].iter().enumerate() {
             if idx + 1 == usize::from(cursor.1 - 1) {
-                write!(stdout, "\n\r{HIGHLIGHT}{TXT}{line}{NO_HIGHLIGHT}{NO_TXT}")?;
+                // Fill the cursor line with spaces so the highlight is shown.
+                write!(
+                    stdout,
+                    "\n\r{HIGHLIGHT}{line}{}{NO_HIGHLIGHT}",
+                    " ".repeat(self.w - line.chars().count())
+                )?;
             } else {
-                write!(stdout, "\n\r{BG}{TXT}{line}{NO_BG}{NO_TXT}")?;
+                write!(stdout, "\n\r{BG}{line}{NO_BG}")?;
             }
         }
 
         match cursor_style {
-            CursorStyle::BlinkingBar => write!(stdout, "{cursor}{BlinkingBar}",)?,
-            CursorStyle::BlinkingBlock => write!(stdout, "{cursor}{BlinkingBlock}",)?,
-            CursorStyle::SteadyBlock => write!(stdout, "{cursor}{SteadyBlock}")?,
+            CursorStyle::BlinkingBar => write!(stdout, "{cursor}{BlinkingBar}{NO_TXT}{Show}",)?,
+            CursorStyle::BlinkingBlock => write!(stdout, "{cursor}{BlinkingBlock}{NO_TXT}{Show}",)?,
+            CursorStyle::SteadyBlock => write!(stdout, "{cursor}{SteadyBlock}{NO_TXT}{Show}")?,
         }
 
         stdout.flush()
