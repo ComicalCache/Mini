@@ -11,16 +11,16 @@ use std::borrow::Cow;
 /// Yanks the selected area.
 pub fn selection(
     doc: &mut Document,
-    selection: &mut Option<Cursor>,
+    sel: &mut Option<Cursor>,
     clipboard: &mut Clipboard,
 ) -> Result<(), CommandResult> {
-    let Some(pos) = selection else {
+    let Some(pos) = sel else {
         return Ok(());
     };
 
     let res = clipboard.set_text(doc.get_range(doc.cur, *pos).expect("Illegal state"));
 
-    *selection = None;
+    *sel = None;
     match res {
         Ok(()) => Ok(()),
         Err(err) => Err(CommandResult::SetAndChangeBuffer(

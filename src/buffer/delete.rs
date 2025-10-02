@@ -6,8 +6,8 @@ use crate::{
 use std::borrow::Cow;
 
 /// Deletes the selected area.
-pub fn selection(doc: &mut Document, view: &mut Viewport, selection: &mut Option<Cursor>) {
-    let Some(pos) = *selection else {
+pub fn selection(doc: &mut Document, view: &mut Viewport, sel: &mut Option<Cursor>) {
+    let Some(pos) = *sel else {
         return;
     };
 
@@ -61,7 +61,7 @@ pub fn selection(doc: &mut Document, view: &mut Viewport, selection: &mut Option
         cursor::right(doc, view, diff);
     }
 
-    *selection = None;
+    *sel = None;
     doc.edited = true;
 }
 

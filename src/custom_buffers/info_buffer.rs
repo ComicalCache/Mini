@@ -49,7 +49,7 @@ enum Action {
 pub struct InfoBuffer {
     doc: Document,
     view: Viewport,
-    selection: Option<Cursor>,
+    sel: Option<Cursor>,
     clipboard: Clipboard,
     input_state_machine: StateMachine<Action>,
 }
@@ -94,7 +94,7 @@ impl InfoBuffer {
         Ok(InfoBuffer {
             doc: Document::new(0, 0, None),
             view: Viewport::new(w, h, 0, h / 2, 1),
-            selection: None,
+            sel: None,
             clipboard: Clipboard::new().map_err(Error::other)?,
             input_state_machine,
         })
@@ -119,11 +119,17 @@ impl Buffer for InfoBuffer {
         )
         .map_err(Error::other)?;
 
-        if let Some(pos) = self.selection {
+        if let Some(pos) = self.sel {
             // Plus 1 since text coordinates are 0 indexed.
             let line = pos.y + 1;
             let col = pos.x + 1;
-            write!(&mut self.view.info_line, " [Selected {line}:{col}]").map_err(Error::other)?;
+            write!(
+                &mut self.view.info_line,
+                " [Selected {line}:{col} - {}:{}]",
+                self.doc.cur.y + 1,
+                self.doc.cur.x + 1
+            )
+            .map_err(Error::other)?;
         }
 
         let edited = if self.doc.edited { '*' } else { ' ' };
@@ -131,7 +137,7 @@ impl Buffer for InfoBuffer {
 
         self.view.cmd = None;
         self.view
-            .render(stdout, &self.doc, CursorStyle::BlinkingBlock)
+            .render(stdout, &self.doc, self.sel, CursorStyle::BlinkingBlock)
     }
 
     fn resize(&mut self, w: usize, h: usize) {
@@ -166,10 +172,10 @@ impl Buffer for InfoBuffer {
             A(JumpToBeginningOfFile) => {
                 cursor::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
             }
-            A(SelectMode) => self.selection = Some(self.doc.cur),
-            A(ExitSelectMode) => self.selection = None,
+            A(SelectMode) => self.sel = Some(self.doc.cur),
+            A(ExitSelectMode) => self.sel = None,
             A(YankSelection) => {
-                match yank::selection(&mut self.doc, &mut self.selection, &mut self.clipboard) {
+                match yank::selection(&mut self.doc, &mut self.sel, &mut self.clipboard) {
                     Ok(()) => {}
                     Err(err) => return err,
                 }

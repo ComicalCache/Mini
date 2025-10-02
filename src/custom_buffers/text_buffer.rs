@@ -77,7 +77,6 @@ enum ViewAction {
     YankToBeginningOfFile,
     YankToEndOfFile,
     Paste,
-    DeleteChar,
     ReplaceChar(char),
     Repeat(char),
 }
@@ -118,7 +117,7 @@ pub struct TextBuffer {
     cmd: Document,
     view: Viewport,
     file: Option<File>,
-    selection: Option<Cursor>,
+    sel: Option<Cursor>,
     mode: Mode,
     motion_repeat: String,
     clipboard: Clipboard,
@@ -175,7 +174,7 @@ impl TextBuffer {
                     Key::Char('G') => Some(ChainResult::Action(DeleteToBeginningOfFile)),
                     _ => None,
                 })
-                .simple(Key::Char('x'), DeleteChar)
+                .simple(Key::Char('x'), DeleteRight)
                 .operator(Key::Char('c'), |key| match key {
                     Key::Char('v') => Some(ChainResult::Action(ChangeSelection)),
                     Key::Char('c') => Some(ChainResult::Action(ChangeLine)),
@@ -264,7 +263,7 @@ impl TextBuffer {
             cmd: Document::new(0, 0, None),
             view: Viewport::new(w, h, 0, h / 2, count),
             file,
-            selection: None,
+            sel: None,
             mode: Mode::View,
             motion_repeat: String::new(),
             clipboard: Clipboard::new().map_err(Error::other)?,
@@ -296,11 +295,17 @@ impl TextBuffer {
             "[Text] [{mode}] [{line}:{col}/{total} {percentage}%] [{size}B]",
         )
         .unwrap();
-        if let Some(pos) = self.selection {
+        if let Some(pos) = self.sel {
             // Plus 1 since text coordinates are 0 indexed.
             let line = pos.y + 1;
             let col = pos.x + 1;
-            write!(&mut self.view.info_line, " [Selected {line}:{col}]").unwrap();
+            write!(
+                &mut self.view.info_line,
+                " [Selected {line}:{col} - {}:{}]",
+                self.doc.cur.y + 1,
+                self.doc.cur.x + 1
+            )
+            .unwrap();
         }
 
         let edited = if self.doc.edited { '*' } else { ' ' };
@@ -410,17 +415,17 @@ impl TextBuffer {
                 return CommandResult::ChangeBuffer(FILES_BUFF_IDX);
             }
             A(CommandMode) => self.change_mode(Mode::Command),
-            A(SelectMode) => self.selection = Some(self.doc.cur),
-            A(ExitSelectMode) => self.selection = None,
+            A(SelectMode) => self.sel = Some(self.doc.cur),
+            A(ExitSelectMode) => self.sel = None,
             A(DeleteSelection) => {
-                delete::selection(&mut self.doc, &mut self.view, &mut self.selection);
+                delete::selection(&mut self.doc, &mut self.view, &mut self.sel);
             }
             A(DeleteLine) => delete::line(
                 &mut self.doc,
                 &mut self.view,
                 self.motion_repeat.parse::<usize>().unwrap_or(1),
             ),
-            A(DeleteLeft) | A(DeleteChar) => delete::left(
+            A(DeleteLeft) => delete::left(
                 &mut self.doc,
                 &mut self.view,
                 self.motion_repeat.parse::<usize>().unwrap_or(1),
@@ -446,7 +451,7 @@ impl TextBuffer {
             A(DeleteToBeginningOfFile) => delete::beginning_of_file(&mut self.doc, &mut self.view),
             A(DeleteToEndOfFile) => delete::end_of_file(&mut self.doc, &mut self.view),
             A(ChangeSelection) => {
-                delete::selection(&mut self.doc, &mut self.view, &mut self.selection);
+                delete::selection(&mut self.doc, &mut self.view, &mut self.sel);
                 self.change_mode(Mode::Write);
             }
             A(ChangeLine) => {
@@ -507,7 +512,7 @@ impl TextBuffer {
                 self.change_mode(Mode::Write);
             }
             A(YankSelection) => {
-                match yank::selection(&mut self.doc, &mut self.selection, &mut self.clipboard) {
+                match yank::selection(&mut self.doc, &mut self.sel, &mut self.clipboard) {
                     Ok(()) => {}
                     Err(err) => return err,
                 }
@@ -674,7 +679,7 @@ impl Buffer for TextBuffer {
             Mode::Write | Mode::Command => CursorStyle::BlinkingBar,
         };
         self.view.cmd = self.cmd_line();
-        self.view.render(stdout, &self.doc, cursor_style)
+        self.view.render(stdout, &self.doc, self.sel, cursor_style)
     }
 
     fn resize(&mut self, w: usize, h: usize) {

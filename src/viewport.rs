@@ -10,6 +10,7 @@ use termion::{
 const BG: Bg<color::Rgb> = Bg(color::Rgb(41, 44, 51));
 const NO_BG: Bg<Reset> = Bg(Reset);
 const HIGHLIGHT: Bg<color::Rgb> = Bg(color::Rgb(51, 53, 59));
+const SEL: Bg<color::Rgb> = Bg(color::Rgb(75, 78, 87));
 const TXT: Fg<color::Rgb> = Fg(color::Rgb(172, 178, 190));
 const REL_NUMS: Fg<color::Rgb> = Fg(color::Rgb(101, 103, 105));
 const NO_TXT: Fg<Reset> = Fg(Reset);
@@ -24,8 +25,6 @@ pub struct Viewport {
     pub cur: Cursor,
 
     pub info_line: String,
-    nums_buff: Vec<String>,
-    buff: Vec<String>,
     pub cmd: Option<(String, Cursor)>,
 }
 
@@ -33,16 +32,14 @@ impl Viewport {
     pub fn new(w: usize, h: usize, x: usize, y: usize, count: usize) -> Self {
         let digits = count.ilog10() as usize + 1;
         Viewport {
-            w: w,
-            h: h,
+            w,
+            h,
             nums_w: digits + 4,
             nums_h: h,
             buff_w: w - digits - 4,
             buff_h: h,
             cur: Cursor::new(x, y),
             info_line: String::with_capacity(w),
-            nums_buff: vec![String::with_capacity(digits + 4); h - 1],
-            buff: vec![String::with_capacity(w - digits - 4); h - 1],
             cmd: None,
         }
     }
@@ -60,14 +57,6 @@ impl Viewport {
         self.cur = Cursor::new(x, y);
 
         self.info_line.clear();
-        self.nums_buff
-            .resize(h - 1, String::with_capacity(digits + 4));
-        self.buff
-            .resize(h - 1, String::with_capacity(w - digits - 4));
-        for idx in 0..h - 1 {
-            self.nums_buff[idx].clear();
-            self.buff[idx].clear();
-        }
         self.cmd = None;
     }
 
@@ -76,6 +65,7 @@ impl Viewport {
         &mut self,
         stdout: &mut BufWriter<RawTerminal<Stdout>>,
         doc: &Document,
+        sel: Option<Cursor>,
         cursor_style: CursorStyle,
     ) -> Result<(), Error> {
         // Update the nums width if the supplied buffer is not correct.
@@ -87,71 +77,33 @@ impl Viewport {
             }
         }
 
+        // Prepre the selection to be in order if a selection state is active.
+        let sel = if let Some(sel) = sel {
+            if doc.cur < sel {
+                Some((doc.cur, sel))
+            } else {
+                Some((sel, doc.cur))
+            }
+        } else {
+            None
+        };
+
         // Make sure that info line is stretched to window width.
         if self.info_line.chars().count() < self.w {
             self.info_line
                 .push_str(&" ".repeat(self.w - self.info_line.chars().count()));
         }
+        write!(
+            stdout,
+            "{All}{Hide}{}{HIGHLIGHT}{TXT}{}{BG}",
+            Goto(1, 1),
+            self.info_line
+        )?;
 
-        // Calculate which line of text is visible at what line on the screen.
-        #[allow(clippy::cast_possible_wrap)]
-        let lines_offset = doc.cur.y as isize - self.cur.y as isize;
-        for (lines_idx, doc_idx) in (0..self.buff_h - 1).zip(lines_offset + 1..) {
-            self.buff[lines_idx].clear();
-
-            // Skip screen lines outside the text line bounds.
-            // The value is guaranteed positive at that point.
-            #[allow(clippy::cast_sign_loss)]
-            if doc_idx < 0 || (doc_idx as usize) >= doc.buff.len() {
-                self.nums_buff[lines_idx] = format!("{}┃ ", " ".repeat(self.nums_w - 2));
-                continue;
-            }
-
-            // The value is guaranteed positive at that point.
-            #[allow(clippy::cast_sign_loss)]
-            {
-                let padding = self.nums_w - 3;
-                if doc_idx as usize == doc.cur.y {
-                    self.nums_buff[lines_idx] = format!("{:>padding$} ┃ ", doc_idx + 1);
-                } else {
-                    self.nums_buff[lines_idx] =
-                        format!("{:>padding$} ┃ ", doc.cur.y.abs_diff(doc_idx as usize));
-                }
-            }
-
-            // The value is guaranteed positive at that point.
-            #[allow(clippy::cast_sign_loss)]
-            let content = &doc.buff[doc_idx as usize];
-            let lower = doc.cur.x.saturating_sub(self.cur.x);
-            // Only print lines if their content is visible on the screen (horizontal movement).
-            if content.chars().count() > lower {
-                let upper = (lower + self.buff_w).min(content.chars().count());
-                let start = content
-                    .char_indices()
-                    .nth(lower)
-                    .map(|(idx, _)| idx)
-                    .unwrap();
-                let end = content
-                    .char_indices()
-                    .nth(upper)
-                    // Use all remaining bytes if they don't fill the entire line.
-                    .map_or(content.len(), |(idx, _)| idx);
-
-                self.buff[lines_idx].replace_range(.., &content[start..end]);
-            }
-        }
-
-        // Set command line and cursor.
+        // Get cursor position.
         // Can never be larger than u16 since the width is used as upper bound and equal to the terminal size.
         #[allow(clippy::cast_possible_truncation)]
-        let cur = if let Some((cmd_line, cur)) = &self.cmd {
-            // Copy command line and stretch to buffer window width.
-            self.buff[self.buff_h - 2].clone_from(cmd_line);
-            if cmd_line.chars().count() < self.buff_w {
-                self.buff[self.buff_h - 2]
-                    .push_str(&" ".repeat(self.buff_w - cmd_line.chars().count()));
-            }
-
+        let cur = if let Some((_, cur)) = &self.cmd {
             Goto(
                 ((self.nums_w + cur.x) as u16).saturating_add(1),
                 ((cur.y + self.buff_h) as u16).saturating_add(1),
@@ -163,28 +115,175 @@ impl Viewport {
             )
         };
 
-        // Write the new content.
-        write!(
-            stdout,
-            "{All}{Hide}{}{HIGHLIGHT}{TXT}{}{BG}",
-            Goto(1, 1),
-            self.info_line
-        )?;
-        for (idx, (line, nums)) in self.buff[..self.buff.len()]
-            .iter()
-            .zip(&self.nums_buff[..self.nums_buff.len()])
-            .enumerate()
-        {
-            if idx + 1 == usize::from(cur.1 - 1) {
-                // Fill the cursor line with spaces so the highlight is shown.
-                write!(
-                    stdout,
-                    "\n\r{HIGHLIGHT}{nums}{line}{}{BG}",
-                    " ".repeat(self.buff_w - line.chars().count())
-                )?;
+        // Calculate which line of text is visible at what line on the screen.
+        #[allow(clippy::cast_possible_wrap)]
+        let lines_offset = doc.cur.y as isize - self.cur.y as isize;
+        for (lines_idx, doc_idx) in (0..self.buff_h - 1).zip(lines_offset + 1..) {
+            // Set the trailing background color to match if its the cursor line.
+            let sel_bg = if lines_idx + 1 == usize::from(cur.1 - 1) {
+                HIGHLIGHT
             } else {
-                write!(stdout, "\n\r{REL_NUMS}{nums}{TXT}{line}")?;
+                BG
+            };
+
+            // Set highlight or rel nums.
+            if lines_idx + 1 == usize::from(cur.1 - 1) {
+                write!(stdout, "\n\r{HIGHLIGHT}{TXT}")?;
+            } else {
+                write!(stdout, "\n\r{REL_NUMS}")?;
             }
+
+            // Skip screen lines outside the text line bounds.
+            // The value is guaranteed positive at that point.
+            #[allow(clippy::cast_sign_loss)]
+            if doc_idx < 0 || (doc_idx as usize) >= doc.buff.len() {
+                write!(stdout, "{}┃", " ".repeat(self.nums_w - 2))?;
+                continue;
+            }
+
+            // The value is guaranteed positive at that point.
+            #[allow(clippy::cast_sign_loss)]
+            let doc_idx = doc_idx as usize;
+
+            // Write line numbers.
+            {
+                let padding = self.nums_w - 3;
+                if doc_idx == doc.cur.y {
+                    write!(stdout, "{:>padding$} ┃ ", doc_idx + 1)?;
+                } else {
+                    write!(stdout, "{:>padding$} ┃ ", doc.cur.y.abs_diff(doc_idx))?;
+                }
+            }
+
+            // Switch from relative line number color to regular text.
+            if lines_idx + 1 != usize::from(cur.1 - 1) {
+                write!(stdout, "{TXT}")?;
+            }
+
+            let content = &doc.buff[doc_idx];
+            let lower = doc.cur.x.saturating_sub(self.cur.x);
+            // Only print lines if their content is visible on the screen (horizontal movement).
+            if content.chars().count() > lower {
+                let upper = (lower + self.buff_w).min(content.chars().count());
+                let start_idx = content
+                    .char_indices()
+                    .nth(lower)
+                    .map_or(content.len(), |(idx, _)| idx);
+                let end_idx = content
+                    .char_indices()
+                    .nth(upper)
+                    // Use all remaining bytes if they don't fill the entire line.
+                    .map_or(content.len(), |(idx, _)| idx);
+
+                match sel {
+                    // Empty selection
+                    Some((start, end)) if start == end => {
+                        write!(stdout, "{}", &content[start_idx..end_idx])?;
+                    }
+                    // Selection on one line.
+                    Some((start, end)) if start.y == end.y && start.y == doc_idx => {
+                        let sel_start_idx = if start.x <= lower {
+                            // Selection started outside of visible line.
+                            start_idx
+                        } else {
+                            // Find selection start index.
+                            content
+                                .char_indices()
+                                .nth(start.x)
+                                .map(|(idx, _)| idx)
+                                .expect("Illegal state")
+                        };
+                        let sel_end_idx = if end.x >= upper {
+                            // Selection started outside of window.
+                            end_idx
+                        } else {
+                            content
+                                .char_indices()
+                                .nth(end.x)
+                                .map(|(idx, _)| idx)
+                                .expect("Illegal state")
+                        };
+
+                        if sel_start_idx > start_idx {
+                            write!(stdout, "{}", &content[start_idx..sel_start_idx])?;
+                        }
+                        write!(stdout, "{SEL}{}", &content[sel_start_idx..sel_end_idx])?;
+                        if sel_end_idx < end_idx {
+                            write!(stdout, "{sel_bg}{}", &content[sel_end_idx..end_idx])?;
+                        } else {
+                            write!(stdout, "{sel_bg}")?;
+                        }
+                    }
+                    // Start line of selection
+                    Some((start, _)) if start.y == doc_idx => {
+                        let sel_start_idx = if start.x <= lower {
+                            // Selection started outside of visible line.
+                            start_idx
+                        } else {
+                            // Find selection start index.
+                            content
+                                .char_indices()
+                                .nth(start.x)
+                                .map(|(idx, _)| idx)
+                                .expect("Illegal state")
+                        };
+
+                        if sel_start_idx > start_idx {
+                            write!(stdout, "{}", &content[start_idx..sel_start_idx])?;
+                        }
+                        write!(stdout, "{SEL}{}{sel_bg}", &content[sel_start_idx..end_idx],)?;
+                    }
+                    // Inbetween lines of selection
+                    Some((start, end)) if start.y < doc_idx && doc_idx < end.y => {
+                        write!(stdout, "{SEL}{}{sel_bg}", &content[start_idx..end_idx],)?;
+                    }
+                    // End line of selection
+                    Some((_, end)) if end.y == doc_idx => {
+                        let sel_end_idx = if end.x >= upper {
+                            // Selection started outside of window.
+                            end_idx
+                        } else {
+                            content
+                                .char_indices()
+                                .nth(end.x)
+                                .map(|(idx, _)| idx)
+                                .expect("Illegal state")
+                        };
+
+                        write!(stdout, "{SEL}{}", &content[start_idx..sel_end_idx])?;
+                        if sel_end_idx < end_idx {
+                            write!(stdout, "{sel_bg}{}", &content[sel_end_idx..end_idx])?;
+                        } else {
+                            write!(stdout, "{sel_bg}")?;
+                        }
+                    }
+                    _ => write!(stdout, "{}", &content[start_idx..end_idx])?,
+                }
+
+                // Stretch current line to end to show highlight properly.
+                if lines_idx + 1 == usize::from(cur.1 - 1) {
+                    write!(
+                        stdout,
+                        "{}{BG}",
+                        " ".repeat(self.buff_w - content[start_idx..end_idx].chars().count())
+                    )?;
+                }
+            } else {
+                // Stretch current line to end to show highlight properly.
+                write!(stdout, "{}{BG}", " ".repeat(self.buff_w))?;
+            }
+        }
+
+        // Set command line.
+        // Can never be larger than u16 since the width is used as upper bound and equal to the terminal size.
+        #[allow(clippy::cast_possible_truncation)]
+        if let Some((cmd_line, _)) = &self.cmd {
+            write!(
+                stdout,
+                "{}{TXT}{cmd_line}{}",
+                Goto(self.nums_w as u16 + 1, self.h as u16),
+                " ".repeat(self.buff_w - cmd_line.chars().count())
+            )?;
         }
 
         match cursor_style {
@@ -201,13 +300,6 @@ impl Viewport {
     /// Resizes the viewport.
     pub fn resize(&mut self, w: usize, h: usize, x: usize, y: usize, count: usize) {
         let digits = count.ilog10() as usize + 1;
-
-        if h != self.buff_h {
-            self.nums_buff
-                .resize(h - 1, String::with_capacity(digits + 4));
-            self.buff
-                .resize(h - 1, String::with_capacity(w - digits - 4));
-        }
 
         self.w = w;
         self.h = h;

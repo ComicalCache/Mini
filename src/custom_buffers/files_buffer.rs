@@ -57,7 +57,7 @@ pub struct FilesBuffer {
     base: PathBuf,
     entries: Vec<PathBuf>,
 
-    selection: Option<Cursor>,
+    sel: Option<Cursor>,
     motion_repeat: String,
     clipboard: Clipboard,
     input_state_machine: StateMachine<Action>,
@@ -124,7 +124,7 @@ impl FilesBuffer {
             view: Viewport::new(w, h, 0, h / 2, count),
             base,
             entries,
-            selection: None,
+            sel: None,
             motion_repeat: String::new(),
             clipboard: Clipboard::new().map_err(Error::other)?,
             input_state_machine,
@@ -153,11 +153,17 @@ impl FilesBuffer {
         )
         .unwrap();
 
-        if let Some(pos) = self.selection {
+        if let Some(pos) = self.sel {
             // Plus 1 since text coordinates are 0 indexed.
             let line = pos.y + 1;
             let col = pos.x + 1;
-            write!(&mut self.view.info_line, " [Selected {line}:{col}]").unwrap();
+            write!(
+                &mut self.view.info_line,
+                " [Selected {line}:{col} - {}:{}]",
+                self.doc.cur.y + 1,
+                self.doc.cur.x + 1
+            )
+            .unwrap();
         }
     }
 }
@@ -167,7 +173,7 @@ impl Buffer for FilesBuffer {
         self.info_line();
         self.view.cmd = None;
         self.view
-            .render(stdout, &self.doc, CursorStyle::SteadyBlock)
+            .render(stdout, &self.doc, self.sel, CursorStyle::SteadyBlock)
     }
 
     fn resize(&mut self, w: usize, h: usize) {
@@ -249,10 +255,10 @@ impl Buffer for FilesBuffer {
                     })
                     .unwrap();
             }
-            A(SelectMode) => self.selection = Some(self.doc.cur),
-            A(ExitSelectMode) => self.selection = None,
+            A(SelectMode) => self.sel = Some(self.doc.cur),
+            A(ExitSelectMode) => self.sel = None,
             A(YankSelection) => {
-                match yank::selection(&mut self.doc, &mut self.selection, &mut self.clipboard) {
+                match yank::selection(&mut self.doc, &mut self.sel, &mut self.clipboard) {
                     Ok(()) => {}
                     Err(err) => return err,
                 }

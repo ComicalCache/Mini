@@ -1,4 +1,3 @@
 - Open symlink in file browser
 - Diff based rendering
 - Find
-- Visualize the selection area
