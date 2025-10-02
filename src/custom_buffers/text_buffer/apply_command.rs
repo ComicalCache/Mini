@@ -44,8 +44,13 @@ impl TextBuffer {
         // Reset state.
         self.doc.clear(0, 0);
         self.cmd.clear(0, 0);
-        self.view
-            .clear(self.view.w, self.view.h, 0, self.view.h / 2);
+        self.view.clear(
+            self.view.buff_w,
+            self.view.buff_h,
+            0,
+            self.view.buff_h / 2,
+            1,
+        );
         self.file = None;
 
         // Open blank buffer if no path is specified.

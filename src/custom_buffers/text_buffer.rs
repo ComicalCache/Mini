@@ -254,10 +254,15 @@ impl TextBuffer {
             StateMachine::new(command_map, Duration::from_secs(1))
         };
 
+        let count = if let Some(content) = &content {
+            content.len()
+        } else {
+            1
+        };
         Ok(TextBuffer {
             doc: Document::new(0, 0, content),
             cmd: Document::new(0, 0, None),
-            view: Viewport::new(w, h, 0, h / 2),
+            view: Viewport::new(w, h, 0, h / 2, count),
             file,
             selection: None,
             mode: Mode::View,
@@ -415,7 +420,7 @@ impl TextBuffer {
                 &mut self.view,
                 self.motion_repeat.parse::<usize>().unwrap_or(1),
             ),
-            A(DeleteLeft) => delete::left(
+            A(DeleteLeft) | A(DeleteChar) => delete::left(
                 &mut self.doc,
                 &mut self.view,
                 self.motion_repeat.parse::<usize>().unwrap_or(1),
@@ -440,11 +445,6 @@ impl TextBuffer {
             A(DeleteToMatchingOpposite) => delete::matching_opposite(&mut self.doc, &mut self.view),
             A(DeleteToBeginningOfFile) => delete::beginning_of_file(&mut self.doc, &mut self.view),
             A(DeleteToEndOfFile) => delete::end_of_file(&mut self.doc, &mut self.view),
-            A(DeleteChar) => delete::left(
-                &mut self.doc,
-                &mut self.view,
-                self.motion_repeat.parse::<usize>().unwrap_or(1),
-            ),
             A(ChangeSelection) => {
                 delete::selection(&mut self.doc, &mut self.view, &mut self.selection);
                 self.change_mode(Mode::Write);
@@ -678,11 +678,12 @@ impl Buffer for TextBuffer {
     }
 
     fn resize(&mut self, w: usize, h: usize) {
-        if self.view.w == w && self.view.h == h {
+        if self.view.buff_w == w && self.view.buff_h == h {
             return;
         }
 
-        self.view.resize(w, h, self.view.cur.x.min(w), h / 2);
+        self.view
+            .resize(w, h, self.view.cur.x.min(w), h / 2, self.doc.buff.len());
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {

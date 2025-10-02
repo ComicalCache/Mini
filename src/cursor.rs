@@ -42,7 +42,7 @@ pub fn left(doc: &mut Document, view: &mut Viewport, n: usize) {
 pub fn right(doc: &mut Document, view: &mut Viewport, n: usize) {
     let line_bound = doc.line_count(doc.cur.y).expect("Illegal state");
     doc.cur.right(n, line_bound);
-    view.cur.right(n, line_bound.min(view.w - 1));
+    view.cur.right(n, line_bound.min(view.buff_w - 1));
 }
 
 /// Moves the cursor up.

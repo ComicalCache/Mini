@@ -93,7 +93,7 @@ impl InfoBuffer {
 
         Ok(InfoBuffer {
             doc: Document::new(0, 0, None),
-            view: Viewport::new(w, h, 0, h / 2),
+            view: Viewport::new(w, h, 0, h / 2, 1),
             selection: None,
             clipboard: Clipboard::new().map_err(Error::other)?,
             input_state_machine,
@@ -135,11 +135,12 @@ impl Buffer for InfoBuffer {
     }
 
     fn resize(&mut self, w: usize, h: usize) {
-        if self.view.w == w && self.view.h == h {
+        if self.view.buff_w == w && self.view.buff_h == h {
             return;
         }
 
-        self.view.resize(w, h, self.view.cur.x.min(w), h / 2);
+        self.view
+            .resize(w, h, self.view.cur.x.min(w), h / 2, self.doc.buff.len());
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
