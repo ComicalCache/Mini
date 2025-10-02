@@ -1,5 +1,4 @@
-- Symlink in file browser
+- Open symlink in file browser
 - Diff based rendering
-- Line numbers
-- Find (?)
+- Find
 - Visualize the selection area

@@ -1,7 +1,15 @@
-Mini terminal text editor. Run it with a file(path) argument to open or create a file. Omit the file(path) to create a "scratchpad" buffer with no backing file.
+Mini - A terminal text-editor.
 
-Motions:
-> Use motions to navigate the buffer. Type a number followed by a motion to execute it multiple times.
+Run Mini with a file(path) argument to open or create a file. Omit the file(path) to create a
+"scratchpad" buffer with no backing file. A few things that make Mini interesting: it has (relative) line-numbers by
+default, it keeps the current line centered on the screen, it has full unicode support, and it contains a full file
+browser.
+
+Mini should feel familiar to those who have used VIm before. It features three kinds of buffers: a text buffer, an info
+buffer, and a file browser buffer. You can switch to the text buffer, info buffer and files buffer, from any of the
+buffers, by hitting 't', '?', or 'e' respectively. You can navigate and manipulate buffers using "motions". Typing a
+string of numbers before a motion makes the motion execute the specified amount of times. All buffers support these
+basic motions:
 - 'h' | 'j' | 'k' | 'l' to move the cursor
 - 'w' to skip to the next word
 - 'b' to go back one word
@@ -9,61 +17,57 @@ Motions:
 - '.' to jump to the matching opposite bracket
 - 'g' to go to the end of the file
 - 'G' to go to the start of the file
-- 'x' to delete the character under the cursor
-- 'd' + motion to delete characters that would be skipped by the motion
-- 'dd' to delete a line
-- 'c' + motion to change characters that would be skipped by the motion
-- 'cc' to change a line
-- 'r' + char to replace the character under the cursor
 - 'y' + motion to yank characters that would be skipped by the motion to the clipboard
 - 'yy' to yank a line to the clipboard
-- 'p' to paste the clipboard at the cursor
 
-Write Mode:
-> Insert text into the buffer.
-Press 'i' to enter write mode
-Press 'a' to enter write mode one character after the current
-Press 'A' to enter write mode at the end of the line
-Press 'o' to enter write mode one line under the current
-Press 'O' to enter write mode one line above the current
-- '←' | '↓' | '↑' | '→' to move the cursor
-- alt + '←' | '→' to go back one or skip to the next word
-Press 'esc' to exit write mode
+Additionally by pressing 'v' you can start a selection. A selection marks a character and selects the text "between"
+the selected character and the current cursor position. Using 'yv' you can yank that selection.
 
-Command Mode:
-> Issue commands to the editor using the command mode.
-Press space to enter command mode
-Press esc to exit command mode
-- 'q' to quit
-- 'qq' to force quit, discarding unsaved changes
-- '?' to see this message
-- 'w' to write the buffer to file
-- 'w <path>' to write this/all future writes to the specified path
-- 'o ?<path>' to open a file and replace the buffer (if the path is omitted a new "scratchpad" buffer with no backing file is created)
-- 'oo ?<path>' to open a file and replace the buffer, discarding unsaved changes (if the path is omitted a new "scratchpad" buffer with no backing file is created)
+Text Buffer:
+This is probably the most important buffer. It contains the editor window where you can edit your files and is the
+buffer that you'll be presented with when opening the editor. It has three modes: view mode, input mode, and command
+mode. 
+    View Mode:
+    View mode is the default mode when opening Mini or the text buffer. In view mode you can use the common motions to
+    navigate or any of the following to manipulate the buffer:
+    - 'x' to delete the character under the cursor
+    - 'd' + motion to delete characters that would be skipped by the motion
+    - 'dd' to delete a line
+    - 'c' + motion to change characters that would be skipped by the motion
+    - 'cc' to change a line
+    - 'r' + char to replace the character under the cursor
+    - 'p' to paste the clipboard at the cursor
 
-Selection:
-> Select text for deletion with the flexibility of all available motions.
-Press 'v' to start selection at the current cursor position, move the cursor using all available motions
-Press esc to stop selection
-- 'dv' to delete the selection
+    Additionally you can start a selection and press 'dv' or 'cv' to delete or yank the selection respectively.
 
-Files:
-Press enter to open the file or directory
-- 'r' to refresh the file list
+    Write Mode:
+    Write mode is the mode where you can input text and manipulate the buffer this way, analog to VIm's insertion mode.
+    You can enter write mode by pressing any of the following motions and exit it using the escape key:
+    - 'i' to enter write mode
+    - 'a' to enter write mode one character after the current
+    - 'A' to enter write mode at the end of the line
+    - 'o' to enter write mode one line under the current
+    - 'O' to enter write mode one line above the current
 
---- Buffers ---
-Text:
-> Display the opened file's contents or the "scratchpad" buffer.
-Press '?' to switch to the info buffer
-Press 'e' to switch to the files buffer
+    Additionally you can use the arrow keys to move the cursor, or alt + '←' or alt + '→' to skip words in the
+    respective direction.
 
-Info:
-> Display infos about input commands.
-Press 't' to switch to the text buffer
-Press 'e' to switch to the files buffer
+    Command Mode:
+    In command mode you can issue editor commands. You enter command mode by pressing space, typing in your command and
+    hitting enter to execute it, or escape to abort. The following are valid commands:
+    - 'q' to quit
+    - 'qq' to force quit, discarding unsaved changes
+    - '?' to see this message
+    - 'w' to write the buffer to file
+    - 'w <path>' to write this/all future writes to the specified path
+    - 'o ?<path>' to open a file and replace the buffer (if the path is omitted a new "scratchpad" buffer with no
+        backing file is created)
+    - 'oo ?<path>' to open a file and replace the buffer, discarding unsaved changes (if the path is omitted a new
+        "scratchpad" buffer with no backing file is created)
 
-Files:
-> Display and browse files of your current working directory.
-Press 't' to switch to the text buffer
-Press '?' to switch to the info buffer
+Info Buffer:
+The info buffer is a read only buffer that displays errors, warnings or other types of information.
+
+Files Buffer:
+The files buffer is a small file browser to browse directories, starting initially at the current path, and open files.
+You can press 'r' to refresh the file list.
