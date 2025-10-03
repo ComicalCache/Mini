@@ -117,13 +117,17 @@ pub struct TextBuffer {
     cmd: Document,
     view: Viewport,
     file: Option<File>,
+
     sel: Option<Cursor>,
     mode: Mode,
     motion_repeat: String,
     clipboard: Clipboard,
+
     view_state_machine: StateMachine<ViewAction>,
     write_state_machine: StateMachine<WriteAction>,
     cmd_state_machine: StateMachine<CommandAction>,
+
+    rerender: bool,
 }
 
 impl TextBuffer {
@@ -270,10 +274,11 @@ impl TextBuffer {
             view_state_machine,
             write_state_machine,
             cmd_state_machine,
+            rerender: true,
         })
     }
 
-    fn info_line(&mut self) {
+    fn info_line(&mut self) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
 
         self.view.info_line.clear();
@@ -293,8 +298,7 @@ impl TextBuffer {
         write!(
             &mut self.view.info_line,
             "[Text] [{mode}] [{line}:{col}/{total} {percentage}%] [{size}B]",
-        )
-        .unwrap();
+        )?;
         if let Some(pos) = self.sel {
             // Plus 1 since text coordinates are 0 indexed.
             let line = pos.y + 1;
@@ -304,12 +308,13 @@ impl TextBuffer {
                 " [Selected {line}:{col} - {}:{}]",
                 self.doc.cur.y + 1,
                 self.doc.cur.x + 1
-            )
-            .unwrap();
+            )?;
         }
 
         let edited = if self.doc.edited { '*' } else { ' ' };
-        write!(&mut self.view.info_line, " {edited}").unwrap();
+        write!(&mut self.view.info_line, " {edited}")?;
+
+        Ok(())
     }
 
     fn cmd_line(&self) -> Option<(String, Cursor)> {
@@ -671,8 +676,14 @@ impl TextBuffer {
 }
 
 impl Buffer for TextBuffer {
+    fn need_rerender(&self) -> bool {
+        self.rerender
+    }
+
     fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
-        self.info_line();
+        self.rerender = false;
+
+        self.info_line().map_err(Error::other)?;
 
         let cursor_style = match self.mode {
             Mode::View => CursorStyle::BlinkingBlock,
@@ -692,6 +703,8 @@ impl Buffer for TextBuffer {
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
+        // Only rerender if input was received.
+        self.rerender = key.is_some();
         match self.mode {
             Mode::View => self.view_tick(key),
             Mode::Write => self.write_tick(key),

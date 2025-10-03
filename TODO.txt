@@ -1,3 +1,0 @@
-- Open symlink in file browser
-- Diff based rendering
-- Find

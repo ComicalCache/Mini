@@ -21,7 +21,8 @@ basic motions:
 - 'yy' to yank a line to the clipboard
 
 Additionally by pressing 'v' you can start a selection. A selection marks a character and selects the text "between"
-the selected character and the current cursor position. Using 'yv' you can yank that selection.
+the selected character and the current cursor position. This is visualized through highlighting the selected area.
+Using 'yv' you can yank that selection.
 
 Text Buffer:
 This is probably the most important buffer. It contains the editor window where you can edit your files and is the

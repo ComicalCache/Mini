@@ -10,6 +10,9 @@ use std::{
 use termion::{event::Key, raw::RawTerminal};
 
 pub trait Buffer {
+    /// Checks if the buffer needs to be rerendered.
+    fn need_rerender(&self) -> bool;
+
     /// Renders the object to stdout.
     fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error>;
 

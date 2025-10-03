@@ -60,7 +60,10 @@ pub struct FilesBuffer {
     sel: Option<Cursor>,
     motion_repeat: String,
     clipboard: Clipboard,
+
     input_state_machine: StateMachine<Action>,
+
+    rerender: bool,
 }
 
 impl FilesBuffer {
@@ -128,10 +131,11 @@ impl FilesBuffer {
             motion_repeat: String::new(),
             clipboard: Clipboard::new().map_err(Error::other)?,
             input_state_machine,
+            rerender: false,
         })
     }
 
-    fn info_line(&mut self) {
+    fn info_line(&mut self) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
 
         self.view.info_line.clear();
@@ -150,8 +154,7 @@ impl FilesBuffer {
         write!(
             &mut self.view.info_line,
             "[Files] [{curr_type}] [{curr}/{entries} {entries_label}]",
-        )
-        .unwrap();
+        )?;
 
         if let Some(pos) = self.sel {
             // Plus 1 since text coordinates are 0 indexed.
@@ -162,15 +165,22 @@ impl FilesBuffer {
                 " [Selected {line}:{col} - {}:{}]",
                 self.doc.cur.y + 1,
                 self.doc.cur.x + 1
-            )
-            .unwrap();
+            )?;
         }
+
+        Ok(())
     }
 }
 
 impl Buffer for FilesBuffer {
+    fn need_rerender(&self) -> bool {
+        self.rerender
+    }
+
     fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
-        self.info_line();
+        self.rerender = false;
+
+        self.info_line().map_err(Error::other)?;
         self.view.cmd = None;
         self.view
             .render(stdout, &self.doc, self.sel, CursorStyle::SteadyBlock)
@@ -190,6 +200,8 @@ impl Buffer for FilesBuffer {
         #[allow(clippy::enum_glob_use)]
         use Action::*;
 
+        // Only rerender if input was received.
+        self.rerender = key.is_some();
         match self.input_state_machine.tick(key.into()) {
             A(Left) => cursor::left(
                 &mut self.doc,

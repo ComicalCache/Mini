@@ -118,19 +118,23 @@ impl Viewport {
         // Calculate which line of text is visible at what line on the screen.
         #[allow(clippy::cast_possible_wrap)]
         let lines_offset = doc.cur.y as isize - self.cur.y as isize;
-        for (lines_idx, doc_idx) in (0..self.buff_h - 1).zip(lines_offset + 1..) {
+        for (idx, doc_idx) in (1..self.buff_h).zip(lines_offset + 1..) {
             // Set the trailing background color to match if its the cursor line.
-            let sel_bg = if lines_idx + 1 == usize::from(cur.1 - 1) {
+            let sel_bg = if idx == usize::from(cur.1 - 1) {
                 HIGHLIGHT
             } else {
                 BG
             };
 
             // Set highlight or rel nums.
-            if lines_idx + 1 == usize::from(cur.1 - 1) {
-                write!(stdout, "\n\r{HIGHLIGHT}{TXT}")?;
+            if idx == usize::from(cur.1 - 1) {
+                // The idx is bound by the height which is bound by u16 when passed by the terminal.
+                #[allow(clippy::cast_possible_truncation)]
+                write!(stdout, "{}{HIGHLIGHT}{TXT}", Goto(1, idx as u16 + 1))?;
             } else {
-                write!(stdout, "\n\r{REL_NUMS}")?;
+                // The idx is bound by the height which is bound by u16 when passed by the terminal.
+                #[allow(clippy::cast_possible_truncation)]
+                write!(stdout, "{}{REL_NUMS}", Goto(1, idx as u16 + 1))?;
             }
 
             // Skip screen lines outside the text line bounds.
@@ -156,7 +160,7 @@ impl Viewport {
             }
 
             // Switch from relative line number color to regular text.
-            if lines_idx + 1 != usize::from(cur.1 - 1) {
+            if idx != usize::from(cur.1 - 1) {
                 write!(stdout, "{TXT}")?;
             }
 
@@ -261,7 +265,7 @@ impl Viewport {
                 }
 
                 // Stretch current line to end to show highlight properly.
-                if lines_idx + 1 == usize::from(cur.1 - 1) {
+                if idx == usize::from(cur.1 - 1) {
                     write!(
                         stdout,
                         "{}{BG}",

@@ -49,9 +49,13 @@ enum Action {
 pub struct InfoBuffer {
     doc: Document,
     view: Viewport,
+
     sel: Option<Cursor>,
     clipboard: Clipboard,
+
     input_state_machine: StateMachine<Action>,
+
+    rerender: bool,
 }
 
 impl InfoBuffer {
@@ -97,12 +101,11 @@ impl InfoBuffer {
             sel: None,
             clipboard: Clipboard::new().map_err(Error::other)?,
             input_state_machine,
+            rerender: false,
         })
     }
-}
 
-impl Buffer for InfoBuffer {
-    fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
+    fn info_line(&mut self) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
 
         self.view.info_line.clear();
@@ -116,8 +119,7 @@ impl Buffer for InfoBuffer {
         write!(
             &mut self.view.info_line,
             "[Info] [{line}:{col}/{total} {percentage}%]",
-        )
-        .map_err(Error::other)?;
+        )?;
 
         if let Some(pos) = self.sel {
             // Plus 1 since text coordinates are 0 indexed.
@@ -128,13 +130,23 @@ impl Buffer for InfoBuffer {
                 " [Selected {line}:{col} - {}:{}]",
                 self.doc.cur.y + 1,
                 self.doc.cur.x + 1
-            )
-            .map_err(Error::other)?;
+            )?;
         }
 
         let edited = if self.doc.edited { '*' } else { ' ' };
-        write!(&mut self.view.info_line, " {edited}").map_err(Error::other)?;
+        write!(&mut self.view.info_line, " {edited}")
+    }
+}
 
+impl Buffer for InfoBuffer {
+    fn need_rerender(&self) -> bool {
+        self.rerender
+    }
+
+    fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
+        self.rerender = false;
+
+        self.info_line().map_err(Error::other)?;
         self.view.cmd = None;
         self.view
             .render(stdout, &self.doc, self.sel, CursorStyle::BlinkingBlock)
@@ -154,6 +166,8 @@ impl Buffer for InfoBuffer {
         #[allow(clippy::enum_glob_use)]
         use Action::*;
 
+        // Only rerender if input was received.
+        self.rerender = key.is_some();
         match self.input_state_machine.tick(key.into()) {
             A(Left) => cursor::left(&mut self.doc, &mut self.view, 1),
             A(Down) => cursor::down(&mut self.doc, &mut self.view, 1),
