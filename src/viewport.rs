@@ -111,8 +111,8 @@ impl Viewport {
 
         // Calculate which line of text is visible at what line on the screen.
         #[allow(clippy::cast_possible_wrap)]
-        let lines_offset = doc.cur.y as isize - self.cur.y as isize;
-        for (idx, doc_idx) in (1..self.h).zip(lines_offset..) {
+        let offset = doc.cur.y as isize - self.cur.y as isize;
+        for (idx, doc_idx) in (1..self.h).zip(offset..) {
             // Set the trailing background color to match if its the cursor line.
             let sel_bg = if idx == usize::from(cur.1 - 1) {
                 HIGHLIGHT

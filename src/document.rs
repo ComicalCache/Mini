@@ -13,12 +13,12 @@ pub struct Document {
 
 impl Document {
     pub fn new(x: usize, y: usize, contents: Option<Vec<Cow<'static, str>>>) -> Self {
-        let lines = contents
+        let buff = contents
             .filter(|c| !c.is_empty())
             .map_or_else(|| vec![Cow::from("")], |c| c.into_iter().collect());
 
         Document {
-            buff: lines,
+            buff,
             cur: Cursor::new(x, y),
             edited: false,
         }
@@ -59,13 +59,13 @@ impl Document {
     }
 
     /// Replaces the document buffer and sets the cursor to a specified position.
-    pub fn set_contents(&mut self, lines: &[Cow<'static, str>], x: usize, y: usize) {
-        if lines.is_empty() {
+    pub fn set_contents(&mut self, buff: &[Cow<'static, str>], x: usize, y: usize) {
+        if buff.is_empty() {
             self.buff.truncate(1);
             self.buff[0].to_mut().clear();
         } else {
-            self.buff.resize(lines.len(), Cow::from(""));
-            for (idx, line) in lines.iter().enumerate() {
+            self.buff.resize(buff.len(), Cow::from(""));
+            for (idx, line) in buff.iter().enumerate() {
                 self.buff[idx].clone_from(line);
             }
         }
