@@ -10,18 +10,17 @@ use termion::{
 const BG: Bg<color::Rgb> = Bg(color::Rgb(41, 44, 51));
 const NO_BG: Bg<Reset> = Bg(Reset);
 const HIGHLIGHT: Bg<color::Rgb> = Bg(color::Rgb(51, 53, 59));
+const INFO: Bg<color::Rgb> = Bg(color::Rgb(59, 61, 66));
 const SEL: Bg<color::Rgb> = Bg(color::Rgb(75, 78, 87));
 const TXT: Fg<color::Rgb> = Fg(color::Rgb(172, 178, 190));
 const REL_NUMS: Fg<color::Rgb> = Fg(color::Rgb(101, 103, 105));
 const NO_TXT: Fg<Reset> = Fg(Reset);
 
 pub struct Viewport {
-    w: usize,
-    h: usize,
-    nums_w: usize,
-    nums_h: usize,
+    pub w: usize,
+    pub h: usize,
+    pub nums_w: usize,
     pub buff_w: usize,
-    pub buff_h: usize,
     pub cur: Cursor,
 
     pub info_line: String,
@@ -35,25 +34,20 @@ impl Viewport {
             w,
             h,
             nums_w: digits + 4,
-            nums_h: h,
             buff_w: w - digits - 4,
-            buff_h: h,
             cur: Cursor::new(x, y),
             info_line: String::with_capacity(w),
             cmd: None,
         }
     }
 
-    /// Clears the viewports buffer and sets the cursor to a specified position.
-    pub fn clear(&mut self, w: usize, h: usize, x: usize, y: usize, count: usize) {
+    pub fn init(&mut self, w: usize, h: usize, x: usize, y: usize, count: usize) {
         let digits = count.ilog10() as usize + 1;
 
         self.w = w;
         self.h = h;
         self.nums_w = digits + 4;
-        self.nums_h = h;
         self.buff_w = w - digits - 4;
-        self.buff_h = h;
         self.cur = Cursor::new(x, y);
 
         self.info_line.clear();
@@ -73,7 +67,7 @@ impl Viewport {
         {
             let digits = doc.buff.len().ilog10() as usize + 1;
             if digits + 4 != self.nums_w {
-                self.resize(self.w, self.h, self.cur.x, self.cur.y, doc.buff.len());
+                self.resize(self.w, self.h, doc.buff.len());
             }
         }
 
@@ -95,30 +89,30 @@ impl Viewport {
         }
         write!(
             stdout,
-            "{All}{Hide}{}{HIGHLIGHT}{TXT}{}{BG}",
+            "{All}{Hide}{}{INFO}{TXT}{}{BG}",
             Goto(1, 1),
             self.info_line
         )?;
 
-        // Get cursor position.
+        // Get cursor position. Add two to the y coordinate because one based and info line at the top.
         // Can never be larger than u16 since the width is used as upper bound and equal to the terminal size.
         #[allow(clippy::cast_possible_truncation)]
         let cur = if let Some((_, cur)) = &self.cmd {
             Goto(
                 ((self.nums_w + cur.x) as u16).saturating_add(1),
-                ((cur.y + self.buff_h) as u16).saturating_add(1),
+                ((cur.y + self.h) as u16).saturating_add(2),
             )
         } else {
             Goto(
                 ((self.nums_w + self.cur.x) as u16).saturating_add(1),
-                (self.cur.y as u16).saturating_add(1),
+                (self.cur.y as u16).saturating_add(2),
             )
         };
 
         // Calculate which line of text is visible at what line on the screen.
         #[allow(clippy::cast_possible_wrap)]
         let lines_offset = doc.cur.y as isize - self.cur.y as isize;
-        for (idx, doc_idx) in (1..self.buff_h).zip(lines_offset + 1..) {
+        for (idx, doc_idx) in (1..self.h).zip(lines_offset..) {
             // Set the trailing background color to match if its the cursor line.
             let sel_bg = if idx == usize::from(cur.1 - 1) {
                 HIGHLIGHT
@@ -284,8 +278,9 @@ impl Viewport {
         if let Some((cmd_line, _)) = &self.cmd {
             write!(
                 stdout,
-                "{}{TXT}{cmd_line}{}",
-                Goto(self.nums_w as u16 + 1, self.h as u16),
+                "{INFO}{}{REL_NUMS}{}> {TXT}{cmd_line}{}",
+                Goto(1, self.h as u16),
+                " ".repeat(self.nums_w - 2),
                 " ".repeat(self.buff_w - cmd_line.chars().count())
             )?;
         }
@@ -302,17 +297,16 @@ impl Viewport {
     }
 
     /// Resizes the viewport.
-    pub fn resize(&mut self, w: usize, h: usize, x: usize, y: usize, count: usize) {
+    pub fn resize(&mut self, w: usize, h: usize, count: usize) {
         let digits = count.ilog10() as usize + 1;
 
         self.w = w;
         self.h = h;
         self.nums_w = digits + 4;
-        self.nums_h = h;
         self.buff_w = w - digits - 4;
-        self.buff_h = h;
 
-        self.cur.y = y;
-        self.cur.x = x;
+        self.cur.x = self.cur.x.min(self.buff_w - 1);
+        // Minus two because one for zero based, one for the info line.
+        self.cur.y = self.cur.y.min(self.h - 2);
     }
 }

@@ -12,49 +12,51 @@ impl Cursor {
     }
 
     /// Moves the cursor to the left.
-    pub fn left(&mut self, n: usize) {
-        self.x = self.x.saturating_sub(n);
+    fn left(&mut self, n: usize, bound: usize) {
+        self.x = self.x.saturating_sub(n).max(bound);
     }
 
     /// Moves the cursor to the right with a bound.
-    pub fn right(&mut self, n: usize, bound: usize) {
+    fn right(&mut self, n: usize, bound: usize) {
         self.x = (self.x + n).min(bound);
     }
 
     /// Moves the cursor up.
-    pub fn up(&mut self, n: usize) {
-        self.y = self.y.saturating_sub(n);
+    fn up(&mut self, n: usize, bound: usize) {
+        self.y = self.y.saturating_sub(n).max(bound);
     }
 
     /// Moves the cursor down with a bound.
-    pub fn down(&mut self, n: usize, bound: usize) {
+    fn down(&mut self, n: usize, bound: usize) {
         self.y = (self.y + n).min(bound);
     }
 }
 
 /// Moves the cursor to the left.
 pub fn left(doc: &mut Document, view: &mut Viewport, n: usize) {
-    doc.cur.left(n);
-    view.cur.left(n);
+    doc.cur.left(n, 0);
+    view.cur.left(n, 0);
 }
 
 /// Moves the cursor to the right
 pub fn right(doc: &mut Document, view: &mut Viewport, n: usize) {
     let line_bound = doc.line_count(doc.cur.y).expect("Illegal state");
     doc.cur.right(n, line_bound);
-    view.cur.right(n, line_bound.min(view.buff_w - 1));
+    view.cur.right(n, (doc.cur.x).min(view.buff_w - 1));
 }
 
 /// Moves the cursor up.
 pub fn up(doc: &mut Document, view: &mut Viewport, n: usize) {
-    doc.cur.up(n);
+    doc.cur.up(n, 0);
+    // One for info line.
+    view.cur.up(n, 0);
 
     // When moving up, handle case that new line contains less text than previous.
     let line_bound = doc.line_count(doc.cur.y).expect("Illegal state");
     if doc.cur.x >= line_bound {
         let diff = doc.cur.x - line_bound;
-        doc.cur.left(diff);
-        view.cur.left(diff);
+        doc.cur.left(diff, 0);
+        view.cur.left(diff, 0);
     }
 }
 
@@ -62,13 +64,15 @@ pub fn up(doc: &mut Document, view: &mut Viewport, n: usize) {
 pub fn down(doc: &mut Document, view: &mut Viewport, n: usize) {
     let bound = doc.buff.len().saturating_sub(1);
     doc.cur.down(n, bound);
+    // Minus two because one for zero based, one for the info line.
+    view.cur.down(n, (view.h - 2).min(bound));
 
     // When moving down, handle case that new line contains less text than previous.
     let line_bound = doc.line_count(doc.cur.y).expect("Illegal state");
     if doc.cur.x >= line_bound {
         let diff = doc.cur.x - line_bound;
-        doc.cur.left(diff);
-        view.cur.left(diff);
+        doc.cur.left(diff, 0);
+        view.cur.left(diff, 0);
     }
 }
 

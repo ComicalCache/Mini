@@ -105,8 +105,6 @@ fn main() -> Result<(), std::io::Error> {
                 curr_buff = idx;
             }
             CommandResult::SetAndChangeBuffer(idx, contents, path) => {
-                rerender_changed_buff = true;
-
                 if let Err(err) = buffs[idx].can_quit() {
                     buffs[INFO_BUFF_IDX].set_contents(&err, path);
                     curr_buff = INFO_BUFF_IDX;
@@ -130,10 +128,11 @@ fn main() -> Result<(), std::io::Error> {
             }
         }
 
-        // Render the "new" state and re-enable polling.
+        // Render the "new" state if necessary.
         if rerender_changed_buff || buffs[curr_buff].need_rerender() {
             buffs[curr_buff].render(&mut stdout)?;
         }
+        // Re-enable polling.
         poller.modify(stdin_fd, polling::Event::readable(STDIN_EVENT_KEY))?;
     }
 

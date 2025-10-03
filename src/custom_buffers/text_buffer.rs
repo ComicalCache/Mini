@@ -265,7 +265,7 @@ impl TextBuffer {
         Ok(TextBuffer {
             doc: Document::new(0, 0, content),
             cmd: Document::new(0, 0, None),
-            view: Viewport::new(w, h, 0, h / 2, count),
+            view: Viewport::new(w, h, 0, 0, count),
             file,
             sel: None,
             mode: Mode::View,
@@ -694,17 +694,18 @@ impl Buffer for TextBuffer {
     }
 
     fn resize(&mut self, w: usize, h: usize) {
-        if self.view.buff_w == w && self.view.buff_h == h {
+        if self.view.w == w && self.view.h == h {
             return;
         }
 
-        self.view
-            .resize(w, h, self.view.cur.x.min(w), h / 2, self.doc.buff.len());
+        self.rerender = true;
+
+        self.view.resize(w, h, self.doc.buff.len());
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
         // Only rerender if input was received.
-        self.rerender = key.is_some();
+        self.rerender |= key.is_some();
         match self.mode {
             Mode::View => self.view_tick(key),
             Mode::Write => self.write_tick(key),
@@ -714,9 +715,16 @@ impl Buffer for TextBuffer {
 
     fn set_contents(&mut self, contents: &[Cow<'static, str>], path: Option<PathBuf>) {
         self.doc.set_contents(contents, 0, 0);
+        self.view.cur = Cursor::new(0, 0);
         if let Some(path) = path {
             self.file = open_file(path).ok();
         }
+
+        self.sel = None;
+        self.change_mode(Mode::View);
+        self.motion_repeat.clear();
+
+        self.rerender = true;
     }
 
     fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>> {

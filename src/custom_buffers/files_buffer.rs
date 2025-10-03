@@ -124,7 +124,7 @@ impl FilesBuffer {
         let count = contents.len();
         Ok(FilesBuffer {
             doc: Document::new(0, 0, Some(contents)),
-            view: Viewport::new(w, h, 0, h / 2, count),
+            view: Viewport::new(w, h, 0, 0, count),
             base,
             entries,
             sel: None,
@@ -187,12 +187,13 @@ impl Buffer for FilesBuffer {
     }
 
     fn resize(&mut self, w: usize, h: usize) {
-        if self.view.buff_w == w && self.view.buff_h == h {
+        if self.view.w == w && self.view.h == h {
             return;
         }
 
-        self.view
-            .resize(w, h, self.view.cur.x.min(w), h / 2, self.doc.buff.len());
+        self.rerender = true;
+
+        self.view.resize(w, h, self.doc.buff.len());
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
@@ -201,7 +202,7 @@ impl Buffer for FilesBuffer {
         use Action::*;
 
         // Only rerender if input was received.
-        self.rerender = key.is_some();
+        self.rerender |= key.is_some();
         match self.input_state_machine.tick(key.into()) {
             A(Left) => cursor::left(
                 &mut self.doc,
@@ -347,9 +348,16 @@ impl Buffer for FilesBuffer {
     }
 
     fn set_contents(&mut self, _: &[Cow<'static, str>], path: Option<PathBuf>) {
+        self.doc.set_contents(&[], 0, 0);
         if let Some(path) = path {
             self.base = path;
         }
+        self.view.cur = Cursor::new(0, 0);
+
+        self.sel = None;
+        self.motion_repeat.clear();
+
+        self.rerender = true;
     }
 
     fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>> {

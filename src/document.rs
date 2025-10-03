@@ -60,7 +60,10 @@ impl Document {
 
     /// Replaces the document buffer and sets the cursor to a specified position.
     pub fn set_contents(&mut self, lines: &[Cow<'static, str>], x: usize, y: usize) {
-        if !lines.is_empty() {
+        if lines.is_empty() {
+            self.buff.truncate(1);
+            self.buff[0].to_mut().clear();
+        } else {
             self.buff.resize(lines.len(), Cow::from(""));
             for (idx, line) in lines.iter().enumerate() {
                 self.buff[idx].clone_from(line);

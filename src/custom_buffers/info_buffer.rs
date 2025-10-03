@@ -44,6 +44,7 @@ enum Action {
     YankToEndOfFile,
     ChangeToTextBuffer,
     ChangeToFilesBuffer,
+    Repeat(char),
 }
 
 pub struct InfoBuffer {
@@ -51,6 +52,7 @@ pub struct InfoBuffer {
     view: Viewport,
 
     sel: Option<Cursor>,
+    motion_repeat: String,
     clipboard: Clipboard,
 
     input_state_machine: StateMachine<Action>,
@@ -92,13 +94,24 @@ impl InfoBuffer {
                 _ => None,
             })
             .simple(Key::Char('t'), ChangeToTextBuffer)
-            .simple(Key::Char('e'), ChangeToFilesBuffer);
+            .simple(Key::Char('e'), ChangeToFilesBuffer)
+            .simple(Key::Char('0'), Repeat('0'))
+            .simple(Key::Char('1'), Repeat('1'))
+            .simple(Key::Char('2'), Repeat('2'))
+            .simple(Key::Char('3'), Repeat('3'))
+            .simple(Key::Char('4'), Repeat('4'))
+            .simple(Key::Char('5'), Repeat('5'))
+            .simple(Key::Char('6'), Repeat('6'))
+            .simple(Key::Char('7'), Repeat('7'))
+            .simple(Key::Char('8'), Repeat('8'))
+            .simple(Key::Char('9'), Repeat('9'));
         let input_state_machine = StateMachine::new(command_map, Duration::from_secs(1));
 
         Ok(InfoBuffer {
             doc: Document::new(0, 0, None),
-            view: Viewport::new(w, h, 0, h / 2, 1),
+            view: Viewport::new(w, h, 0, 0, 1),
             sel: None,
+            motion_repeat: String::new(),
             clipboard: Clipboard::new().map_err(Error::other)?,
             input_state_machine,
             rerender: false,
@@ -153,12 +166,13 @@ impl Buffer for InfoBuffer {
     }
 
     fn resize(&mut self, w: usize, h: usize) {
-        if self.view.buff_w == w && self.view.buff_h == h {
+        if self.view.w == w && self.view.h == h {
             return;
         }
 
-        self.view
-            .resize(w, h, self.view.cur.x.min(w), h / 2, self.doc.buff.len());
+        self.rerender = true;
+
+        self.view.resize(w, h, self.doc.buff.len());
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
@@ -167,14 +181,38 @@ impl Buffer for InfoBuffer {
         use Action::*;
 
         // Only rerender if input was received.
-        self.rerender = key.is_some();
+        self.rerender |= key.is_some();
         match self.input_state_machine.tick(key.into()) {
-            A(Left) => cursor::left(&mut self.doc, &mut self.view, 1),
-            A(Down) => cursor::down(&mut self.doc, &mut self.view, 1),
-            A(Up) => cursor::up(&mut self.doc, &mut self.view, 1),
-            A(Right) => cursor::right(&mut self.doc, &mut self.view, 1),
-            A(NextWord) => cursor::next_word(&mut self.doc, &mut self.view, 1),
-            A(PrevWord) => cursor::prev_word(&mut self.doc, &mut self.view, 1),
+            A(Left) => cursor::left(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(Down) => cursor::down(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(Up) => cursor::up(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(Right) => cursor::right(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(NextWord) => cursor::next_word(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
+            A(PrevWord) => cursor::prev_word(
+                &mut self.doc,
+                &mut self.view,
+                self.motion_repeat.parse::<usize>().unwrap_or(1),
+            ),
             A(JumpToBeginningOfLine) => {
                 cursor::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
             }
@@ -250,15 +288,29 @@ impl Buffer for InfoBuffer {
             }
             A(ChangeToTextBuffer) => return CommandResult::ChangeBuffer(TXT_BUFF_IDX),
             A(ChangeToFilesBuffer) => return CommandResult::ChangeBuffer(FILES_BUFF_IDX),
+            A(Repeat(ch)) => {
+                self.motion_repeat.push(ch);
+
+                // Skip resetting motion repeat buffer when new repeat was issued.
+                return CommandResult::Ok;
+            }
             Incomplete => return CommandResult::Ok,
             Invalid => {}
         }
 
+        // Rest motion repeat buffer after successful command.
+        self.motion_repeat.clear();
         CommandResult::Ok
     }
 
     fn set_contents(&mut self, contents: &[Cow<'static, str>], _: Option<PathBuf>) {
         self.doc.set_contents(contents, 0, 0);
+        self.view.cur = Cursor::new(0, 0);
+
+        self.sel = None;
+        self.motion_repeat.clear();
+
+        self.rerender = true;
     }
 
     fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>> {
