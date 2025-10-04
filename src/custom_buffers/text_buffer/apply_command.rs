@@ -11,13 +11,13 @@ impl TextBuffer {
             return Ok(false);
         };
 
-        self.doc.write_to_file(file)?;
+        self.base.doc.write_to_file(file)?;
 
         Ok(true)
     }
 
     fn quit_command(&mut self) -> CommandResult {
-        if !self.doc.edited {
+        if !self.base.doc.edited {
             return CommandResult::Quit;
         }
 
@@ -31,7 +31,7 @@ impl TextBuffer {
     }
 
     fn open_command(&mut self, args: &str, force: bool) -> CommandResult {
-        if self.doc.edited && !force {
+        if self.base.doc.edited && !force {
             return CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
                 vec![Cow::from(
@@ -42,9 +42,11 @@ impl TextBuffer {
         }
 
         // Reset state.
-        self.doc.clear(0, 0);
-        self.cmd.clear(0, 0);
-        self.view.init(self.view.w, self.view.h, 0, 0, 1);
+        self.base.doc.clear(0, 0);
+        self.base.cmd.clear(0, 0);
+        self.base
+            .view
+            .init(self.base.view.w, self.base.view.h, 0, 0, 1);
         self.file = None;
 
         // Open blank buffer if no path is specified.
@@ -64,7 +66,7 @@ impl TextBuffer {
         };
 
         match read_file_to_lines(self.file.as_mut().unwrap()) {
-            Ok(lines) => self.doc.set_contents(&lines, 0, 0),
+            Ok(lines) => self.base.doc.set_contents(&lines, 0, 0),
             Err(err) => {
                 return CommandResult::SetAndChangeBuffer(
                     INFO_BUFF_IDX,
@@ -115,27 +117,13 @@ impl TextBuffer {
         CommandResult::Ok
     }
 
-    fn jump_to_line(&mut self, mut dest: usize) -> CommandResult {
-        // At most the len of the buffer, at least 1, then subtract one to get the correct index.
-        dest = dest.min(self.doc.buff.len()).max(1) - 1;
-
-        let y = self.doc.cur.y;
-        if dest < y {
-            cursor::up(&mut self.doc, &mut self.view, y - dest);
-        } else if dest > y {
-            cursor::down(&mut self.doc, &mut self.view, dest - y);
-        }
-
-        CommandResult::Ok
-    }
-
     /// Applies the command entered during command mode.
     pub fn apply_command(&mut self) -> CommandResult {
-        if self.cmd.buff[0].is_empty() {
+        if self.base.cmd.buff[0].is_empty() {
             return CommandResult::Ok;
         }
 
-        let cmd_buff = self.cmd.buff[0].clone();
+        let cmd_buff = self.base.cmd.buff[0].clone();
         let (cmd, args) = match cmd_buff.split_once(char::is_whitespace) {
             Some((cmd, args)) => (cmd, args),
             None => (cmd_buff.as_str(), ""),
@@ -169,7 +157,8 @@ impl TextBuffer {
             ),
             _ => {
                 if let Ok(dest) = cmd.parse::<usize>() {
-                    return self.jump_to_line(dest);
+                    cursor::jump_to_line(&mut self.base.doc, &mut self.base.view, dest);
+                    return CommandResult::Ok;
                 }
 
                 CommandResult::SetAndChangeBuffer(

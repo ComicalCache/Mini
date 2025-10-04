@@ -41,35 +41,35 @@ impl FilesBuffer {
 
     /// Handles the user selection of an entry in the file buffer.
     pub(super) fn select_item(&mut self) -> Result<CommandResult, Error> {
-        let idx = self.doc.cur.y;
+        let idx = self.base.doc.cur.y;
 
         // Move directory up.
-        if idx == 0 && self.base.pop() {
-            cursor::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
+        if idx == 0 && self.path.pop() {
+            cursor::jump_to_beginning_of_file(&mut self.base.doc, &mut self.base.view);
 
-            FilesBuffer::load_dir(&self.base, &mut self.entries, &mut self.doc.buff)?;
+            FilesBuffer::load_dir(&self.path, &mut self.entries, &mut self.base.doc.buff)?;
             return Ok(CommandResult::Ok);
         }
 
         let entry = &self.entries[idx - 1].clone();
         if entry.is_file() {
-            cursor::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
+            cursor::jump_to_beginning_of_file(&mut self.base.doc, &mut self.base.view);
             let contents = read_file_to_lines(&mut open_file(entry)?)?;
-            self.base.clone_from(entry);
+            self.path.clone_from(entry);
 
             return Ok(CommandResult::SetAndChangeBuffer(
                 TXT_BUFF_IDX,
                 contents,
-                Some(self.base.clone()),
+                Some(self.path.clone()),
             ));
         } else if entry.is_dir() {
-            cursor::jump_to_beginning_of_file(&mut self.doc, &mut self.view);
-            self.base.clone_from(entry);
+            cursor::jump_to_beginning_of_file(&mut self.base.doc, &mut self.base.view);
+            self.path.clone_from(entry);
 
-            FilesBuffer::load_dir(&self.base, &mut self.entries, &mut self.doc.buff)?;
+            FilesBuffer::load_dir(&self.path, &mut self.entries, &mut self.base.doc.buff)?;
             return Ok(CommandResult::Ok);
         } else if entry.is_symlink() && entry.exists() {
-            self.base = entry.read_link()?;
+            self.path = entry.read_link()?;
             return self.select_item();
         }
 

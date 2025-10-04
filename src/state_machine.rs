@@ -22,7 +22,7 @@ pub enum StateMachineResult<A: Action> {
 }
 
 pub struct StateMachine<A: Action> {
-    command_map: CommandMap<A>,
+    pub command_map: CommandMap<A>,
     state: State<A>,
     timeout_duration: Duration,
 }

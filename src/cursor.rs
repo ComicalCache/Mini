@@ -76,6 +76,19 @@ pub fn down(doc: &mut Document, view: &mut Viewport, n: usize) {
     }
 }
 
+/// Jumps to a specific line (or the first/last line if out of bounds).
+pub fn jump_to_line(doc: &mut Document, view: &mut Viewport, mut dest: usize) {
+    // At most the len of the buffer, at least 1, then subtract one to get the correct index.
+    dest = dest.min(doc.buff.len()).max(1) - 1;
+
+    let y = doc.cur.y;
+    if dest < y {
+        up(doc, view, y - dest);
+    } else if dest > y {
+        down(doc, view, dest - y);
+    }
+}
+
 /// Jumps to the next "word".
 pub fn next_word(doc: &mut Document, view: &mut Viewport, n: usize) {
     for _ in 0..n {

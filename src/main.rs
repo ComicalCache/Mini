@@ -1,6 +1,6 @@
 #![feature(trait_alias)]
 #![feature(str_as_str)]
-#![allow(clippy::too_many_lines)]
+#![allow(clippy::too_many_lines, clippy::enum_glob_use)]
 
 mod buffer;
 mod cursor;
