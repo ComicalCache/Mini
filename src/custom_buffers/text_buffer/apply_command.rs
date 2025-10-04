@@ -1,5 +1,5 @@
 use crate::{
-    INFO_BUFF_IDX, INFO_MSG,
+    INFO_BUFF_IDX, INFO_MSG, cursor,
     custom_buffers::text_buffer::TextBuffer,
     util::{CommandResult, open_file, read_file_to_lines},
 };
@@ -115,6 +115,20 @@ impl TextBuffer {
         CommandResult::Ok
     }
 
+    fn jump_to_line(&mut self, mut dest: usize) -> CommandResult {
+        // At most the len of the buffer, at least 1, then subtract one to get the correct index.
+        dest = dest.min(self.doc.buff.len()).max(1) - 1;
+
+        let y = self.doc.cur.y;
+        if dest < y {
+            cursor::up(&mut self.doc, &mut self.view, y - dest);
+        } else if dest > y {
+            cursor::down(&mut self.doc, &mut self.view, dest - y);
+        }
+
+        CommandResult::Ok
+    }
+
     /// Applies the command entered during command mode.
     pub fn apply_command(&mut self) -> CommandResult {
         if self.cmd.buff[0].is_empty() {
@@ -129,10 +143,7 @@ impl TextBuffer {
 
         match cmd {
             "q" => self.quit_command(),
-            "qq" => {
-                self.doc.edited = false;
-                CommandResult::Quit
-            }
+            "qq" => CommandResult::ForceQuit,
             "wq" => match self.write_to_file() {
                 Ok(res) if !res => CommandResult::SetAndChangeBuffer(
                     INFO_BUFF_IDX,
@@ -156,11 +167,17 @@ impl TextBuffer {
                 INFO_MSG.lines().map(Cow::from).collect(),
                 None,
             ),
-            _ => CommandResult::SetAndChangeBuffer(
-                INFO_BUFF_IDX,
-                vec![Cow::from(format!("Unrecognized command: '{cmd}'"))],
-                None,
-            ),
+            _ => {
+                if let Ok(dest) = cmd.parse::<usize>() {
+                    return self.jump_to_line(dest);
+                }
+
+                CommandResult::SetAndChangeBuffer(
+                    INFO_BUFF_IDX,
+                    vec![Cow::from(format!("Unrecognized command: '{cmd}'"))],
+                    None,
+                )
+            }
         }
     }
 }

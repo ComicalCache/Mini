@@ -1,9 +1,9 @@
 mod apply_command;
-mod edit;
+mod insert;
 
 use crate::{
     FILES_BUFF_IDX, INFO_BUFF_IDX,
-    buffer::{Buffer, delete, yank},
+    buffer::{Buffer, delete, edit, yank},
     cursor::{self, Cursor},
     document::Document,
     state_machine::{ChainResult, CommandMap, StateMachine},
@@ -100,6 +100,8 @@ enum CommandAction {
     ViewMode,
     Left,
     Right,
+    NextWord,
+    PrevWord,
     Newline,
     Tab,
     DeleteChar,
@@ -251,6 +253,8 @@ impl TextBuffer {
                 .simple(Key::Esc, ViewMode)
                 .simple(Key::Left, Left)
                 .simple(Key::Right, Right)
+                .simple(Key::AltRight, NextWord)
+                .simple(Key::AltLeft, PrevWord)
                 .simple(Key::Char('\n'), Newline)
                 .simple(Key::Char('\t'), Tab)
                 .simple(Key::Backspace, DeleteChar);
@@ -599,8 +603,8 @@ impl TextBuffer {
                     self.doc.delete_char();
 
                     match ch {
-                        '\n' => self.write_new_line_char(),
-                        '\t' => self.write_tab(),
+                        '\n' => edit::write_new_line_char(&mut self.doc, &mut self.view),
+                        '\t' => edit::write_tab(&mut self.doc, &mut self.view),
                         _ => self.doc.write_char(ch),
                     }
                 }
@@ -633,12 +637,12 @@ impl TextBuffer {
             A(Right) => cursor::right(&mut self.doc, &mut self.view, 1),
             A(NextWord) => cursor::next_word(&mut self.doc, &mut self.view, 1),
             A(PrevWord) => cursor::prev_word(&mut self.doc, &mut self.view, 1),
-            A(Newline) => self.write_new_line_char(),
-            A(Tab) => self.write_tab(),
-            A(DeleteChar) => self.delete_char(),
+            A(Newline) => edit::write_new_line_char(&mut self.doc, &mut self.view),
+            A(Tab) => edit::write_tab(&mut self.doc, &mut self.view),
+            A(DeleteChar) => edit::delete_char(&mut self.doc, &mut self.view),
             Invalid => {
                 if let Some(Key::Char(ch)) = key {
-                    self.write_char(ch);
+                    edit::write_char(&mut self.doc, &mut self.view, ch);
                 }
             }
             Incomplete => {}
@@ -656,16 +660,18 @@ impl TextBuffer {
             A(ViewMode) => self.change_mode(Mode::View),
             A(Left) => cursor::left(&mut self.cmd, &mut self.view, 1),
             A(Right) => cursor::right(&mut self.cmd, &mut self.view, 1),
+            A(NextWord) => cursor::next_word(&mut self.cmd, &mut self.view, 1),
+            A(PrevWord) => cursor::prev_word(&mut self.cmd, &mut self.view, 1),
             A(Newline) => {
                 let res = self.apply_command();
                 self.change_mode(Mode::View);
                 return res;
             }
-            A(Tab) => self.write_cmd_tab(),
-            A(DeleteChar) => self.delete_cmd_char(),
+            A(Tab) => edit::write_tab(&mut self.cmd, &mut self.view),
+            A(DeleteChar) => edit::delete_char(&mut self.cmd, &mut self.view),
             Invalid => {
                 if let Some(Key::Char(ch)) = key {
-                    self.write_cmd_char(ch);
+                    edit::write_char(&mut self.cmd, &mut self.view, ch);
                 }
             }
             Incomplete => {}
@@ -732,6 +738,8 @@ impl Buffer for TextBuffer {
             return Ok(());
         }
 
-        Err(vec![Cow::from("There are unsaved changes")])
+        Err(vec![Cow::from(
+            "There are unsaved changes in the text buffer",
+        )])
     }
 }

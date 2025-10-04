@@ -64,10 +64,34 @@ mode.
         backing file is created)
     - 'oo ?<path>' to open a file and replace the buffer, discarding unsaved changes (if the path is omitted a new
         "scratchpad" buffer with no backing file is created)
+    - <line number> to jump to an absolute line number
 
 Info Buffer:
-The info buffer is a read only buffer that displays errors, warnings or other types of information.
+The info buffer is a read only buffer that displays errors, warnings or other types of information. It has two modes:
+view mode and command mode.
+    View Mode:
+    View mode is the default mode when opening the info buffer.
+
+    Command Mode:
+    In command mode you can issue editor commands. You enter command mode by pressing space, typing in your command and
+    hitting enter to execute it, or escape to abort. The following are valid commands:
+    - 'q' to quit
+    - 'qq' to force quit, discarding unsaved changes
+    - '?' to see this message
+    - 'clear' to clear the info buffer
+    - <line number> to jump to an absolute line number
 
 Files Buffer:
 The files buffer is a small file browser to browse directories, starting initially at the current path, and open files.
-You can press 'r' to refresh the file list.
+You can press 'r' to refresh the file list and enter to open a directory or file. It has two modes: view mode and
+command mode.
+    View Mode:
+    View mode is the default mode when opening the files buffer.
+
+    Command Mode:
+    In command mode you can issue editor commands. You enter command mode by pressing space, typing in your command and
+    hitting enter to execute it, or escape to abort. The following are valid commands:
+    - 'q' to quit
+    - 'qq' to force quit, discarding unsaved changes
+    - '?' to see this message
+    - <line number> to jump to an absolute line number

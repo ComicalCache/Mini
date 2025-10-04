@@ -1,5 +1,6 @@
 #![feature(trait_alias)]
 #![feature(str_as_str)]
+#![allow(clippy::too_many_lines)]
 
 mod buffer;
 mod cursor;
@@ -126,10 +127,13 @@ fn main() -> Result<(), std::io::Error> {
                     }
                 }
             }
+            CommandResult::ForceQuit => {
+                quit = true;
+            }
         }
 
         // Render the "new" state if necessary.
-        if rerender_changed_buff || buffs[curr_buff].need_rerender() {
+        if !quit && (rerender_changed_buff || buffs[curr_buff].need_rerender()) {
             buffs[curr_buff].render(&mut stdout)?;
         }
         // Re-enable polling.

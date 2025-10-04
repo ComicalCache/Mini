@@ -1,8 +1,9 @@
+mod apply_command;
 mod interact;
 
 use crate::{
     INFO_BUFF_IDX, TXT_BUFF_IDX,
-    buffer::{Buffer, yank},
+    buffer::{Buffer, edit, yank},
     cursor::{self, Cursor},
     document::Document,
     state_machine::{ChainResult, CommandMap, StateMachine},
@@ -19,7 +20,7 @@ use std::{
 use termion::{event::Key, raw::RawTerminal};
 
 #[derive(Clone)]
-enum Action {
+enum ViewAction {
     Left,
     Down,
     Up,
@@ -48,20 +49,42 @@ enum Action {
     YankToEndOfFile,
     ChangeToTextBuffer,
     ChangeToInfoBuffer,
+    CommandMode,
     Repeat(char),
+}
+
+#[derive(Clone)]
+enum CommandAction {
+    ViewMode,
+    Left,
+    Right,
+    NextWord,
+    PrevWord,
+    Newline,
+    Tab,
+    DeleteChar,
+}
+
+#[derive(Clone, Copy)]
+enum Mode {
+    View,
+    Command,
 }
 
 pub struct FilesBuffer {
     doc: Document,
+    cmd: Document,
     view: Viewport,
     base: PathBuf,
     entries: Vec<PathBuf>,
 
     sel: Option<Cursor>,
+    mode: Mode,
     motion_repeat: String,
     clipboard: Clipboard,
 
-    input_state_machine: StateMachine<Action>,
+    view_state_machine: StateMachine<ViewAction>,
+    cmd_state_machine: StateMachine<CommandAction>,
 
     rerender: bool,
 }
@@ -72,9 +95,9 @@ impl FilesBuffer {
         let mut contents = Vec::new();
         FilesBuffer::load_dir(&base, &mut entries, &mut contents)?;
 
-        let input_state_machine = {
+        let view_state_machine = {
             #[allow(clippy::enum_glob_use)]
-            use Action::*;
+            use ViewAction::*;
 
             let command_map = CommandMap::new()
                 .simple(Key::Char('h'), Left)
@@ -90,6 +113,7 @@ impl FilesBuffer {
                 .simple(Key::Char('G'), JumpToBeginningOfFile)
                 .simple(Key::Char('r'), Refresh)
                 .simple(Key::Char('\n'), SelectItem)
+                .simple(Key::Char(' '), CommandMode)
                 .simple(Key::Char('v'), SelectMode)
                 .simple(Key::Esc, ExitSelectMode)
                 .operator(Key::Char('y'), |key| match key {
@@ -121,16 +145,35 @@ impl FilesBuffer {
             StateMachine::new(command_map, Duration::from_secs(1))
         };
 
+        let cmd_state_machine = {
+            #[allow(clippy::enum_glob_use)]
+            use CommandAction::*;
+
+            let command_map = CommandMap::new()
+                .simple(Key::Esc, ViewMode)
+                .simple(Key::Left, Left)
+                .simple(Key::Right, Right)
+                .simple(Key::AltRight, NextWord)
+                .simple(Key::AltLeft, PrevWord)
+                .simple(Key::Char('\n'), Newline)
+                .simple(Key::Char('\t'), Tab)
+                .simple(Key::Backspace, DeleteChar);
+            StateMachine::new(command_map, Duration::from_secs(1))
+        };
+
         let count = contents.len();
         Ok(FilesBuffer {
             doc: Document::new(0, 0, Some(contents)),
+            cmd: Document::new(0, 0, None),
             view: Viewport::new(w, h, 0, 0, count),
             base,
             entries,
             sel: None,
+            mode: Mode::View,
             motion_repeat: String::new(),
             clipboard: Clipboard::new().map_err(Error::other)?,
-            input_state_machine,
+            view_state_machine,
+            cmd_state_machine,
             rerender: false,
         })
     }
@@ -140,6 +183,10 @@ impl FilesBuffer {
 
         self.view.info_line.clear();
 
+        let mode = match self.mode {
+            Mode::View => "V",
+            Mode::Command => "C",
+        };
         // No plus 1 since the first entry is always ".." and not really a directory entry.
         let curr = self.doc.cur.y;
         let curr_type = match curr {
@@ -153,7 +200,7 @@ impl FilesBuffer {
 
         write!(
             &mut self.view.info_line,
-            "[Files] [{curr_type}] [{curr}/{entries} {entries_label}]",
+            "[Files] [{mode}] [{curr_type}] [{curr}/{entries} {entries_label}]",
         )?;
 
         if let Some(pos) = self.sel {
@@ -170,40 +217,49 @@ impl FilesBuffer {
 
         Ok(())
     }
-}
 
-impl Buffer for FilesBuffer {
-    fn need_rerender(&self) -> bool {
-        self.rerender
+    fn cmd_line(&self) -> Option<(String, Cursor)> {
+        match self.mode {
+            Mode::Command => Some((self.cmd.buff[0].to_string(), self.cmd.cur)),
+            Mode::View => None,
+        }
     }
 
-    fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
-        self.rerender = false;
+    fn change_mode(&mut self, mode: Mode) {
+        match self.mode {
+            Mode::Command => {
+                // Clear command line so its ready for next entry.
+                self.cmd.buff[0].to_mut().clear();
 
-        self.info_line().map_err(Error::other)?;
-        self.view.cmd = None;
-        self.view
-            .render(stdout, &self.doc, self.sel, CursorStyle::SteadyBlock)
-    }
+                // Set cursor to the beginning of line so its always at a predictable position.
+                // TODO: restore prev position.
+                cursor::left(&mut self.doc, &mut self.view, self.cmd.cur.x);
 
-    fn resize(&mut self, w: usize, h: usize) {
-        if self.view.w == w && self.view.h == h {
-            return;
+                self.cmd.cur = Cursor::new(0, 0);
+            }
+            Mode::View => {}
         }
 
-        self.rerender = true;
+        match mode {
+            Mode::Command => {
+                // Set cursor to the beginning of line to avoid weird scrolling behaviour.
+                // TODO: save curr position and restore.
+                cursor::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
+            }
+            Mode::View => {}
+        }
 
-        self.view.resize(w, h, self.doc.buff.len());
+        self.mode = mode;
     }
 
-    fn tick(&mut self, key: Option<Key>) -> CommandResult {
+    fn view_tick(&mut self, key: Option<Key>) -> CommandResult {
         use crate::state_machine::StateMachineResult::{Action as A, Incomplete, Invalid};
         #[allow(clippy::enum_glob_use)]
-        use Action::*;
+        use ViewAction::*;
 
         // Only rerender if input was received.
         self.rerender |= key.is_some();
-        match self.input_state_machine.tick(key.into()) {
+        match self.view_state_machine.tick(key.into()) {
             A(Left) => cursor::left(
                 &mut self.doc,
                 &mut self.view,
@@ -332,6 +388,7 @@ impl Buffer for FilesBuffer {
             }
             A(ChangeToTextBuffer) => return CommandResult::ChangeBuffer(TXT_BUFF_IDX),
             A(ChangeToInfoBuffer) => return CommandResult::ChangeBuffer(INFO_BUFF_IDX),
+            A(CommandMode) => self.change_mode(Mode::Command),
             A(Repeat(ch)) => {
                 self.motion_repeat.push(ch);
 
@@ -345,6 +402,73 @@ impl Buffer for FilesBuffer {
         // Rest motion repeat buffer after successful command.
         self.motion_repeat.clear();
         CommandResult::Ok
+    }
+
+    fn command_tick(&mut self, key: Option<Key>) -> CommandResult {
+        use crate::state_machine::StateMachineResult::{Action as A, Incomplete, Invalid};
+        #[allow(clippy::enum_glob_use)]
+        use CommandAction::*;
+
+        match self.cmd_state_machine.tick(key.into()) {
+            A(ViewMode) => self.change_mode(Mode::View),
+            A(Left) => cursor::left(&mut self.cmd, &mut self.view, 1),
+            A(Right) => cursor::right(&mut self.cmd, &mut self.view, 1),
+            A(NextWord) => cursor::next_word(&mut self.cmd, &mut self.view, 1),
+            A(PrevWord) => cursor::prev_word(&mut self.cmd, &mut self.view, 1),
+            A(Newline) => {
+                let res = self.apply_command();
+                self.change_mode(Mode::View);
+                return res;
+            }
+            A(Tab) => edit::write_tab(&mut self.cmd, &mut self.view),
+            A(DeleteChar) => edit::delete_char(&mut self.cmd, &mut self.view),
+            Invalid => {
+                if let Some(Key::Char(ch)) = key {
+                    edit::write_char(&mut self.cmd, &mut self.view, ch);
+                }
+            }
+            Incomplete => {}
+        }
+
+        CommandResult::Ok
+    }
+}
+
+impl Buffer for FilesBuffer {
+    fn need_rerender(&self) -> bool {
+        self.rerender
+    }
+
+    fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
+        self.rerender = false;
+
+        self.info_line().map_err(Error::other)?;
+
+        let cursor_style = match self.mode {
+            Mode::View => CursorStyle::SteadyBlock,
+            Mode::Command => CursorStyle::BlinkingBar,
+        };
+        self.view.cmd = self.cmd_line();
+        self.view.render(stdout, &self.doc, self.sel, cursor_style)
+    }
+
+    fn resize(&mut self, w: usize, h: usize) {
+        if self.view.w == w && self.view.h == h {
+            return;
+        }
+
+        self.rerender = true;
+
+        self.view.resize(w, h, self.doc.buff.len());
+    }
+
+    fn tick(&mut self, key: Option<Key>) -> CommandResult {
+        // Only rerender if input was received.
+        self.rerender |= key.is_some();
+        match self.mode {
+            Mode::View => self.view_tick(key),
+            Mode::Command => self.command_tick(key),
+        }
     }
 
     fn set_contents(&mut self, _: &[Cow<'static, str>], path: Option<PathBuf>) {

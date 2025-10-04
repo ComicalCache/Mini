@@ -11,6 +11,7 @@ pub enum CommandResult {
     ChangeBuffer(usize),
     SetAndChangeBuffer(usize, Vec<Cow<'static, str>>, Option<PathBuf>),
     Quit,
+    ForceQuit,
 }
 
 #[derive(Clone, Copy)]

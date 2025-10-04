@@ -87,7 +87,7 @@ fn __next_word(doc: &mut Document, view: &mut Viewport) {
     let cur = doc.cur;
     let line = &doc.buff[cur.y];
     // Return early if at end of line.
-    if line.chars().count() <= cur.x + 1 {
+    if line.chars().count() < cur.x {
         return;
     }
 
@@ -101,7 +101,8 @@ fn __next_word(doc: &mut Document, view: &mut Viewport) {
             !ch.is_alphanumeric() || (!curr.is_alphanumeric() && ch.is_alphanumeric())
         })
     else {
-        // Return early if no next "word" candidate exists.
+        // Jump to end of line if no next word candidate exists.
+        jump_to_end_of_line(doc, view);
         return;
     };
 
@@ -166,7 +167,7 @@ fn __prev_word(doc: &mut Document, view: &mut Viewport) {
         left(doc, view, offset);
     } else {
         // Move to the beginning of line.
-        left(doc, view, cur.x);
+        jump_to_beginning_of_line(doc, view);
     }
 }
 
@@ -183,7 +184,7 @@ pub fn jump_to_end_of_line(doc: &mut Document, view: &mut Viewport) {
         doc.buff[doc.cur.y]
             .chars()
             .count()
-            .saturating_sub(doc.cur.x + 1),
+            .saturating_sub(doc.cur.x),
     );
 }
 

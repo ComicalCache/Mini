@@ -1,4 +1,5 @@
 pub mod delete;
+pub mod edit;
 pub mod yank;
 
 use crate::util::CommandResult;
