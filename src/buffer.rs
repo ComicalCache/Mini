@@ -11,11 +11,12 @@ use std::{
 };
 use termion::{event::Key, raw::RawTerminal};
 
+/// The buffer trait defines the basic primitives a buffer needs.
 pub trait Buffer {
     /// Checks if the buffer needs to be rerendered.
     fn need_rerender(&self) -> bool;
 
-    /// Renders the object to stdout.
+    /// Renders the buffer to stdout.
     fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error>;
 
     /// Handles the event, that the terminal was resized.
@@ -31,6 +32,6 @@ pub trait Buffer {
     /// Sets the contents of a buffer.
     fn set_contents(&mut self, contents: &[Cow<'static, str>], path: Option<PathBuf>);
 
-    /// Asks if the buffer is ready to quit.
+    /// Asks if the buffer is ready to quit/has pending changes.
     fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>>;
 }

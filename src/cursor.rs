@@ -1,8 +1,11 @@
 use crate::{document::Document, viewport::Viewport};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+/// A cursor position in a document or viewport.
 pub struct Cursor {
+    /// Y position. The y position preceeds the x position to make sorting easier.
     pub y: usize,
+    /// X position.
     pub x: usize,
 }
 
@@ -32,20 +35,20 @@ impl Cursor {
     }
 }
 
-/// Moves the cursor to the left.
+/// Moves the cursors to the left.
 pub fn left(doc: &mut Document, view: &mut Viewport, n: usize) {
     doc.cur.left(n, 0);
     view.cur.left(n, 0);
 }
 
-/// Moves the cursor to the right
+/// Moves the cursors to the right
 pub fn right(doc: &mut Document, view: &mut Viewport, n: usize) {
     let line_bound = doc.line_count(doc.cur.y).expect("Illegal state");
     doc.cur.right(n, line_bound);
     view.cur.right(n, (doc.cur.x).min(view.buff_w - 1));
 }
 
-/// Moves the cursor up.
+/// Moves the cursors up.
 pub fn up(doc: &mut Document, view: &mut Viewport, n: usize) {
     doc.cur.up(n, 0);
     // One for info line.
@@ -60,7 +63,7 @@ pub fn up(doc: &mut Document, view: &mut Viewport, n: usize) {
     }
 }
 
-/// Moves the cursor down.
+/// Moves the cursors down.
 pub fn down(doc: &mut Document, view: &mut Viewport, n: usize) {
     let bound = doc.buff.len().saturating_sub(1);
     doc.cur.down(n, bound);
@@ -76,7 +79,7 @@ pub fn down(doc: &mut Document, view: &mut Viewport, n: usize) {
     }
 }
 
-/// Jumps to a specific line (or the first/last line if out of bounds).
+/// Jumps the cursors to a specific line (or the first/last line if out of bounds).
 pub fn jump_to_line(doc: &mut Document, view: &mut Viewport, mut dest: usize) {
     // At most the len of the buffer, at least 1, then subtract one to get the correct index.
     dest = dest.min(doc.buff.len()).max(1) - 1;
@@ -89,7 +92,7 @@ pub fn jump_to_line(doc: &mut Document, view: &mut Viewport, mut dest: usize) {
     }
 }
 
-/// Jumps to the next "word".
+/// Jumps the cursors to the next "word".
 pub fn next_word(doc: &mut Document, view: &mut Viewport, n: usize) {
     for _ in 0..n {
         __next_word(doc, view);
@@ -139,7 +142,7 @@ fn __next_word(doc: &mut Document, view: &mut Viewport) {
     }
 }
 
-/// Jumps to the previous "word".
+/// Jumps the cursors to the previous "word".
 pub fn prev_word(doc: &mut Document, view: &mut Viewport, n: usize) {
     for _ in 0..n {
         __prev_word(doc, view);
@@ -184,12 +187,12 @@ fn __prev_word(doc: &mut Document, view: &mut Viewport) {
     }
 }
 
-/// Jumps the the beginning of a line.
+/// Jumps the cursors the the beginning of a line.
 pub fn jump_to_beginning_of_line(doc: &mut Document, view: &mut Viewport) {
     left(doc, view, doc.cur.x);
 }
 
-/// Jumps to the end of a line.
+/// Jumps the cursors to the end of a line.
 pub fn jump_to_end_of_line(doc: &mut Document, view: &mut Viewport) {
     right(
         doc,
@@ -265,7 +268,7 @@ fn find_matching_bracket(doc: &Document) -> Option<(usize, usize)> {
     None
 }
 
-/// Jumps to the matching opposite bracket (if exists).
+/// Jumps the cursors to the matching opposite bracket (if exists).
 pub fn jump_to_matching_opposite(doc: &mut Document, view: &mut Viewport) {
     let Some((x, y)) = find_matching_bracket(doc) else {
         return;
@@ -284,13 +287,13 @@ pub fn jump_to_matching_opposite(doc: &mut Document, view: &mut Viewport) {
     }
 }
 
-/// Jumps to the last line of the file.
+/// Jumps the cursors to the last line of the file.
 pub(super) fn jump_to_end_of_file(doc: &mut Document, view: &mut Viewport) {
     down(doc, view, doc.buff.len() - (doc.cur.y + 1));
     left(doc, view, doc.cur.x);
 }
 
-/// Jumps to the first line of the file.
+/// Jumps the cursors to the first line of the file.
 pub(super) fn jump_to_beginning_of_file(doc: &mut Document, view: &mut Viewport) {
     up(doc, view, doc.cur.y + 1);
     left(doc, view, doc.cur.x);

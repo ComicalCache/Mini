@@ -29,9 +29,12 @@ enum OtherViewAction {
     ChangeToInfoBuffer,
 }
 
+/// A file browser buffer.
 pub struct FilesBuffer {
     base: BaseBuffer<(), OtherViewAction, ()>,
+    /// The path of the current item.
     path: PathBuf,
+    /// All entries of the dir containing the current item.
     entries: Vec<PathBuf>,
 }
 
@@ -43,7 +46,7 @@ impl FilesBuffer {
         let mut contents = Vec::new();
         FilesBuffer::load_dir(&path, &mut entries, &mut contents)?;
 
-        let mut base = BaseBuffer::new(w, h, contents.len(), Some(contents))?;
+        let mut base = BaseBuffer::new(w, h, Some(contents))?;
         base.view_state_machine.command_map = base
             .view_state_machine
             .command_map
@@ -59,6 +62,7 @@ impl FilesBuffer {
         })
     }
 
+    /// Creates an info line
     fn info_line(&mut self) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
 
@@ -100,6 +104,7 @@ impl FilesBuffer {
         Ok(())
     }
 
+    /// Handles self defined view actions.
     fn view_action(&mut self, action: OtherViewAction) -> CommandResult {
         use OtherViewAction::*;
 
@@ -136,6 +141,7 @@ impl FilesBuffer {
         CommandResult::Ok
     }
 
+    /// Handles self apply and self defined command ticks.
     fn command_tick(&mut self, tick: CommandTick<()>) -> CommandResult {
         use CommandTick::*;
 

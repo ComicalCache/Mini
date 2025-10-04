@@ -1,17 +1,13 @@
-use crate::state_machine::{action::Action, states::ChainResult};
+use crate::state_machine::{Command, action::Action, states::ChainResult};
 use std::{collections::HashMap, rc::Rc};
 use termion::event::Key;
 
+/// A function handling multi-key input sequence definitions.
 pub trait HandlerFn<A: Action> = Fn(Key) -> Option<ChainResult<A>>;
+/// A function handling multi-key input sequence definitions.
 pub type Handler<A> = Rc<dyn HandlerFn<A>>;
 
-#[derive(Clone)]
-pub enum Command<A: Action> {
-    Simple(A),
-    Operator(Handler<A>),
-    Prefix(Handler<A>),
-}
-
+/// Maps keys to commands.
 pub struct CommandMap<A: Action> {
     pub(super) bindings: HashMap<Key, Command<A>>,
 }

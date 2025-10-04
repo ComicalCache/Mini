@@ -48,8 +48,9 @@ macro_rules! yank {
 }
 
 #[derive(Clone, Copy)]
+/// A base set of actions in the view mode.
 pub enum ViewAction<T> {
-    // Movement
+    // Movement.
     Left,
     Down,
     Up,
@@ -62,13 +63,13 @@ pub enum ViewAction<T> {
     JumpToBeginningOfFile,
     JumpToEndOfFile,
 
-    // Modes
+    // Modes.
     SelectMode,
     ExitSelectMode,
     CommandMode,
     YankToEndOfFile,
 
-    // Yank
+    // Yank.
     YankSelection,
     YankLine,
     YankLeft,
@@ -80,14 +81,15 @@ pub enum ViewAction<T> {
     YankToMatchingOpposite,
     YankToBeginningOfFile,
 
-    // Repeat
+    // Repeat.
     Repeat(char),
 
-    // Other
+    /// Other actions defined by specialized buffers.
     Other(T),
 }
 
 #[derive(Clone, Copy)]
+/// A base set of actions in the command mode.
 pub enum CommandAction<T> {
     // Movement
     Left,
@@ -103,36 +105,57 @@ pub enum CommandAction<T> {
     Newline,
     DeleteChar,
 
-    // Other
+    /// Other actions defined by specialized buffers.
     Other(T),
 }
 
 #[derive(Clone, Copy)]
+/// Command mode encountered a non-standard event or can be applied.
 pub enum CommandTick<T> {
+    /// The command can be applied to the buffer.
     Apply,
+
+    /// Other actions defined by specialized buffers.
     Other(T),
 }
 
 #[derive(Clone, Copy)]
+/// A base set of buffer mode.
 pub enum Mode<T> {
+    /// View mode, made for inspecting a document.
     View,
+    /// Command mode, made to issue commands to the buffer.
     Command,
+    /// Other modes defined by specialized buffers.
     Other(T),
 }
 
+/// A struct defining the base functionality of a buffer. Specialized buffers can keep
+/// it as a field to "inherit" this base. Buffers with completely separate functionality
+/// can use it as a blueprint and define their own functionality from scratch.
 pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
+    /// The main content of the buffer.
     pub doc: Document,
+    /// The command content.
     pub cmd: Document,
+    /// The viewport of the buffer.
     pub view: Viewport,
 
+    /// Marker of the start of the selection.
     pub sel: Option<Cursor>,
+    /// The current buffer mode.
     pub mode: Mode<ModeEnum>,
+    /// A buffer to repeat motions.
     pub motion_repeat: String,
+    /// An instance of the system clipboard to yank to.
     pub clipboard: Clipboard,
 
+    /// The state machine handling input in view mode.
     pub view_state_machine: StateMachine<ViewAction<ViewEnum>>,
+    /// The state machine handling input in command mode.
     pub cmd_state_machine: StateMachine<CommandAction<CommandEnum>>,
 
+    /// Flag if the buffer needs re-rendering.
     pub rerender: bool,
 }
 
@@ -142,7 +165,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     pub fn new(
         w: usize,
         h: usize,
-        count: usize,
         contents: Option<Vec<Cow<'static, str>>>,
     ) -> Result<Self, Error> {
         let view_state_machine = {
@@ -207,6 +229,11 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             StateMachine::new(command_map, Duration::from_secs(1))
         };
 
+        let count = if let Some(contents) = &contents {
+            contents.len()
+        } else {
+            1
+        };
         Ok(BaseBuffer {
             doc: Document::new(0, 0, contents),
             cmd: Document::new(0, 0, None),

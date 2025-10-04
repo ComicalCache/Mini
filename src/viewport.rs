@@ -7,23 +7,39 @@ use termion::{
     raw::RawTerminal,
 };
 
+/// Background color.
 const BG: Bg<color::Rgb> = Bg(color::Rgb(41, 44, 51));
+/// Reset background color.
 const NO_BG: Bg<Reset> = Bg(Reset);
+/// Line highlight background color.
 const HIGHLIGHT: Bg<color::Rgb> = Bg(color::Rgb(51, 53, 59));
+/// Info line background color.
 const INFO: Bg<color::Rgb> = Bg(color::Rgb(59, 61, 66));
+/// Selection highlight background color
 const SEL: Bg<color::Rgb> = Bg(color::Rgb(75, 78, 87));
+/// Text color.
 const TXT: Fg<color::Rgb> = Fg(color::Rgb(172, 178, 190));
+/// Relative number text color.
 const REL_NUMS: Fg<color::Rgb> = Fg(color::Rgb(101, 103, 105));
+/// Reset text color.
 const NO_TXT: Fg<Reset> = Fg(Reset);
 
+/// The viewport of a (section of a) terminal.
 pub struct Viewport {
+    /// The total width of the viewport.
     pub w: usize,
+    /// The total height of the viewport.
     pub h: usize,
+    /// The width of the line number colon.
     pub nums_w: usize,
+    /// The width of the buffer content.
     pub buff_w: usize,
+    /// The (visible) cursor in the viewport.
     pub cur: Cursor,
 
+    /// The info line displayed at the top of the viewport.
     pub info_line: String,
+    /// The optional command line displayed at the bottom of the viewport.
     pub cmd: Option<(String, Cursor)>,
 }
 
@@ -41,6 +57,7 @@ impl Viewport {
         }
     }
 
+    /// Re-initializes the viewport.
     pub fn init(&mut self, w: usize, h: usize, x: usize, y: usize, count: usize) {
         let digits = count.ilog10() as usize + 1;
 
@@ -63,12 +80,9 @@ impl Viewport {
         cursor_style: CursorStyle,
     ) -> Result<(), Error> {
         // Update the nums width if the supplied buffer is not correct.
-        // Avoid leaking variables into the scope.
-        {
-            let digits = doc.buff.len().ilog10() as usize + 1;
-            if digits + 4 != self.nums_w {
-                self.resize(self.w, self.h, doc.buff.len());
-            }
+        // log10 + 1 for length + 4 for whitespace and separator.
+        if doc.buff.len().ilog10() as usize + 5 != self.nums_w {
+            self.resize(self.w, self.h, doc.buff.len());
         }
 
         // Prepre the selection to be in order if a selection state is active.
@@ -285,6 +299,7 @@ impl Viewport {
             )?;
         }
 
+        // Set cursor.
         match cursor_style {
             CursorStyle::BlinkingBar => write!(stdout, "{cur}{BlinkingBar}{NO_TXT}{NO_BG}{Show}",)?,
             CursorStyle::BlinkingBlock => {

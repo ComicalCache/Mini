@@ -24,6 +24,7 @@ enum OtherViewAction {
     ChangeToFilesBuffer,
 }
 
+/// A buffer to show read only information.
 pub struct InfoBuffer {
     base: BaseBuffer<(), OtherViewAction, ()>,
 }
@@ -32,7 +33,7 @@ impl InfoBuffer {
     pub fn new(w: usize, h: usize) -> Result<Self, Error> {
         use OtherViewAction::*;
 
-        let mut base = BaseBuffer::new(w, h, 1, None)?;
+        let mut base = BaseBuffer::new(w, h, None)?;
         base.view_state_machine.command_map = base
             .view_state_machine
             .command_map
@@ -42,6 +43,7 @@ impl InfoBuffer {
         Ok(InfoBuffer { base })
     }
 
+    /// Creates an info line
     fn info_line(&mut self) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
 
@@ -79,6 +81,7 @@ impl InfoBuffer {
         write!(&mut self.base.view.info_line, " {edited}")
     }
 
+    /// Handles self defined view actions.
     fn view_action(&mut self, action: OtherViewAction) -> CommandResult {
         use OtherViewAction::*;
 
@@ -91,6 +94,7 @@ impl InfoBuffer {
         // self.base.motion_repeat.clear();
     }
 
+    /// Handles self apply and self defined command ticks.
     fn command_tick(&mut self, tick: CommandTick<()>) -> CommandResult {
         use CommandTick::*;
 

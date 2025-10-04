@@ -41,6 +41,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut args = std::env::args();
     args.next();
 
+    // Print help or parse read file if argument was supplied.
     let file = if let Some(path) = args.next() {
         if path == "--help" {
             println!("{INFO_MSG}");
@@ -62,7 +63,7 @@ fn main() -> Result<(), std::io::Error> {
     let poller = Poller::new()?;
     unsafe { poller.add(&stdin_fd, polling::Event::readable(STDIN_EVENT_KEY))? };
 
-    // Create array of buffers that can be switched to.
+    // Create an array of buffers that can be switched to.
     let (w, h) = termion::terminal_size()?;
     let base = std::env::current_dir()?;
     let mut buffs: [Box<dyn Buffer>; 3] = [
@@ -101,10 +102,12 @@ fn main() -> Result<(), std::io::Error> {
         let mut rerender_changed_buff = false;
         match buffs[curr_buff].tick(key) {
             CommandResult::Ok => {}
+            // Change to a different buffer.
             CommandResult::ChangeBuffer(idx) => {
                 rerender_changed_buff = true;
                 curr_buff = idx;
             }
+            // Set a buffer and change to it if the buffer has no pending changes.
             CommandResult::SetAndChangeBuffer(idx, contents, path) => {
                 if let Err(err) = buffs[idx].can_quit() {
                     buffs[INFO_BUFF_IDX].set_contents(&err, path);
@@ -114,6 +117,7 @@ fn main() -> Result<(), std::io::Error> {
                     curr_buff = idx;
                 }
             }
+            // Quit the app if there are no unsaved changes left.
             CommandResult::Quit => {
                 quit = true;
 
@@ -127,6 +131,7 @@ fn main() -> Result<(), std::io::Error> {
                     }
                 }
             }
+            // Quit discarding all pending changes.
             CommandResult::ForceQuit => {
                 quit = true;
             }

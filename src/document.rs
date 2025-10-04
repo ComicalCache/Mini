@@ -5,14 +5,19 @@ use std::{
     io::{BufWriter, Error, Seek, SeekFrom, Write},
 };
 
+// The document of a buffer containing its contents.
 pub struct Document {
+    // The buffer contents.
     pub buff: Vec<Cow<'static, str>>,
+    // The cursor inside the buffer.
     pub cur: Cursor,
+    // Flag if the buffer was modified.
     pub edited: bool,
 }
 
 impl Document {
     pub fn new(x: usize, y: usize, contents: Option<Vec<Cow<'static, str>>>) -> Self {
+        // Always have at least one line in the document.
         let buff = contents
             .filter(|c| !c.is_empty())
             .map_or_else(|| vec![Cow::from("")], |c| c.into_iter().collect());
@@ -47,6 +52,7 @@ impl Document {
         let size: u64 = self.buff.iter().map(|s| s.len() as u64 + 1).sum();
         file.set_len(size.saturating_sub(1))?;
 
+        // Write line by line.
         file.seek(SeekFrom::Start(0))?;
         let mut writer = BufWriter::new(file);
         for line in &self.buff {
@@ -61,6 +67,7 @@ impl Document {
     /// Replaces the document buffer and sets the cursor to a specified position.
     pub fn set_contents(&mut self, buff: &[Cow<'static, str>], x: usize, y: usize) {
         if buff.is_empty() {
+            // Always have at least one line in the document.
             self.buff.truncate(1);
             self.buff[0].to_mut().clear();
         } else {
@@ -150,12 +157,14 @@ impl Document {
     }
 
     /// Writes a str at the current cursor position.
+    /// Creates new lines if the content contains new lines.
     pub fn write_str(&mut self, r#str: &str) {
         self.write_str_at(self.cur.x, self.cur.y, r#str);
     }
 
     /// Writes a str at a specified position.
-    pub fn write_str_at(&mut self, x: usize, y: usize, r#str: &str) {
+    /// Creates new lines if the content contains new lines.
+    pub fn write_str_at(&mut self, x: usize, mut y: usize, r#str: &str) {
         let Some(count) = self.line_count(y) else {
             return;
         };
@@ -163,13 +172,28 @@ impl Document {
             return;
         }
 
+        let mut lines = r#str.lines();
+
+        // Insertion point of current line.
         let line = &mut self.buff[y];
         let idx = line
             .char_indices()
             .nth(x)
             .map_or(line.len(), |(idx, _)| idx);
 
-        line.to_mut().insert_str(idx, r#str);
+        // Content of the original line after the cursor.
+        let tail = line.to_mut().split_off(idx);
+        line.to_mut().push_str(lines.next().unwrap_or(""));
+
+        // Insert lines.
+        for new_line in lines {
+            y += 1;
+            self.insert_line_at(y, Cow::from(new_line.to_string()));
+        }
+
+        // Append tail.
+        self.buff[y].to_mut().push_str(&tail);
+
         self.edited = true;
     }
 
@@ -201,21 +225,19 @@ impl Document {
             return Some(Cow::from(line[start_idx..end_idx].to_string()));
         }
 
-        let mut result = String::new();
-
         // First line
         let first_line = &self.buff[start.y];
         let start_idx = first_line
             .char_indices()
             .nth(start.x)
             .map_or(start_len, |(idx, _)| idx);
-        result.push_str(&first_line[start_idx..]);
-        result.push('\n');
+        let mut result = Cow::from(first_line[start_idx..].to_string());
+        result.to_mut().push('\n');
 
         // Lines between first and last line
         for line in self.buff.iter().skip(start.y + 1).take(end.y - start.y - 1) {
-            result.push_str(line);
-            result.push('\n');
+            result.to_mut().push_str(line);
+            result.to_mut().push('\n');
         }
 
         // Last line
@@ -224,8 +246,8 @@ impl Document {
             .char_indices()
             .nth(end.x)
             .map_or(end_len, |(idx, _)| idx);
-        result.push_str(&last_line[..end_idx]);
+        result.to_mut().push_str(&last_line[..end_idx]);
 
-        Some(Cow::from(result))
+        Some(result)
     }
 }

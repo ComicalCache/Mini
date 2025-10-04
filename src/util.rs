@@ -6,6 +6,7 @@ use std::{
 };
 
 #[derive(PartialEq, Eq)]
+/// The result of a command entered by the user.
 pub enum CommandResult {
     Ok,
     ChangeBuffer(usize),
@@ -15,12 +16,14 @@ pub enum CommandResult {
 }
 
 #[derive(Clone, Copy)]
+/// The displayed cursor style.
 pub enum CursorStyle {
     BlinkingBar,
     BlinkingBlock,
     SteadyBlock,
 }
 
+/// Opens a file as rw+truncate
 pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
     OpenOptions::new()
         .read(true)
@@ -30,6 +33,7 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
         .open(path)
 }
 
+/// Reads a files contents into lines.
 pub fn read_file_to_lines(file: &mut File) -> Result<Vec<Cow<'static, str>>, Error> {
     BufReader::new(file)
         .lines()

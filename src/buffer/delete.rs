@@ -29,13 +29,12 @@ pub fn selection(doc: &mut Document, view: &mut Viewport, sel: &mut Option<Curso
     } else {
         let (start_line, remaining_lines) = doc.buff.split_at_mut(start.y + 1);
         let end_line = &remaining_lines[end.y - (start.y + 1)];
-        let tail = {
-            let start_idx = end_line
-                .char_indices()
-                .nth(end.x)
-                .map_or(end_line.len(), |(idx, _)| idx);
-            &end_line[start_idx..]
-        };
+
+        let start_idx = end_line
+            .char_indices()
+            .nth(end.x)
+            .map_or(end_line.len(), |(idx, _)| idx);
+        let tail = &end_line[start_idx..];
 
         let start_idx = start_line[start.y]
             .char_indices()
@@ -48,7 +47,7 @@ pub fn selection(doc: &mut Document, view: &mut Viewport, sel: &mut Option<Curso
         doc.buff.drain((start.y + 1)..=end.y);
     }
 
-    // Allign the cursor
+    // Align the cursor
     if cur.y > start.y {
         let diff = cur.y - start.y;
         cursor::up(doc, view, diff);
@@ -72,6 +71,7 @@ pub fn line(doc: &mut Document, view: &mut Viewport, n: usize) {
         doc.remove_line();
         if doc.buff.is_empty() {
             doc.insert_line(Cow::from(""));
+            break;
         }
         if doc.cur.y == doc.buff.len() {
             cursor::up(doc, view, 1);

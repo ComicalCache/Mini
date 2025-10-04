@@ -120,6 +120,7 @@ enum OtherMode {
     Write,
 }
 
+/// A text buffer.
 pub struct TextBuffer {
     base: BaseBuffer<OtherMode, OtherViewAction, ()>,
     file: Option<File>,
@@ -134,12 +135,7 @@ impl TextBuffer {
             None
         };
 
-        let count = if let Some(content) = &contents {
-            content.len()
-        } else {
-            1
-        };
-        let mut base = BaseBuffer::new(w, h, count, contents)?;
+        let mut base = BaseBuffer::new(w, h, contents)?;
         {
             use OtherViewAction::*;
             use ViewAction::Other;
@@ -215,6 +211,7 @@ impl TextBuffer {
         })
     }
 
+    /// Creates an info line
     fn info_line(&mut self) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
 
@@ -254,6 +251,7 @@ impl TextBuffer {
         Ok(())
     }
 
+    /// Handles self defined view actions.
     fn view_action(&mut self, action: OtherViewAction) -> CommandResult {
         use OtherMode::Write;
         use OtherViewAction::*;
@@ -344,6 +342,7 @@ impl TextBuffer {
         CommandResult::Ok
     }
 
+    /// Handles write mode ticks.
     fn write_tick(&mut self, key: Option<Key>) -> CommandResult {
         use crate::state_machine::StateMachineResult::{Action as A, Incomplete, Invalid};
         #[allow(clippy::enum_glob_use)]
@@ -371,6 +370,7 @@ impl TextBuffer {
         CommandResult::Ok
     }
 
+    /// Handles self apply and self defined command ticks.
     fn command_tick(&mut self, tick: CommandTick<()>) -> CommandResult {
         use CommandTick::*;
 
