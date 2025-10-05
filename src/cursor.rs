@@ -1,4 +1,5 @@
 use crate::{document::Document, viewport::Viewport};
+use std::borrow::Cow;
 
 #[derive(Clone, Copy)]
 /// A cursor position in a document or viewport.
@@ -55,6 +56,43 @@ impl PartialOrd for Cursor {
 
         // Compare x coordinates second.
         self.x.partial_cmp(&other.x)
+    }
+}
+
+/// Calculates the position of a cursor after skipping the supplied text.
+pub fn end_pos(start: &Cursor, text: &Cow<'static, str>) -> Cursor {
+    let mut end = *start;
+
+    let mut count = 0;
+    let mut offset = 0;
+    for line in text.split("\n") {
+        count += 1;
+        offset = line.chars().count();
+    }
+
+    end.y += count - 1;
+    if start.y == end.y {
+        // The offset is additive on the same line.
+        end.x += offset;
+    } else {
+        end.x = offset;
+    }
+
+    end
+}
+
+/// Moves the cursor to a specific position.
+pub fn move_to(doc: &mut Document, view: &mut Viewport, pos: Cursor) {
+    if pos.y < doc.cur.y {
+        up(doc, view, doc.cur.y - pos.y);
+    } else if pos.y > doc.cur.y {
+        down(doc, view, pos.y - doc.cur.y);
+    }
+
+    if pos.x < doc.cur.x {
+        left(doc, view, doc.cur.x - pos.x);
+    } else if pos.x > doc.cur.x {
+        right(doc, view, pos.x - doc.cur.x);
     }
 }
 

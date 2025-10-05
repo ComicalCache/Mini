@@ -1,6 +1,7 @@
 pub mod base;
 pub mod delete;
 pub mod edit;
+pub mod history;
 pub mod yank;
 
 use crate::util::CommandResult;

@@ -1,4 +1,5 @@
 mod apply_command;
+mod history;
 mod insert;
 
 use crate::{
@@ -7,6 +8,7 @@ use crate::{
         Buffer,
         base::{BaseBuffer, CommandTick, Mode, ViewAction},
         delete, edit,
+        history::History,
     },
     change_buffer,
     cursor::{self, Cursor},
@@ -24,12 +26,17 @@ use termion::{event::Key, raw::RawTerminal};
 
 macro_rules! delete {
     ($self:ident, $func:ident) => {
-        delete::$func(&mut $self.base.doc, &mut $self.base.view)
+        delete::$func(
+            &mut $self.base.doc,
+            &mut $self.base.view,
+            Some(&mut $self.history),
+        )
     };
     ($self:ident, $func:ident, REPEAT) => {
         delete::$func(
             &mut $self.base.doc,
             &mut $self.base.view,
+            Some(&mut $self.history),
             $self.base.motion_repeat.parse::<usize>().unwrap_or(1),
         )
     };
@@ -38,19 +45,25 @@ macro_rules! delete {
             &mut $self.base.doc,
             &mut $self.base.view,
             &mut $self.base.sel,
+            Some(&mut $self.history),
         )
     };
 }
 
 macro_rules! change {
     ($self:ident, $func:ident) => {{
-        delete::$func(&mut $self.base.doc, &mut $self.base.view);
+        delete::$func(
+            &mut $self.base.doc,
+            &mut $self.base.view,
+            Some(&mut $self.history),
+        );
         $self.base.change_mode(Mode::Other(Write));
     }};
     ($self:ident, $func:ident, REPEAT) => {{
         delete::$func(
             &mut $self.base.doc,
             &mut $self.base.view,
+            Some(&mut $self.history),
             $self.base.motion_repeat.parse::<usize>().unwrap_or(1),
         );
         $self.base.change_mode(Mode::Other(Write));
@@ -99,6 +112,10 @@ enum OtherViewAction {
 
     // Paste
     Paste,
+
+    // History
+    Undo,
+    Redo,
 }
 
 #[derive(Clone, Copy)]
@@ -124,6 +141,7 @@ enum OtherMode {
 pub struct TextBuffer {
     base: BaseBuffer<OtherMode, OtherViewAction, ()>,
     file: Option<File>,
+    history: History,
     write_state_machine: StateMachine<WriteAction>,
 }
 
@@ -183,7 +201,9 @@ impl TextBuffer {
                 .prefix(Key::Char('r'), |key| match key {
                     Key::Char(ch) => Some(ChainResult::Action(Other(ReplaceChar(ch)))),
                     _ => None,
-                });
+                })
+                .simple(Key::Char('u'), Other(Undo))
+                .simple(Key::Char('U'), Other(Redo));
         }
 
         let write_state_machine = {
@@ -207,6 +227,7 @@ impl TextBuffer {
         Ok(TextBuffer {
             base,
             file,
+            history: History::new(),
             write_state_machine,
         })
     }
@@ -288,12 +309,21 @@ impl TextBuffer {
             DeleteToEndOfFile => delete!(self, end_of_file),
             DeleteToBeginningOfFile => delete!(self, beginning_of_file),
             ChangeSelection => {
-                delete::selection(&mut self.base.doc, &mut self.base.view, &mut self.base.sel);
+                delete::selection(
+                    &mut self.base.doc,
+                    &mut self.base.view,
+                    &mut self.base.sel,
+                    Some(&mut self.history),
+                );
                 self.base.change_mode(Mode::Other(Write));
             }
             ChangeLine => {
                 cursor::jump_to_beginning_of_line(&mut self.base.doc, &mut self.base.view);
-                delete::end_of_line(&mut self.base.doc, &mut self.base.view);
+                delete::end_of_line(
+                    &mut self.base.doc,
+                    &mut self.base.view,
+                    Some(&mut self.history),
+                );
                 self.base.change_mode(Mode::Other(Write));
             }
             ChangeLeft => change!(self, left, REPEAT),
@@ -329,12 +359,22 @@ impl TextBuffer {
                     self.base.doc.delete_char();
 
                     match ch {
-                        '\n' => edit::write_new_line_char(&mut self.base.doc, &mut self.base.view),
-                        '\t' => edit::write_tab(&mut self.base.doc, &mut self.base.view),
+                        '\n' => edit::write_new_line_char(
+                            &mut self.base.doc,
+                            &mut self.base.view,
+                            Some(&mut self.history),
+                        ),
+                        '\t' => edit::write_tab(
+                            &mut self.base.doc,
+                            &mut self.base.view,
+                            Some(&mut self.history),
+                        ),
                         _ => self.base.doc.write_char(ch),
                     }
                 }
             }
+            Undo => self.undo(),
+            Redo => self.redo(),
         }
 
         // Rest motion repeat buffer after successful command.
@@ -356,12 +396,29 @@ impl TextBuffer {
             A(Right) => cursor::right(&mut self.base.doc, &mut self.base.view, 1),
             A(NextWord) => cursor::next_word(&mut self.base.doc, &mut self.base.view, 1),
             A(PrevWord) => cursor::prev_word(&mut self.base.doc, &mut self.base.view, 1),
-            A(Newline) => edit::write_new_line_char(&mut self.base.doc, &mut self.base.view),
-            A(Tab) => edit::write_tab(&mut self.base.doc, &mut self.base.view),
-            A(DeleteChar) => edit::delete_char(&mut self.base.doc, &mut self.base.view),
+            A(Newline) => edit::write_new_line_char(
+                &mut self.base.doc,
+                &mut self.base.view,
+                Some(&mut self.history),
+            ),
+            A(Tab) => edit::write_tab(
+                &mut self.base.doc,
+                &mut self.base.view,
+                Some(&mut self.history),
+            ),
+            A(DeleteChar) => edit::delete_char(
+                &mut self.base.doc,
+                &mut self.base.view,
+                Some(&mut self.history),
+            ),
             Invalid => {
                 if let Some(Key::Char(ch)) = key {
-                    edit::write_char(&mut self.base.doc, &mut self.base.view, ch);
+                    edit::write_char(
+                        &mut self.base.doc,
+                        &mut self.base.view,
+                        Some(&mut self.history),
+                        ch,
+                    );
                 }
             }
             Incomplete => {}
@@ -443,6 +500,8 @@ impl Buffer for TextBuffer {
         self.base.sel = None;
         self.base.change_mode(Mode::View);
         self.base.motion_repeat.clear();
+
+        self.history.clear();
 
         self.base.rerender = true;
     }

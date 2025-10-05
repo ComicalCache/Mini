@@ -362,12 +362,12 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             A(NextWord) => cursor::next_word(&mut self.cmd, &mut self.view, 1),
             A(PrevWord) => cursor::prev_word(&mut self.cmd, &mut self.view, 1),
             A(Newline) => return Err(CommandTick::Apply),
-            A(Tab) => edit::write_tab(&mut self.cmd, &mut self.view),
-            A(DeleteChar) => edit::delete_char(&mut self.cmd, &mut self.view),
+            A(Tab) => edit::write_tab(&mut self.cmd, &mut self.view, None),
+            A(DeleteChar) => edit::delete_char(&mut self.cmd, &mut self.view, None),
             A(Other(tick)) => return Err(CommandTick::Other(tick)),
             Invalid => {
                 if let Some(Key::Char(ch)) = key {
-                    edit::write_char(&mut self.cmd, &mut self.view, ch);
+                    edit::write_char(&mut self.cmd, &mut self.view, None, ch);
                 }
             }
             Incomplete => {}

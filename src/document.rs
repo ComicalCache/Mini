@@ -138,22 +138,25 @@ impl Document {
     }
 
     /// Deletes a char at the current cursor position.
-    pub fn delete_char(&mut self) {
-        self.delete_char_at(self.cur.x, self.cur.y);
+    pub fn delete_char(&mut self) -> Option<char> {
+        self.delete_char_at(self.cur.x, self.cur.y)
     }
 
     /// Deletes a char at a specified position.
-    pub fn delete_char_at(&mut self, x: usize, y: usize) {
+    pub fn delete_char_at(&mut self, x: usize, y: usize) -> Option<char> {
         if y >= self.buff.len() {
-            return;
+            return None;
         }
 
         let line = &mut self.buff[y];
         let Some((idx, _)) = line.char_indices().nth(x) else {
-            return;
+            return None;
         };
-        line.to_mut().remove(idx);
+
+        let ret = line.to_mut().remove(idx);
         self.edited = true;
+
+        Some(ret)
     }
 
     /// Writes a str at the current cursor position.
@@ -172,7 +175,7 @@ impl Document {
             return;
         }
 
-        let mut lines = r#str.lines();
+        let mut lines = r#str.split("\n");
 
         // Insertion point of current line.
         let line = &mut self.buff[y];
@@ -193,6 +196,51 @@ impl Document {
 
         // Append tail.
         self.buff[y].to_mut().push_str(&tail);
+
+        self.edited = true;
+    }
+
+    /// Removes a range of text from the document.
+    pub fn remove_range(&mut self, pos1: Cursor, pos2: Cursor) {
+        let (start, end) = if pos1 <= pos2 {
+            (pos1, pos2)
+        } else {
+            (pos2, pos1)
+        };
+
+        if start.y == end.y {
+            // Single-line deletion.
+            let line = &mut self.buff[start.y];
+            let start_idx = line
+                .char_indices()
+                .nth(start.x)
+                .map_or(line.len(), |(idx, _)| idx);
+            let end_idx = line
+                .char_indices()
+                .nth(end.x)
+                .map_or(line.len(), |(idx, _)| idx);
+
+            line.to_mut().drain(start_idx..end_idx);
+        } else {
+            // Multi-line deletion.
+            let end_line = &self.buff[end.y];
+            let end_idx = end_line
+                .char_indices()
+                .nth(end.x)
+                .map_or(end_line.len(), |(idx, _)| idx);
+            let tail = end_line[end_idx..].to_string();
+
+            let start_line = &mut self.buff[start.y];
+            let start_idx = start_line
+                .char_indices()
+                .nth(start.x)
+                .map_or(start_line.len(), |(idx, _)| idx);
+            start_line.to_mut().truncate(start_idx);
+            start_line.to_mut().push_str(&tail);
+
+            // Remove the in-between lines.
+            self.buff.drain(start.y + 1..=end.y);
+        }
 
         self.edited = true;
     }
