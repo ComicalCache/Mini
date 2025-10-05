@@ -293,7 +293,7 @@ impl TextBuffer {
             }
             ChangeLine => {
                 cursor::jump_to_beginning_of_line(&mut self.base.doc, &mut self.base.view);
-                self.base.doc.buff[self.base.doc.cur.y].to_mut().clear();
+                delete::end_of_line(&mut self.base.doc, &mut self.base.view);
                 self.base.change_mode(Mode::Other(Write));
             }
             ChangeLeft => change!(self, left, REPEAT),

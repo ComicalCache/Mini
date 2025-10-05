@@ -43,8 +43,7 @@ impl FilesBuffer {
         use OtherViewAction::*;
 
         let mut entries = Vec::new();
-        let mut contents = Vec::new();
-        FilesBuffer::load_dir(&path, &mut entries, &mut contents)?;
+        let contents = FilesBuffer::load_dir(&path, &mut entries)?;
 
         let mut base = BaseBuffer::new(w, h, Some(contents))?;
         base.view_state_machine.command_map = base
@@ -109,17 +108,16 @@ impl FilesBuffer {
         use OtherViewAction::*;
 
         match action {
-            Refresh => {
-                if let Err(err) =
-                    FilesBuffer::load_dir(&self.path, &mut self.entries, &mut self.base.doc.buff)
-                {
+            Refresh => match FilesBuffer::load_dir(&self.path, &mut self.entries) {
+                Ok(contents) => self.base.doc.set_contents(&contents, 0, 0),
+                Err(err) => {
                     return CommandResult::SetAndChangeBuffer(
                         INFO_BUFF_IDX,
                         vec![Cow::from(err.to_string())],
                         None,
                     );
                 }
-            }
+            },
             SelectItem => {
                 return self
                     .select_item()

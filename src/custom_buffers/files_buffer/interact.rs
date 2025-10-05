@@ -10,17 +10,16 @@ impl FilesBuffer {
     pub(super) fn load_dir(
         base: &PathBuf,
         entries: &mut Vec<PathBuf>,
-        contents: &mut Vec<Cow<'static, str>>,
-    ) -> Result<(), Error> {
+    ) -> Result<Vec<Cow<'static, str>>, Error> {
         let mut tmp_entries = read_dir(base)?
             .map(|res| res.map(|e| e.path()))
             .collect::<Result<Vec<_>, Error>>()?;
         tmp_entries.sort();
         *entries = tmp_entries;
 
-        let mut tmp_contents = vec![Cow::from("..")];
+        let mut contents = vec![Cow::from("..")];
         for entry in &mut entries.iter() {
-            tmp_contents.push(if entry.is_symlink() {
+            contents.push(if entry.is_symlink() {
                 let path = entry.read_link()?;
                 if path.is_dir() {
                     Cow::from(format!("{} -> {}/", entry.display(), path.display()))
@@ -34,9 +33,7 @@ impl FilesBuffer {
             });
         }
 
-        *contents = tmp_contents;
-
-        Ok(())
+        Ok(contents)
     }
 
     /// Handles the user selection of an entry in the file buffer.
@@ -45,9 +42,11 @@ impl FilesBuffer {
 
         // Move directory up.
         if idx == 0 && self.path.pop() {
-            cursor::jump_to_beginning_of_file(&mut self.base.doc, &mut self.base.view);
-
-            FilesBuffer::load_dir(&self.path, &mut self.entries, &mut self.base.doc.buff)?;
+            self.base.doc.set_contents(
+                &FilesBuffer::load_dir(&self.path, &mut self.entries)?,
+                0,
+                0,
+            );
             return Ok(CommandResult::Ok);
         }
 
@@ -63,10 +62,13 @@ impl FilesBuffer {
                 Some(self.path.clone()),
             ));
         } else if entry.is_dir() {
-            cursor::jump_to_beginning_of_file(&mut self.base.doc, &mut self.base.view);
             self.path.clone_from(entry);
 
-            FilesBuffer::load_dir(&self.path, &mut self.entries, &mut self.base.doc.buff)?;
+            self.base.doc.set_contents(
+                &FilesBuffer::load_dir(&self.path, &mut self.entries)?,
+                0,
+                0,
+            );
             return Ok(CommandResult::Ok);
         } else if entry.is_symlink() && entry.exists() {
             self.path = entry.read_link()?;
