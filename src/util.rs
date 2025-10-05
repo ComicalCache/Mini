@@ -40,3 +40,19 @@ pub fn read_file_to_lines(file: &mut File) -> Result<Vec<Cow<'static, str>>, Err
         .map(|l| l.map(Cow::from))
         .collect::<Result<Vec<Cow<'static, str>>, _>>()
 }
+
+/// Parses a line column string 'y:x' where y is the line and x is the column.
+pub fn line_column(input: &str) -> (Option<usize>, Option<usize>) {
+    let mut y: Option<usize> = None;
+    let mut x: Option<usize> = None;
+
+    if let Some((y_str, x_str)) = input.split_once(':') {
+        y = y_str.parse::<usize>().ok();
+        x = x_str.parse::<usize>().ok();
+    } else if !input.is_empty() {
+        // Only y was supplied.
+        y = input.parse::<usize>().ok();
+    }
+
+    (x, y)
+}

@@ -23,6 +23,14 @@ Additionally by pressing 'v' you can start a selection. A selection marks a char
 the selected character and the current cursor position. This is visualized through highlighting the selected area.
 Using 'yv' you can yank that selection.
 
+Furthermore, all buffers support following command:
+- 'q' to quit
+- 'qq' to force quit, discarding unsaved changes
+- '?' to see this message
+- 'goto <line>:<column>' to jump to an absolute line number and column. If the column is omitted it jums to the
+    beginning of the line. If the line is missing it jumps to the column in the current line. Particularly ':' does
+    nothing.
+
 Text Buffer:
 This is probably the most important buffer. It contains the editor window where you can edit your files and is the
 buffer that you'll be presented with when opening the editor. It has three modes: view mode, input mode, and command
@@ -55,16 +63,12 @@ mode.
     Command Mode:
     In command mode you can issue editor commands. You enter command mode by pressing space, typing in your command and
     hitting enter to execute it, or escape to abort. The following are valid commands:
-    - 'q' to quit
-    - 'qq' to force quit, discarding unsaved changes
-    - '?' to see this message
     - 'w' to write the buffer to file
     - 'w <path>' to write this/all future writes to the specified path
     - 'o ?<path>' to open a file and replace the buffer (if the path is omitted a new "scratchpad" buffer with no
         backing file is created)
     - 'oo ?<path>' to open a file and replace the buffer, discarding unsaved changes (if the path is omitted a new
         "scratchpad" buffer with no backing file is created)
-    - <line number> to jump to an absolute line number
 
 Info Buffer:
 The info buffer is a read only buffer that displays errors, warnings or other types of information. It has two modes:
@@ -75,11 +79,7 @@ view mode and command mode.
     Command Mode:
     In command mode you can issue editor commands. You enter command mode by pressing space, typing in your command and
     hitting enter to execute it, or escape to abort. The following are valid commands:
-    - 'q' to quit
-    - 'qq' to force quit, discarding unsaved changes
-    - '?' to see this message
     - 'clear' to clear the info buffer
-    - <line number> to jump to an absolute line number
 
 Files Buffer:
 The files buffer is a small file browser to browse directories, starting initially at the current path, and open files.
@@ -90,8 +90,4 @@ command mode.
 
     Command Mode:
     In command mode you can issue editor commands. You enter command mode by pressing space, typing in your command and
-    hitting enter to execute it, or escape to abort. The following are valid commands:
-    - 'q' to quit
-    - 'qq' to force quit, discarding unsaved changes
-    - '?' to see this message
-    - <line number> to jump to an absolute line number
+    hitting enter to execute it, or escape to abort.

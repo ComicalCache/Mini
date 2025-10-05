@@ -141,6 +141,11 @@ pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
     /// The viewport of the buffer.
     pub view: Viewport,
 
+    /// The document cursor position before command mode.
+    pub doc_cur_bak: Cursor,
+    /// The view cursor position before command mode.
+    pub view_cur_bak: Cursor,
+
     /// Marker of the start of the selection.
     pub sel: Option<Cursor>,
     /// The current buffer mode.
@@ -238,6 +243,8 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             doc: Document::new(0, 0, contents),
             cmd: Document::new(0, 0, None),
             view: Viewport::new(w, h, 0, 0, count),
+            doc_cur_bak: Cursor::new(0, 0),
+            view_cur_bak: Cursor::new(0, 0),
             sel: None,
             mode: Mode::View,
             motion_repeat: String::new(),
@@ -262,20 +269,22 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             Mode::Command => {
                 // Clear command line so its ready for next entry.
                 self.cmd.buff[0].to_mut().clear();
-
-                // Set cursor to the beginning of line so its always at a predictable position.
-                // TODO: restore prev position.
-                cursor::left(&mut self.doc, &mut self.view, self.cmd.cur.x);
-
                 self.cmd.cur = Cursor::new(0, 0);
+
+                // Restore cursor position from before entering command mode.
+                self.doc.cur = self.doc_cur_bak;
+                self.view.cur = self.view_cur_bak;
             }
             Mode::View | Mode::Other(_) => {}
         }
 
         match mode {
             Mode::Command => {
+                // Store cursor position before entering command mode.
+                self.doc_cur_bak = self.doc.cur;
+                self.view_cur_bak = self.view.cur;
+
                 // Set cursor to the beginning of line to avoid weird scrolling behaviour.
-                // TODO: save curr position and restore.
                 cursor::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
             }
             Mode::View | Mode::Other(_) => {}

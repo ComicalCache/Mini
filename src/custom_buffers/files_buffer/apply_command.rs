@@ -1,19 +1,20 @@
 use crate::{
-    INFO_BUFF_IDX, INFO_MSG, cursor, custom_buffers::files_buffer::FilesBuffer, util::CommandResult,
+    INFO_BUFF_IDX, INFO_MSG, cursor,
+    custom_buffers::files_buffer::FilesBuffer,
+    util::{CommandResult, line_column},
 };
 use std::borrow::Cow;
 
 impl FilesBuffer {
     /// Applies the command entered during command mode.
-    pub fn apply_command(&mut self) -> CommandResult {
-        if self.base.cmd.buff[0].is_empty() {
+    pub fn apply_command(&mut self, cmd: &str) -> CommandResult {
+        if cmd.is_empty() {
             return CommandResult::Ok;
         }
 
-        let cmd_buff = self.base.cmd.buff[0].clone();
-        let (cmd, _) = match cmd_buff.split_once(char::is_whitespace) {
-            Some((cmd, args)) => (cmd, args),
-            None => (cmd_buff.as_str(), ""),
+        let (cmd, args) = match cmd.split_once(char::is_whitespace) {
+            Some((cmd, args)) => (cmd.trim(), args.trim()),
+            None => (cmd.trim(), ""),
         };
 
         match cmd {
@@ -24,18 +25,17 @@ impl FilesBuffer {
                 INFO_MSG.lines().map(Cow::from).collect(),
                 None,
             ),
-            _ => {
-                if let Ok(dest) = cmd.parse::<usize>() {
-                    cursor::jump_to_line(&mut self.base.doc, &mut self.base.view, dest);
-                    return CommandResult::Ok;
-                }
+            "goto" => {
+                let (x, y) = line_column(args);
+                cursor::jump_to_line_and_column(&mut self.base.doc, &mut self.base.view, x, y);
 
-                CommandResult::SetAndChangeBuffer(
-                    INFO_BUFF_IDX,
-                    vec![Cow::from(format!("Unrecognized command: '{cmd}'"))],
-                    None,
-                )
+                CommandResult::Ok
             }
+            _ => CommandResult::SetAndChangeBuffer(
+                INFO_BUFF_IDX,
+                vec![Cow::from(format!("Unrecognized command: '{cmd}'"))],
+                None,
+            ),
         }
     }
 }

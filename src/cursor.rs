@@ -96,16 +96,37 @@ pub fn down(doc: &mut Document, view: &mut Viewport, n: usize) {
     view.cur.x = doc.cur.x.min(view.buff_w - 1);
 }
 
-/// Jumps the cursors to a specific line (or the first/last line if out of bounds).
-pub fn jump_to_line(doc: &mut Document, view: &mut Viewport, mut dest: usize) {
-    // At most the len of the buffer, at least 1, then subtract one to get the correct index.
-    dest = dest.min(doc.buff.len()).max(1) - 1;
+/// Jumps the cursors to a specific line and column
+/// (or the first/last line/character if out of bounds).
+pub fn jump_to_line_and_column(
+    doc: &mut Document,
+    view: &mut Viewport,
+    x: Option<usize>,
+    y: Option<usize>,
+) {
+    if let Some(mut y) = y {
+        // At most the len of the buffer, at least 1, then subtract one to get the correct index.
+        y = y.min(doc.buff.len()).max(1) - 1;
 
-    let y = doc.cur.y;
-    if dest < y {
-        up(doc, view, y - dest);
-    } else if dest > y {
-        down(doc, view, dest - y);
+        if y < doc.cur.y {
+            up(doc, view, doc.cur.y - y);
+        } else if y > doc.cur.y {
+            down(doc, view, y - doc.cur.y);
+        }
+    }
+
+    if let Some(mut x) = x {
+        // At most the len of the line, at least 1, then subtract one to get the correct index.
+        x = x
+            .min(doc.line_count(doc.cur.y).expect("Illegal state"))
+            .max(1)
+            - 1;
+
+        if x < doc.cur.x {
+            left(doc, view, doc.cur.x - x);
+        } else if x > doc.cur.x {
+            right(doc, view, x - doc.cur.x);
+        }
     }
 }
 

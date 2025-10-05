@@ -147,10 +147,11 @@ impl FilesBuffer {
 
         match tick {
             Apply => {
-                let res = self.apply_command();
+                // Commands have only one line.
+                let cmd = self.base.cmd.buff[0].clone();
                 self.base.change_mode(Mode::View);
 
-                res
+                self.apply_command(&cmd)
             }
             Other(()) => unreachable!("Illegal state"),
         }
