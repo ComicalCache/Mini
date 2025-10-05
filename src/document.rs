@@ -149,9 +149,7 @@ impl Document {
         }
 
         let line = &mut self.buff[y];
-        let Some((idx, _)) = line.char_indices().nth(x) else {
-            return None;
-        };
+        let (idx, _) = line.char_indices().nth(x)?;
 
         let ret = line.to_mut().remove(idx);
         self.edited = true;
@@ -175,7 +173,7 @@ impl Document {
             return;
         }
 
-        let mut lines = r#str.split("\n");
+        let mut lines = r#str.split('\n');
 
         // Insertion point of current line.
         let line = &mut self.buff[y];

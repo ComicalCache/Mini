@@ -23,7 +23,7 @@ impl TextBuffer {
                     cursor::end_pos(pos, data),
                 );
             }
-        };
+        }
 
         self.history.push_redo(change);
     }
@@ -49,7 +49,7 @@ impl TextBuffer {
                 self.base.doc.remove_range(*pos, cursor::end_pos(pos, data));
                 cursor::move_to(&mut self.base.doc, &mut self.base.view, *pos);
             }
-        };
+        }
 
         self.history.push_undo(change);
     }

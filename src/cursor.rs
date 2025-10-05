@@ -1,5 +1,4 @@
 use crate::{document::Document, viewport::Viewport};
-use std::borrow::Cow;
 
 #[derive(Clone, Copy)]
 /// A cursor position in a document or viewport.
@@ -60,12 +59,12 @@ impl PartialOrd for Cursor {
 }
 
 /// Calculates the position of a cursor after skipping the supplied text.
-pub fn end_pos(start: &Cursor, text: &Cow<'static, str>) -> Cursor {
+pub fn end_pos(start: &Cursor, text: &str) -> Cursor {
     let mut end = *start;
 
     let mut count = 0;
     let mut offset = 0;
-    for line in text.split("\n") {
+    for line in text.split('\n') {
         count += 1;
         offset = line.chars().count();
     }
@@ -176,11 +175,28 @@ pub fn next_word(doc: &mut Document, view: &mut Viewport, n: usize) {
 }
 
 fn __next_word(doc: &mut Document, view: &mut Viewport) {
-    let cur = doc.cur;
-    let line = &doc.buff[cur.y];
-    // Return early if at end of line.
-    if line.chars().count() < cur.x {
-        return;
+    let cur;
+    let line;
+
+    // Move line down if at end of line and not at end of document.
+    if doc.buff[doc.cur.y].chars().count() <= doc.cur.x && doc.cur.y < doc.buff.len() - 1 {
+        jump_to_beginning_of_line(doc, view);
+        down(doc, view, 1);
+
+        // If empty line or not whitespace, abort.
+        if doc.buff[doc.cur.y]
+            .chars()
+            .next()
+            .is_none_or(|ch| !ch.is_whitespace())
+        {
+            return;
+        }
+
+        cur = doc.cur;
+        line = &doc.buff[cur.y];
+    } else {
+        cur = doc.cur;
+        line = &doc.buff[cur.y];
     }
 
     let Some(curr) = line.chars().nth(cur.x) else {
@@ -226,14 +242,25 @@ pub fn prev_word(doc: &mut Document, view: &mut Viewport, n: usize) {
 }
 
 fn __prev_word(doc: &mut Document, view: &mut Viewport) {
-    let cur = doc.cur;
+    let cur;
+    let line;
 
-    // Return early if already at beginning of line.
-    if cur.x == 0 {
-        return;
+    // Move line up if at beginning of line and not at beginning of document.
+    if doc.cur.x == 0 && doc.cur.y > 0 {
+        up(doc, view, 1);
+        jump_to_end_of_line(doc, view);
+
+        // If empty line, abort.
+        if doc.buff[doc.cur.y].is_empty() {
+            return;
+        }
+
+        cur = doc.cur;
+        line = &doc.buff[cur.y];
+    } else {
+        cur = doc.cur;
+        line = &doc.buff[cur.y];
     }
-
-    let line = &doc.buff[cur.y];
 
     // Find next non-whitespace character.
     if let Some((idx, ch)) = line

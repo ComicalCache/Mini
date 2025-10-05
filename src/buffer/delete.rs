@@ -20,10 +20,10 @@ pub fn selection(
     let cur = doc.cur;
     let (start, end) = if pos <= cur { (pos, cur) } else { (cur, pos) };
 
-    if let Some(history) = history {
-        if let Some(data) = doc.get_range(start, end) {
-            history.add_change(Change::Delete { pos: start, data });
-        }
+    if let Some(history) = history
+        && let Some(data) = doc.get_range(start, end)
+    {
+        history.add_change(Change::Delete { pos: start, data });
     }
     doc.remove_range(start, end);
 
@@ -56,13 +56,13 @@ pub fn line(doc: &mut Document, view: &mut Viewport, history: Option<&mut Histor
         data.as_mut().expect("Illegal state").push('\n');
     }
 
-    if let Some(history) = history {
-        if !data.as_ref().expect("Illegal state").is_empty() {
-            history.add_change(Change::Delete {
-                pos: Cursor::new(0, doc.cur.y),
-                data: Cow::from(data.expect("Illegal state")),
-            });
-        }
+    if let Some(history) = history
+        && !data.as_ref().expect("Illegal state").is_empty()
+    {
+        history.add_change(Change::Delete {
+            pos: Cursor::new(0, doc.cur.y),
+            data: Cow::from(data.expect("Illegal state")),
+        });
     }
 
     // Adjust cursor.
