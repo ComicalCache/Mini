@@ -1,27 +1,31 @@
 use crate::{document::Document, viewport::Viewport};
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy)]
 /// A cursor position in a document or viewport.
 pub struct Cursor {
-    /// Y position. The y position preceeds the x position to make sorting easier.
-    pub y: usize,
     /// X position.
     pub x: usize,
+    /// Target x position when scrolling through lines of varying lengths.
+    target_x: usize,
+    /// Y position.
+    pub y: usize,
 }
 
 impl Cursor {
     pub fn new(x: usize, y: usize) -> Self {
-        Cursor { y, x }
+        Cursor { y, target_x: x, x }
     }
 
     /// Moves the cursor to the left.
     fn left(&mut self, n: usize, bound: usize) {
         self.x = self.x.saturating_sub(n).max(bound);
+        self.target_x = self.x;
     }
 
     /// Moves the cursor to the right with a bound.
     fn right(&mut self, n: usize, bound: usize) {
         self.x = (self.x + n).min(bound);
+        self.target_x = self.x;
     }
 
     /// Moves the cursor up.
@@ -32,6 +36,25 @@ impl Cursor {
     /// Moves the cursor down with a bound.
     fn down(&mut self, n: usize, bound: usize) {
         self.y = (self.y + n).min(bound);
+    }
+}
+
+impl PartialEq for Cursor {
+    fn eq(&self, other: &Self) -> bool {
+        self.y == other.y && self.x == other.x
+    }
+}
+
+impl PartialOrd for Cursor {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        // Compare y coordinates first.
+        match self.y.partial_cmp(&other.y) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+
+        // Compare x coordinates second.
+        self.x.partial_cmp(&other.x)
     }
 }
 
@@ -56,11 +79,8 @@ pub fn up(doc: &mut Document, view: &mut Viewport, n: usize) {
 
     // When moving up, handle case that new line contains less text than previous.
     let line_bound = doc.line_count(doc.cur.y).expect("Illegal state");
-    if doc.cur.x >= line_bound {
-        let diff = doc.cur.x - line_bound;
-        doc.cur.left(diff, 0);
-        view.cur.left(diff, 0);
-    }
+    doc.cur.x = doc.cur.target_x.min(line_bound);
+    view.cur.x = doc.cur.x.min(view.buff_w - 1);
 }
 
 /// Moves the cursors down.
@@ -72,11 +92,8 @@ pub fn down(doc: &mut Document, view: &mut Viewport, n: usize) {
 
     // When moving down, handle case that new line contains less text than previous.
     let line_bound = doc.line_count(doc.cur.y).expect("Illegal state");
-    if doc.cur.x >= line_bound {
-        let diff = doc.cur.x - line_bound;
-        doc.cur.left(diff, 0);
-        view.cur.left(diff, 0);
-    }
+    doc.cur.x = doc.cur.target_x.min(line_bound);
+    view.cur.x = doc.cur.x.min(view.buff_w - 1);
 }
 
 /// Jumps the cursors to a specific line (or the first/last line if out of bounds).
