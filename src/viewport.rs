@@ -202,8 +202,7 @@ impl Viewport {
                             content
                                 .char_indices()
                                 .nth(start.x)
-                                .map(|(idx, _)| idx)
-                                .expect("Illegal state")
+                                .map_or(content.len(), |(idx, _)| idx)
                         };
                         let sel_end_idx = if end.x >= upper {
                             // Selection started outside of window.
@@ -212,8 +211,7 @@ impl Viewport {
                             content
                                 .char_indices()
                                 .nth(end.x)
-                                .map(|(idx, _)| idx)
-                                .expect("Illegal state")
+                                .map_or(content.len(), |(idx, _)| idx)
                         };
 
                         if sel_start_idx > start_idx {
@@ -236,8 +234,7 @@ impl Viewport {
                             content
                                 .char_indices()
                                 .nth(start.x)
-                                .map(|(idx, _)| idx)
-                                .expect("Illegal state")
+                                .map_or(content.len(), |(idx, _)| idx)
                         };
 
                         if sel_start_idx > start_idx {
@@ -258,8 +255,7 @@ impl Viewport {
                             content
                                 .char_indices()
                                 .nth(end.x)
-                                .map(|(idx, _)| idx)
-                                .expect("Illegal state")
+                                .map_or(content.len(), |(idx, _)| idx)
                         };
 
                         write!(stdout, "{SEL}{}", &content[start_idx..sel_end_idx])?;

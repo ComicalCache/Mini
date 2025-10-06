@@ -1,4 +1,6 @@
 use crate::{document::Document, viewport::Viewport};
+use regex::Regex;
+use std::borrow::Cow;
 
 #[derive(Clone, Copy)]
 /// A cursor position in a document or viewport.
@@ -391,13 +393,49 @@ pub fn jump_to_matching_opposite(doc: &mut Document, view: &mut Viewport) {
 }
 
 /// Jumps the cursors to the last line of the file.
-pub(super) fn jump_to_end_of_file(doc: &mut Document, view: &mut Viewport) {
+pub fn jump_to_end_of_file(doc: &mut Document, view: &mut Viewport) {
     down(doc, view, doc.buff.len() - (doc.cur.y + 1));
     left(doc, view, doc.cur.x);
 }
 
 /// Jumps the cursors to the first line of the file.
-pub(super) fn jump_to_beginning_of_file(doc: &mut Document, view: &mut Viewport) {
+pub fn jump_to_beginning_of_file(doc: &mut Document, view: &mut Viewport) {
     up(doc, view, doc.cur.y + 1);
     left(doc, view, doc.cur.x);
+}
+
+/// Finds the start and end cursor positions of a regex search starting at a specific position.
+pub fn regex_match(doc: &Document, regex: &Regex) -> Vec<(Cursor, Cursor)> {
+    let hay = doc.buff.join("\n");
+
+    // Calculates the cursor based from an offset.
+    let cur = |offset: usize, buff: &[Cow<'static, str>]| -> Option<Cursor> {
+        let mut count = 0;
+        for (y, line) in buff.iter().enumerate() {
+            if count + line.len() >= offset {
+                let col = line[..offset - count].chars().count();
+                return Some(Cursor::new(col, y));
+            }
+
+            // Plus one because of newline.
+            count += line.len() + 1;
+        }
+
+        if offset == count {
+            let y = buff.len().saturating_sub(1);
+            let x = if let Some(line) = buff.get(y) {
+                line.chars().count()
+            } else {
+                0
+            };
+            return Some(Cursor::new(x, y));
+        }
+
+        None
+    };
+
+    regex
+        .find_iter(&hay)
+        .filter_map(|mat| Some((cur(mat.start(), &doc.buff)?, cur(mat.end(), &doc.buff)?)))
+        .collect()
 }

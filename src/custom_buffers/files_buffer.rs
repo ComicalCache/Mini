@@ -206,6 +206,7 @@ impl Buffer for FilesBuffer {
 
         self.base.sel = None;
         self.base.motion_repeat.clear();
+        self.base.matches.clear();
 
         self.base.rerender = true;
     }

@@ -1,12 +1,13 @@
 [package]
 name = "mini"
-version = "3.141592.653589"
+version = "4.0.0"
 edition = "2024"
 
 [dependencies]
 termion = "4.0.5"
 polling = "3.11.0"
 arboard = "3.6.1"
+regex = "1.11.3"
 
 [profile.release]
 strip = true

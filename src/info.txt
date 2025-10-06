@@ -1,5 +1,3 @@
-Mini - A terminal text-editor.
-
 Run Mini with a file(path) argument to open or create a file. Omit the file(path) to create a
 "scratchpad" buffer with no backing file. A few things that make Mini interesting: it has (relative) line-numbers by
 default, it has full unicode support, undo and redo, and it contains a full file browser.
@@ -18,6 +16,8 @@ basic motions:
 - 'G' to go to the start of the file
 - 'y' + motion to yank characters that would be skipped by the motion to the clipboard
 - 'yy' to yank a line to the clipboard
+- 'n' to jump to the next search match
+- 'N' to jump to the previous search match
 
 Additionally by pressing 'v' you can start a selection. A selection marks a character and selects the text "between"
 the selected character and the current cursor position. This is visualized through highlighting the selected area.
@@ -30,6 +30,7 @@ Furthermore, all buffers support following command:
 - 'goto <line>:<column>' to jump to an absolute line number and column. If the column is omitted it jums to the
     beginning of the line. If the line is missing it jumps to the column in the current line. Particularly ':' does
     nothing.
+- 's /<regex>/' to search the document for a regular expression pattern, the matches will be selected
 
 Text Buffer:
 This is probably the most important buffer. It contains the editor window where you can edit your files and is the

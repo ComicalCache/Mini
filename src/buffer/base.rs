@@ -83,6 +83,10 @@ pub enum ViewAction<T> {
     YankToMatchingOpposite,
     YankToBeginningOfFile,
 
+    // Regex.
+    NextMatch,
+    PrevMatch,
+
     // Repeat.
     Repeat(char),
 
@@ -157,6 +161,11 @@ pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
     /// An instance of the system clipboard to yank to.
     pub clipboard: Clipboard,
 
+    /// The vector of matches of a search.
+    pub matches: Vec<(Cursor, Cursor)>,
+    /// The index of the current match for navigation.
+    matches_idx: Option<usize>,
+
     /// The state machine handling input in view mode.
     pub view_state_machine: StateMachine<ViewAction<ViewEnum>>,
     /// The state machine handling input in command mode.
@@ -207,6 +216,8 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
                     Key::Char('G') => Some(ChainResult::Action(YankToBeginningOfFile)),
                     _ => None,
                 })
+                .simple(Key::Char('n'), NextMatch)
+                .simple(Key::Char('N'), PrevMatch)
                 .simple(Key::Char('0'), Repeat('0'))
                 .simple(Key::Char('1'), Repeat('1'))
                 .simple(Key::Char('2'), Repeat('2'))
@@ -251,10 +262,36 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             mode: Mode::View,
             motion_repeat: String::new(),
             clipboard: Clipboard::new().map_err(Error::other)?,
+            matches: Vec::new(),
+            matches_idx: None,
             view_state_machine,
             cmd_state_machine,
             rerender: true,
         })
+    }
+
+    /// Jumps to the next search match if any.
+    fn next_match(&mut self) {
+        if self.matches.is_empty() {
+            return;
+        }
+        let idx = self.matches_idx.as_mut().expect("Illegal state");
+        *idx = (*idx + 1).min(self.matches.len() - 1);
+
+        self.sel = Some(self.matches[*idx].1);
+        cursor::move_to(&mut self.doc, &mut self.view, self.matches[*idx].0);
+    }
+
+    // Jumps to the previous search match if any.
+    fn prev_match(&mut self) {
+        if self.matches.is_empty() {
+            return;
+        }
+        let idx = self.matches_idx.as_mut().expect("Illegal state");
+        *idx = idx.saturating_sub(1);
+
+        self.sel = Some(self.matches[*idx].1);
+        cursor::move_to(&mut self.doc, &mut self.view, self.matches[*idx].0);
     }
 
     /// Returns the command line string and cursor position.
@@ -329,6 +366,8 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             A(YankToEndOfFile) => yank!(self, end_of_file),
             A(YankToBeginningOfFile) => yank!(self, beginning_of_file),
             A(CommandMode) => self.change_mode(Mode::Command),
+            A(NextMatch) => self.next_match(),
+            A(PrevMatch) => self.prev_match(),
             A(Repeat(ch)) => {
                 self.motion_repeat.push(ch);
 

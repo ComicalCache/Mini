@@ -494,6 +494,7 @@ impl Buffer for TextBuffer {
         self.base.sel = None;
         self.base.change_mode(Mode::View);
         self.base.motion_repeat.clear();
+        self.base.matches.clear();
 
         self.history.clear();
 

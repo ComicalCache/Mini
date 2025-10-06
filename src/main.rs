@@ -44,7 +44,8 @@ fn main() -> Result<(), std::io::Error> {
     // Print help or parse read file if argument was supplied.
     let file = if let Some(path) = args.next() {
         if path == "--help" {
-            println!("{INFO_MSG}");
+            let version = option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap();
+            println!("Mini - A terminal text-editor (v{version})\n\n{INFO_MSG}");
             return Ok(());
         }
 
