@@ -109,7 +109,10 @@ impl FilesBuffer {
 
         match action {
             Refresh => match FilesBuffer::load_dir(&self.path, &mut self.entries) {
-                Ok(contents) => self.base.doc.set_contents(&contents, 0, 0),
+                Ok(contents) => {
+                    self.base.doc.set_contents(&contents, 0, 0);
+                    self.base.doc_view.cur = Cursor::new(0, 0);
+                }
                 Err(err) => {
                     return CommandResult::SetAndChangeBuffer(
                         INFO_BUFF_IDX,

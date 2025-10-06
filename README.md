@@ -9,6 +9,8 @@ A mini terminal based file editor. It has VIm-like motions and should fully supp
 Mini can simply be built with `cargo build --release` or installed via cargo with `cargo install --path .`.
 
 ### Interface
+https://github.com/user-attachments/assets/5ef0a383-a429-4c15-afb6-0a92b715e717
+
 The editor features an info line containing information about the current buffer, editing mode, cursor position, etc..
 ![Screenshot in editor](https://github.com/ComicalCache/Mini/blob/main/media/editor.png?raw=true)
 

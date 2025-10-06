@@ -25,6 +25,9 @@ impl TextBuffer {
             .doc
             .insert_line_at(self.base.doc.cur.y + 1, Cow::from(""));
         cursor::down(&mut self.base.doc, &mut self.base.doc_view, 1);
+
+        // Set target x coordinate.
+        cursor::left(&mut self.base.doc, &mut self.base.doc_view, 0);
     }
 
     /// Replaces a character at the current cursor position.
