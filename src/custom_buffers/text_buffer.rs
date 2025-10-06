@@ -25,29 +25,32 @@ use std::{
 use termion::{event::Key, raw::RawTerminal};
 
 macro_rules! delete {
-    ($self:ident, $func:ident) => {
+    ($self:ident, $func:ident) => {{
         delete::$func(
             &mut $self.base.doc,
             &mut $self.base.view,
             Some(&mut $self.history),
-        )
-    };
-    ($self:ident, $func:ident, REPEAT) => {
+        );
+        $self.base.clear_matches();
+    }};
+    ($self:ident, $func:ident, REPEAT) => {{
         delete::$func(
             &mut $self.base.doc,
             &mut $self.base.view,
             Some(&mut $self.history),
             $self.base.motion_repeat.parse::<usize>().unwrap_or(1),
-        )
-    };
-    ($self:ident, $func:ident, SELECTION) => {
+        );
+        $self.base.clear_matches();
+    }};
+    ($self:ident, $func:ident, SELECTION) => {{
         delete::$func(
             &mut $self.base.doc,
             &mut $self.base.view,
             &mut $self.base.sel,
             Some(&mut $self.history),
-        )
-    };
+        );
+        $self.base.clear_matches();
+    }};
 }
 
 macro_rules! change {
@@ -339,8 +342,12 @@ impl TextBuffer {
                 if let Some(res) = self.paste() {
                     return res;
                 }
+                self.base.clear_matches();
             }
-            ReplaceChar(ch) => self.replace(ch),
+            ReplaceChar(ch) => {
+                self.replace(ch);
+                self.base.clear_matches();
+            }
             Undo => self.undo(),
             Redo => self.redo(),
         }

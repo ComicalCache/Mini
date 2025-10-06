@@ -294,6 +294,12 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         cursor::move_to(&mut self.doc, &mut self.view, self.matches[*idx].0);
     }
 
+    /// Clears the existing matches of the buffer.
+    pub fn clear_matches(&mut self) {
+        self.matches.clear();
+        self.matches_idx = None;
+    }
+
     /// Returns the command line string and cursor position.
     pub fn command_line(&mut self) -> Option<(String, Cursor)> {
         match self.mode {
@@ -314,7 +320,13 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
                 self.doc.cur = self.doc_cur_bak;
                 self.view.cur = self.view_cur_bak;
             }
-            Mode::View | Mode::Other(_) => {}
+            Mode::View => {
+                self.sel = None;
+                self.motion_repeat.clear();
+
+                self.clear_matches();
+            }
+            Mode::Other(_) => {}
         }
 
         match mode {
