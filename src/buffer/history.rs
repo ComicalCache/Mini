@@ -13,12 +13,14 @@ pub enum Change {
         pos: Cursor,
         data: Cow<'static, str>,
     },
-    Replace {
-        delete_pos: Cursor,
-        delete_data: Cow<'static, str>,
-        insert_pos: Cursor,
-        insert_data: Cow<'static, str>,
-    },
+    Replace(Vec<Replace>),
+}
+
+/// A change replacing data.
+pub struct Replace {
+    pub pos: Cursor,
+    pub delete_data: Cow<'static, str>,
+    pub insert_data: Cow<'static, str>,
 }
 
 /// A history of changes to a document.

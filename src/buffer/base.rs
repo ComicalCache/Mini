@@ -16,7 +16,7 @@ macro_rules! movement {
     ($self:ident, $func:ident) => {
         cursor::$func(
             &mut $self.doc,
-            &mut $self.view,
+            &mut $self.doc_view,
             $self.motion_repeat.parse::<usize>().unwrap_or(1),
         )
     };
@@ -24,13 +24,13 @@ macro_rules! movement {
 
 macro_rules! jump {
     ($self:ident, $func:ident) => {
-        cursor::$func(&mut $self.doc, &mut $self.view)
+        cursor::$func(&mut $self.doc, &mut $self.doc_view)
     };
 }
 
 macro_rules! yank {
     ($self:ident, $func:ident) => {
-        match yank::$func(&mut $self.doc, &mut $self.view, &mut $self.clipboard) {
+        match yank::$func(&mut $self.doc, &mut $self.doc_view, &mut $self.clipboard) {
             Ok(()) => {}
             Err(err) => {
                 $self.motion_repeat.clear();
@@ -48,6 +48,8 @@ macro_rules! yank {
         }
     };
 }
+
+pub const COMMAND_PROMPT: &str = " > ";
 
 #[derive(Clone, Copy)]
 /// A base set of actions in the view mode.
@@ -142,15 +144,17 @@ pub enum Mode<T> {
 pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
     /// The main content of the buffer.
     pub doc: Document,
+    /// The info bar content.
+    pub info: Document,
     /// The command content.
     pub cmd: Document,
-    /// The viewport of the buffer.
-    pub view: Viewport,
 
-    /// The document cursor position before command mode.
-    pub doc_cur_bak: Cursor,
-    /// The view cursor position before command mode.
-    pub view_cur_bak: Cursor,
+    /// The viewport of the document.
+    pub doc_view: Viewport,
+    /// The viewport of the info bar.
+    pub info_view: Viewport,
+    /// The viewport of the command line.
+    pub cmd_view: Viewport,
 
     /// Marker of the start of the selection.
     pub sel: Option<Cursor>,
@@ -247,6 +251,10 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             StateMachine::new(command_map, Duration::from_secs(1))
         };
 
+        // Set the command view number width manually.
+        let mut cmd_view = Viewport::new(w, 1, 0, 0, None);
+        cmd_view.set_number_width(COMMAND_PROMPT.len());
+
         let count = if let Some(contents) = &contents {
             contents.len()
         } else {
@@ -254,10 +262,11 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         };
         Ok(BaseBuffer {
             doc: Document::new(0, 0, contents),
+            info: Document::new(0, 0, None),
             cmd: Document::new(0, 0, None),
-            view: Viewport::new(w, h, 0, 0, count),
-            doc_cur_bak: Cursor::new(0, 0),
-            view_cur_bak: Cursor::new(0, 0),
+            doc_view: Viewport::new(w, h - 1, 0, 0, Some(count)),
+            info_view: Viewport::new(w, 1, 0, 0, None),
+            cmd_view,
             sel: None,
             mode: Mode::View,
             motion_repeat: String::new(),
@@ -270,6 +279,15 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         })
     }
 
+    /// Resizes the viewports of the buffer.
+    pub fn resize(&mut self, w: usize, h: usize) {
+        let doc_count = self.doc.buff.len();
+        self.doc_view.resize(w, h - 1, Some(doc_count));
+        self.info_view.resize(w, 1, None);
+        self.cmd_view.resize(w, 1, None);
+        self.cmd_view.set_number_width(COMMAND_PROMPT.len());
+    }
+
     /// Jumps to the next search match if any.
     fn next_match(&mut self) {
         if self.matches.is_empty() {
@@ -279,7 +297,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         *idx = (*idx + 1).min(self.matches.len() - 1);
 
         self.sel = Some(self.matches[*idx].1);
-        cursor::move_to(&mut self.doc, &mut self.view, self.matches[*idx].0);
+        cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[*idx].0);
     }
 
     // Jumps to the previous search match if any.
@@ -291,21 +309,13 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         *idx = idx.saturating_sub(1);
 
         self.sel = Some(self.matches[*idx].1);
-        cursor::move_to(&mut self.doc, &mut self.view, self.matches[*idx].0);
+        cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[*idx].0);
     }
 
     /// Clears the existing matches of the buffer.
     pub fn clear_matches(&mut self) {
         self.matches.clear();
         self.matches_idx = None;
-    }
-
-    /// Returns the command line string and cursor position.
-    pub fn command_line(&mut self) -> Option<(String, Cursor)> {
-        match self.mode {
-            Mode::Command => Some((self.cmd.buff[0].to_string(), self.cmd.cur)),
-            _ => None,
-        }
     }
 
     /// Changes the base buffers mode.
@@ -315,30 +325,17 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
                 // Clear command line so its ready for next entry.
                 self.cmd.buff[0].to_mut().clear();
                 self.cmd.cur = Cursor::new(0, 0);
-
-                // Restore cursor position from before entering command mode.
-                self.doc.cur = self.doc_cur_bak;
-                self.view.cur = self.view_cur_bak;
+                self.cmd_view.cur = Cursor::new(0, 0);
             }
             Mode::View => {
-                self.sel = None;
                 self.motion_repeat.clear();
-
                 self.clear_matches();
             }
             Mode::Other(_) => {}
         }
 
         match mode {
-            Mode::Command => {
-                // Store cursor position before entering command mode.
-                self.doc_cur_bak = self.doc.cur;
-                self.view_cur_bak = self.view.cur;
-
-                // Set cursor to the beginning of line to avoid weird scrolling behaviour.
-                cursor::jump_to_beginning_of_line(&mut self.doc, &mut self.view);
-            }
-            Mode::View | Mode::Other(_) => {}
+            Mode::Command | Mode::View | Mode::Other(_) => {}
         }
 
         self.mode = mode;
@@ -410,10 +407,10 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
 
         match self.cmd_state_machine.tick(key.into()) {
             A(ViewMode) => self.change_mode(Mode::View),
-            A(Left) => cursor::left(&mut self.cmd, &mut self.view, 1),
-            A(Right) => cursor::right(&mut self.cmd, &mut self.view, 1),
-            A(NextWord) => cursor::next_word(&mut self.cmd, &mut self.view, 1),
-            A(PrevWord) => cursor::prev_word(&mut self.cmd, &mut self.view, 1),
+            A(Left) => cursor::left(&mut self.cmd, &mut self.cmd_view, 1),
+            A(Right) => cursor::right(&mut self.cmd, &mut self.cmd_view, 1),
+            A(NextWord) => cursor::next_word(&mut self.cmd, &mut self.cmd_view, 1),
+            A(PrevWord) => cursor::prev_word(&mut self.cmd, &mut self.cmd_view, 1),
             A(Newline) => {
                 // Commands have only one line.
                 let cmd = self.cmd.buff[0].clone();
@@ -421,12 +418,12 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
 
                 return self.apply_command(cmd);
             }
-            A(Tab) => edit::write_tab(&mut self.cmd, &mut self.view, None),
-            A(DeleteChar) => edit::delete_char(&mut self.cmd, &mut self.view, None),
+            A(Tab) => edit::write_tab(&mut self.cmd, &mut self.cmd_view, None),
+            A(DeleteChar) => edit::delete_char(&mut self.cmd, &mut self.cmd_view, None),
             A(Other(tick)) => return Err(CommandTick::Other(tick)),
             Invalid => {
                 if let Some(Key::Char(ch)) = key {
-                    edit::write_char(&mut self.cmd, &mut self.view, None, ch);
+                    edit::write_char(&mut self.cmd, &mut self.cmd_view, None, ch);
                 }
             }
             Incomplete => {}

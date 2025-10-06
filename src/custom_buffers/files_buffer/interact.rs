@@ -1,5 +1,6 @@
 use crate::{
-    TXT_BUFF_IDX, cursor,
+    TXT_BUFF_IDX,
+    cursor::{self, Cursor},
     custom_buffers::files_buffer::FilesBuffer,
     util::{CommandResult, open_file, read_file_to_lines},
 };
@@ -52,7 +53,7 @@ impl FilesBuffer {
 
         let entry = &self.entries[idx - 1].clone();
         if entry.is_file() {
-            cursor::jump_to_beginning_of_file(&mut self.base.doc, &mut self.base.view);
+            cursor::jump_to_beginning_of_file(&mut self.base.doc, &mut self.base.doc_view);
             let contents = read_file_to_lines(&mut open_file(entry)?)?;
             self.path.clone_from(entry);
 
@@ -69,6 +70,7 @@ impl FilesBuffer {
                 0,
                 0,
             );
+            self.base.doc_view.cur = Cursor::new(0, 0);
             return Ok(CommandResult::Ok);
         } else if entry.is_symlink() && entry.exists() {
             self.path = entry.read_link()?;

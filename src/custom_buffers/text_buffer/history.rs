@@ -11,38 +11,34 @@ impl TextBuffer {
             Change::Insert { pos, data } => {
                 // To undo an insert, delete the data that was inserted.
                 self.base.doc.remove_range(*pos, cursor::end_pos(pos, data));
-                cursor::move_to(&mut self.base.doc, &mut self.base.view, *pos);
+                cursor::move_to(&mut self.base.doc, &mut self.base.doc_view, *pos);
             }
             Change::Delete { pos, data } => {
                 // To undo a delete, insert the data back.
                 self.base.doc.write_str_at(pos.x, pos.y, data);
                 cursor::move_to(
                     &mut self.base.doc,
-                    &mut self.base.view,
+                    &mut self.base.doc_view,
                     cursor::end_pos(pos, data),
                 );
             }
-            Change::Replace {
-                delete_pos,
-                delete_data,
-                insert_pos,
-                insert_data,
-            } => {
-                // To undo an insert, delete the data that was inserted.
-                self.base
-                    .doc
-                    .remove_range(*insert_pos, cursor::end_pos(insert_pos, insert_data));
-                cursor::move_to(&mut self.base.doc, &mut self.base.view, *insert_pos);
+            Change::Replace(events) => {
+                // Undo in reverse order to not change indices of later events.
+                for e in events.iter().rev() {
+                    // To undo an insert, delete the data that was inserted.
+                    self.base
+                        .doc
+                        .remove_range(e.pos, cursor::end_pos(&e.pos, &e.insert_data));
+                    cursor::move_to(&mut self.base.doc, &mut self.base.doc_view, e.pos);
 
-                // To undo a delete, insert the data back.
-                self.base
-                    .doc
-                    .write_str_at(delete_pos.x, delete_pos.y, delete_data);
-                cursor::move_to(
-                    &mut self.base.doc,
-                    &mut self.base.view,
-                    cursor::end_pos(delete_pos, delete_data),
-                );
+                    // To undo a delete, insert the data back.
+                    self.base.doc.write_str_at(e.pos.x, e.pos.y, &e.delete_data);
+                    cursor::move_to(
+                        &mut self.base.doc,
+                        &mut self.base.doc_view,
+                        cursor::end_pos(&e.pos, &e.delete_data),
+                    );
+                }
             }
         }
 
@@ -61,36 +57,31 @@ impl TextBuffer {
                 self.base.doc.write_str_at(pos.x, pos.y, data);
                 cursor::move_to(
                     &mut self.base.doc,
-                    &mut self.base.view,
+                    &mut self.base.doc_view,
                     cursor::end_pos(pos, data),
                 );
             }
             Change::Delete { pos, data } => {
                 // To redo a delete, delete the data.
                 self.base.doc.remove_range(*pos, cursor::end_pos(pos, data));
-                cursor::move_to(&mut self.base.doc, &mut self.base.view, *pos);
+                cursor::move_to(&mut self.base.doc, &mut self.base.doc_view, *pos);
             }
-            Change::Replace {
-                delete_pos,
-                delete_data,
-                insert_pos,
-                insert_data,
-            } => {
-                // To redo a delete, delete the data.
-                self.base
-                    .doc
-                    .remove_range(*delete_pos, cursor::end_pos(delete_pos, delete_data));
-                cursor::move_to(&mut self.base.doc, &mut self.base.view, *delete_pos);
+            Change::Replace(events) => {
+                for e in events {
+                    // To redo a delete, delete the data.
+                    self.base
+                        .doc
+                        .remove_range(e.pos, cursor::end_pos(&e.pos, &e.delete_data));
+                    cursor::move_to(&mut self.base.doc, &mut self.base.doc_view, e.pos);
 
-                // To redo an insert, insert the data.
-                self.base
-                    .doc
-                    .write_str_at(insert_pos.x, insert_pos.y, insert_data);
-                cursor::move_to(
-                    &mut self.base.doc,
-                    &mut self.base.view,
-                    cursor::end_pos(insert_pos, insert_data),
-                );
+                    // To redo an insert, insert the data.
+                    self.base.doc.write_str_at(e.pos.x, e.pos.y, &e.insert_data);
+                    cursor::move_to(
+                        &mut self.base.doc,
+                        &mut self.base.doc_view,
+                        cursor::end_pos(&e.pos, &e.insert_data),
+                    );
+                }
             }
         }
 

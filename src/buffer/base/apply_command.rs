@@ -11,6 +11,14 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     BaseBuffer<ModeEnum, ViewEnum, CommandEnum>
 {
     fn search(&mut self, args: &str) -> CommandResult {
+        let Some(end) = self.sel else {
+            return CommandResult::SetAndChangeBuffer(
+                INFO_BUFF_IDX,
+                vec![Cow::from("Search command requires a selection.")],
+                None,
+            );
+        };
+
         if !args.starts_with('/') || !args.ends_with('/') || args.len() == 2 {
             return CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
@@ -32,7 +40,22 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             }
         };
 
-        self.matches = cursor::regex_match(&self.doc, &regex);
+        let start = self.doc.cur;
+        let (start, end) = if start < end {
+            (start, end)
+        } else {
+            (end, start)
+        };
+
+        let hay = self.doc.get_range(start, end).expect("Illegal state");
+        self.matches = regex
+            .find_iter(&hay)
+            .map(|mat| {
+                let start_pos = cursor::end_pos(&start, &hay[..mat.start()]);
+                let end_pos = cursor::end_pos(&start, &hay[..mat.end()]);
+                (start_pos, end_pos)
+            })
+            .collect();
         self.matches_idx = None;
 
         if self.matches.is_empty() {
@@ -53,7 +76,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
 
         if let Some(idx) = self.matches_idx {
             self.sel = Some(self.matches[idx].1);
-            cursor::move_to(&mut self.doc, &mut self.view, self.matches[idx].0);
+            cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[idx].0);
         }
 
         CommandResult::Ok
@@ -84,7 +107,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             )),
             "goto" => {
                 let (x, y) = line_column(args);
-                cursor::jump_to_line_and_column(&mut self.doc, &mut self.view, x, y);
+                cursor::jump_to_line_and_column(&mut self.doc, &mut self.doc_view, x, y);
 
                 Ok(CommandResult::Ok)
             }

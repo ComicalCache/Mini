@@ -1,9 +1,8 @@
 use crate::{cursor::Cursor, document::Document, util::CursorStyle};
 use std::io::{BufWriter, Error, Stdout, Write};
 use termion::{
-    clear::All,
     color::{self, Bg, Fg, Reset},
-    cursor::{BlinkingBar, BlinkingBlock, Goto, Hide, Show, SteadyBlock},
+    cursor::{BlinkingBar, BlinkingBlock, Goto, Show, SteadyBlock},
     raw::RawTerminal,
 };
 
@@ -36,53 +35,63 @@ pub struct Viewport {
     pub buff_w: usize,
     /// The (visible) cursor in the viewport.
     pub cur: Cursor,
-
-    /// The info line displayed at the top of the viewport.
-    pub info_line: String,
-    /// The optional command line displayed at the bottom of the viewport.
-    pub cmd: Option<(String, Cursor)>,
+    /// If the viewport displays line numbers or not.
+    line_nums: bool,
 }
 
 impl Viewport {
-    pub fn new(w: usize, h: usize, x: usize, y: usize, count: usize) -> Self {
-        let digits = count.ilog10() as usize + 1;
+    pub fn new(w: usize, h: usize, x: usize, y: usize, count: Option<usize>) -> Self {
+        let (nums_w, buff_w) = if let Some(count) = count {
+            let digits = count.ilog10() as usize + 1;
+            (digits + 4, w - digits - 4)
+        } else {
+            (0, w)
+        };
+
         Viewport {
             w,
             h,
-            nums_w: digits + 4,
-            buff_w: w - digits - 4,
+            nums_w,
+            buff_w,
             cur: Cursor::new(x, y),
-            info_line: String::with_capacity(w),
-            cmd: None,
+            line_nums: count.is_some(),
         }
     }
 
     /// Re-initializes the viewport.
-    pub fn init(&mut self, w: usize, h: usize, x: usize, y: usize, count: usize) {
-        let digits = count.ilog10() as usize + 1;
+    pub fn init(&mut self, w: usize, h: usize, x: usize, y: usize, count: Option<usize>) {
+        let (nums_w, buff_w) = if let Some(count) = count {
+            let digits = count.ilog10() as usize + 1;
+            (digits + 4, w - digits - 4)
+        } else {
+            (0, w)
+        };
 
         self.w = w;
         self.h = h;
-        self.nums_w = digits + 4;
-        self.buff_w = w - digits - 4;
+        self.nums_w = nums_w;
+        self.buff_w = buff_w;
         self.cur = Cursor::new(x, y);
+        self.line_nums = count.is_some();
+    }
 
-        self.info_line.clear();
-        self.cmd = None;
+    /// Sets the absolute line number width.
+    pub fn set_number_width(&mut self, n: usize) {
+        self.nums_w = n;
+        self.buff_w = self.w - n;
     }
 
     /// Renders a document to the viewport.
-    pub fn render(
+    pub fn render_document(
         &mut self,
         stdout: &mut BufWriter<RawTerminal<Stdout>>,
         doc: &Document,
         sel: Option<Cursor>,
-        cursor_style: CursorStyle,
     ) -> Result<(), Error> {
         // Update the nums width if the supplied buffer is not correct.
         // log10 + 1 for length + 4 for whitespace and separator.
-        if doc.buff.len().ilog10() as usize + 5 != self.nums_w {
-            self.resize(self.w, self.h, doc.buff.len());
+        if self.line_nums && doc.buff.len().ilog10() as usize + 5 != self.nums_w {
+            self.resize(self.w, self.h, Some(doc.buff.len()));
         }
 
         // Prepre the selection to be in order if a selection state is active.
@@ -96,46 +105,16 @@ impl Viewport {
             None
         };
 
-        // Make sure that info line is stretched to window width.
-        if self.info_line.chars().count() < self.w {
-            self.info_line
-                .push_str(&" ".repeat(self.w - self.info_line.chars().count()));
-        }
-        write!(
-            stdout,
-            "{All}{Hide}{}{INFO}{TXT}{}{BG}",
-            Goto(1, 1),
-            self.info_line
-        )?;
-
-        // Get cursor position. Add two to the y coordinate because one based and info line at the top.
-        // Can never be larger than u16 since the width is used as upper bound and equal to the terminal size.
-        #[allow(clippy::cast_possible_truncation)]
-        let cur = if let Some((_, cur)) = &self.cmd {
-            Goto(
-                ((self.nums_w + cur.x) as u16).saturating_add(1),
-                ((cur.y + self.h) as u16).saturating_add(2),
-            )
-        } else {
-            Goto(
-                ((self.nums_w + self.cur.x) as u16).saturating_add(1),
-                (self.cur.y as u16).saturating_add(2),
-            )
-        };
-
         // Calculate which line of text is visible at what line on the screen.
         #[allow(clippy::cast_possible_wrap)]
         let offset = doc.cur.y as isize - self.cur.y as isize;
-        for (idx, doc_idx) in (1..self.h).zip(offset..) {
+        // Shifted by one because of info/command line.
+        for (idx, doc_idx) in (1..=self.h).zip(offset..) {
             // Set the trailing background color to match if its the cursor line.
-            let sel_bg = if idx == usize::from(cur.1 - 1) {
-                HIGHLIGHT
-            } else {
-                BG
-            };
+            let sel_bg = if idx == self.cur.y + 1 { HIGHLIGHT } else { BG };
 
             // Set highlight or rel nums.
-            if idx == usize::from(cur.1 - 1) {
+            if idx == self.cur.y + 1 {
                 // The idx is bound by the height which is bound by u16 when passed by the terminal.
                 #[allow(clippy::cast_possible_truncation)]
                 write!(stdout, "{}{HIGHLIGHT}{TXT}", Goto(1, idx as u16 + 1))?;
@@ -149,7 +128,9 @@ impl Viewport {
             // The value is guaranteed positive at that point.
             #[allow(clippy::cast_sign_loss)]
             if doc_idx < 0 || (doc_idx as usize) >= doc.buff.len() {
-                write!(stdout, "{}┃", " ".repeat(self.nums_w - 2))?;
+                if self.line_nums {
+                    write!(stdout, "{}┃", " ".repeat(self.nums_w - 2))?;
+                }
                 continue;
             }
 
@@ -158,7 +139,7 @@ impl Viewport {
             let doc_idx = doc_idx as usize;
 
             // Write line numbers.
-            {
+            if self.line_nums {
                 let padding = self.nums_w - 3;
                 if doc_idx == doc.cur.y {
                     write!(stdout, "{:>padding$} ┃ ", doc_idx + 1)?;
@@ -168,7 +149,7 @@ impl Viewport {
             }
 
             // Switch from relative line number color to regular text.
-            if idx != usize::from(cur.1 - 1) {
+            if idx != self.cur.y + 1 {
                 write!(stdout, "{TXT}")?;
             }
 
@@ -269,7 +250,7 @@ impl Viewport {
                 }
 
                 // Stretch current line to end to show highlight properly.
-                if idx == usize::from(cur.1 - 1) {
+                if idx == self.cur.y + 1 {
                     write!(
                         stdout,
                         "{}{BG}",
@@ -282,18 +263,67 @@ impl Viewport {
             }
         }
 
-        // Set command line.
-        // Can never be larger than u16 since the width is used as upper bound and equal to the terminal size.
-        #[allow(clippy::cast_possible_truncation)]
-        if let Some((cmd_line, _)) = &self.cmd {
-            write!(
-                stdout,
-                "{INFO}{}{REL_NUMS}{}> {TXT}{cmd_line}{}",
-                Goto(1, self.h as u16),
-                " ".repeat(self.nums_w - 2),
-                " ".repeat(self.buff_w - cmd_line.chars().count())
-            )?;
-        }
+        Ok(())
+    }
+
+    /// Renders a bar to the viewport.
+    pub fn render_bar(
+        &self,
+        stdout: &mut BufWriter<RawTerminal<Stdout>>,
+        doc: &Document,
+        prompt: &str,
+    ) -> Result<(), Error> {
+        let line = &doc.buff[0];
+        let w = self.w.saturating_sub(prompt.len());
+
+        let start = doc.cur.x.saturating_sub(self.cur.x);
+        let end = (start + w).min(line.chars().count());
+
+        let start_idx = line
+            .char_indices()
+            .nth(start)
+            .map_or(line.len(), |(idx, _)| idx);
+        let end_idx = line
+            .char_indices()
+            .nth(end)
+            .map_or(line.len(), |(idx, _)| idx);
+        let cmd = &line[start_idx..end_idx];
+        let padding = self.w.saturating_sub(prompt.len() + cmd.chars().count());
+
+        write!(
+            stdout,
+            "{}{INFO}{TXT}{prompt}{cmd}{}{BG}",
+            Goto(1, 1),
+            " ".repeat(padding)
+        )?;
+
+        Ok(())
+    }
+
+    pub fn render_cursor(
+        &self,
+        stdout: &mut BufWriter<RawTerminal<Stdout>>,
+        cursor_style: CursorStyle,
+        prompt: Option<&str>,
+    ) -> Result<(), Error> {
+        let cur = if let Some(prompt) = prompt {
+            // Plus one because one based.
+            // The cursor is bound by the buffer width which is bound by terminal width.
+            #[allow(clippy::cast_possible_truncation)]
+            Goto(((self.cur.x + prompt.len()) as u16).saturating_add(1), 1)
+        } else {
+            Goto(
+                // Plus one because one based.
+                // The cursor is bound by the buffer width which is bound by terminal width.
+                #[allow(clippy::cast_possible_truncation)]
+                ((self.nums_w + self.cur.x) as u16).saturating_add(1),
+                // Plus one because one based, plus one because of the info/command bar.
+                // FIXME: this limits the bar to always be exactly two in width.
+                // The cursor is bound by the buffer width which is bound by terminal width.
+                #[allow(clippy::cast_possible_truncation)]
+                (self.cur.y as u16).saturating_add(2),
+            )
+        };
 
         // Set cursor.
         match cursor_style {
@@ -304,20 +334,25 @@ impl Viewport {
             CursorStyle::SteadyBlock => write!(stdout, "{cur}{SteadyBlock}{NO_TXT}{NO_BG}{Show}")?,
         }
 
-        stdout.flush()
+        Ok(())
     }
 
     /// Resizes the viewport.
-    pub fn resize(&mut self, w: usize, h: usize, count: usize) {
-        let digits = count.ilog10() as usize + 1;
+    pub fn resize(&mut self, w: usize, h: usize, count: Option<usize>) {
+        let (nums_w, buff_w) = if let Some(count) = count {
+            let digits = count.ilog10() as usize + 1;
+            (digits + 4, w - digits - 4)
+        } else {
+            (0, w)
+        };
 
         self.w = w;
         self.h = h;
-        self.nums_w = digits + 4;
-        self.buff_w = w - digits - 4;
+        self.nums_w = nums_w;
+        self.buff_w = buff_w;
+        self.line_nums = count.is_some();
 
         self.cur.x = self.cur.x.min(self.buff_w - 1);
-        // Minus two because one for zero based, one for the info line.
-        self.cur.y = self.cur.y.min(self.h - 2);
+        self.cur.y = self.cur.y.min(self.h - 1);
     }
 }

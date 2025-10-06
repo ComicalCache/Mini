@@ -6,7 +6,7 @@ use crate::{
     FILES_BUFF_IDX, INFO_BUFF_IDX,
     buffer::{
         Buffer,
-        base::{BaseBuffer, CommandTick, Mode, ViewAction},
+        base::{BaseBuffer, COMMAND_PROMPT, CommandTick, Mode, ViewAction},
         delete, edit,
         history::History,
     },
@@ -18,17 +18,17 @@ use crate::{
 use std::{
     borrow::Cow,
     fs::File,
-    io::{BufWriter, Error, Stdout},
+    io::{BufWriter, Error, Stdout, Write},
     path::PathBuf,
     time::Duration,
 };
-use termion::{event::Key, raw::RawTerminal};
+use termion::{clear::All, cursor::Hide, event::Key, raw::RawTerminal};
 
 macro_rules! delete {
     ($self:ident, $func:ident) => {{
         delete::$func(
             &mut $self.base.doc,
-            &mut $self.base.view,
+            &mut $self.base.doc_view,
             Some(&mut $self.history),
         );
         $self.base.clear_matches();
@@ -36,7 +36,7 @@ macro_rules! delete {
     ($self:ident, $func:ident, REPEAT) => {{
         delete::$func(
             &mut $self.base.doc,
-            &mut $self.base.view,
+            &mut $self.base.doc_view,
             Some(&mut $self.history),
             $self.base.motion_repeat.parse::<usize>().unwrap_or(1),
         );
@@ -45,7 +45,7 @@ macro_rules! delete {
     ($self:ident, $func:ident, SELECTION) => {{
         delete::$func(
             &mut $self.base.doc,
-            &mut $self.base.view,
+            &mut $self.base.doc_view,
             &mut $self.base.sel,
             Some(&mut $self.history),
         );
@@ -57,7 +57,7 @@ macro_rules! change {
     ($self:ident, $func:ident) => {{
         delete::$func(
             &mut $self.base.doc,
-            &mut $self.base.view,
+            &mut $self.base.doc_view,
             Some(&mut $self.history),
         );
         $self.base.change_mode(Mode::Other(Write));
@@ -65,7 +65,7 @@ macro_rules! change {
     ($self:ident, $func:ident, REPEAT) => {{
         delete::$func(
             &mut $self.base.doc,
-            &mut $self.base.view,
+            &mut $self.base.doc_view,
             Some(&mut $self.history),
             $self.base.motion_repeat.parse::<usize>().unwrap_or(1),
         );
@@ -239,7 +239,7 @@ impl TextBuffer {
     fn info_line(&mut self) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
 
-        self.base.view.info_line.clear();
+        self.base.info.buff[0].to_mut().clear();
 
         let mode = match self.base.mode {
             Mode::View => "V",
@@ -254,7 +254,7 @@ impl TextBuffer {
         let size: usize = self.base.doc.buff.iter().map(|l| l.len()).sum();
 
         write!(
-            &mut self.base.view.info_line,
+            self.base.info.buff[0].to_mut(),
             "[Text] [{mode}] [{line}:{col}/{total} {percentage}%] [{size}B]",
         )?;
         if let Some(pos) = self.base.sel {
@@ -262,7 +262,7 @@ impl TextBuffer {
             let line = pos.y + 1;
             let col = pos.x + 1;
             write!(
-                &mut self.base.view.info_line,
+                self.base.info.buff[0].to_mut(),
                 " [Selected {line}:{col} - {}:{}]",
                 self.base.doc.cur.y + 1,
                 self.base.doc.cur.x + 1
@@ -270,7 +270,7 @@ impl TextBuffer {
         }
 
         let edited = if self.base.doc.edited { '*' } else { ' ' };
-        write!(&mut self.base.view.info_line, " {edited}")?;
+        write!(self.base.info.buff[0].to_mut(), " {edited}")?;
 
         Ok(())
     }
@@ -283,11 +283,11 @@ impl TextBuffer {
         match action {
             Insert => self.base.change_mode(Mode::Other(Write)),
             Append => {
-                cursor::right(&mut self.base.doc, &mut self.base.view, 1);
+                cursor::right(&mut self.base.doc, &mut self.base.doc_view, 1);
                 self.base.change_mode(Mode::Other(Write));
             }
             AppendEndOfLine => {
-                cursor::jump_to_end_of_line(&mut self.base.doc, &mut self.base.view);
+                cursor::jump_to_end_of_line(&mut self.base.doc, &mut self.base.doc_view);
                 self.base.change_mode(Mode::Other(Write));
             }
             InsertBellow => {
@@ -314,17 +314,17 @@ impl TextBuffer {
             ChangeSelection => {
                 delete::selection(
                     &mut self.base.doc,
-                    &mut self.base.view,
+                    &mut self.base.doc_view,
                     &mut self.base.sel,
                     Some(&mut self.history),
                 );
                 self.base.change_mode(Mode::Other(Write));
             }
             ChangeLine => {
-                cursor::jump_to_beginning_of_line(&mut self.base.doc, &mut self.base.view);
+                cursor::jump_to_beginning_of_line(&mut self.base.doc, &mut self.base.doc_view);
                 delete::end_of_line(
                     &mut self.base.doc,
-                    &mut self.base.view,
+                    &mut self.base.doc_view,
                     Some(&mut self.history),
                 );
                 self.base.change_mode(Mode::Other(Write));
@@ -365,32 +365,32 @@ impl TextBuffer {
 
         match self.write_state_machine.tick(key.into()) {
             A(ViewMode) => self.base.change_mode(Mode::View),
-            A(Left) => cursor::left(&mut self.base.doc, &mut self.base.view, 1),
-            A(Down) => cursor::down(&mut self.base.doc, &mut self.base.view, 1),
-            A(Up) => cursor::up(&mut self.base.doc, &mut self.base.view, 1),
-            A(Right) => cursor::right(&mut self.base.doc, &mut self.base.view, 1),
-            A(NextWord) => cursor::next_word(&mut self.base.doc, &mut self.base.view, 1),
-            A(PrevWord) => cursor::prev_word(&mut self.base.doc, &mut self.base.view, 1),
+            A(Left) => cursor::left(&mut self.base.doc, &mut self.base.doc_view, 1),
+            A(Down) => cursor::down(&mut self.base.doc, &mut self.base.doc_view, 1),
+            A(Up) => cursor::up(&mut self.base.doc, &mut self.base.doc_view, 1),
+            A(Right) => cursor::right(&mut self.base.doc, &mut self.base.doc_view, 1),
+            A(NextWord) => cursor::next_word(&mut self.base.doc, &mut self.base.doc_view, 1),
+            A(PrevWord) => cursor::prev_word(&mut self.base.doc, &mut self.base.doc_view, 1),
             A(Newline) => edit::write_new_line_char(
                 &mut self.base.doc,
-                &mut self.base.view,
+                &mut self.base.doc_view,
                 Some(&mut self.history),
             ),
             A(Tab) => edit::write_tab(
                 &mut self.base.doc,
-                &mut self.base.view,
+                &mut self.base.doc_view,
                 Some(&mut self.history),
             ),
             A(DeleteChar) => edit::delete_char(
                 &mut self.base.doc,
-                &mut self.base.view,
+                &mut self.base.doc_view,
                 Some(&mut self.history),
             ),
             Invalid => {
                 if let Some(Key::Char(ch)) = key {
                     edit::write_char(
                         &mut self.base.doc,
-                        &mut self.base.view,
+                        &mut self.base.doc_view,
                         Some(&mut self.history),
                         ch,
                     );
@@ -419,28 +419,49 @@ impl Buffer for TextBuffer {
     }
 
     fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
+        write!(stdout, "{Hide}{All}")?;
         self.base.rerender = false;
 
         self.info_line().map_err(Error::other)?;
 
-        let cursor_style = match self.base.mode {
-            Mode::View => CursorStyle::BlinkingBlock,
-            Mode::Command | Mode::Other(OtherMode::Write) => CursorStyle::BlinkingBar,
+        let (cursor_style, cmd) = match self.base.mode {
+            Mode::View => (CursorStyle::BlinkingBlock, false),
+            Mode::Command => (CursorStyle::BlinkingBar, true),
+            Mode::Other(OtherMode::Write) => (CursorStyle::BlinkingBar, false),
         };
-        self.base.view.cmd = self.base.command_line();
+
+        if cmd {
+            self.base
+                .cmd_view
+                .render_bar(stdout, &self.base.cmd, COMMAND_PROMPT)?;
+        } else {
+            self.base
+                .info_view
+                .render_bar(stdout, &self.base.info, "")?;
+        }
+
         self.base
-            .view
-            .render(stdout, &self.base.doc, self.base.sel, cursor_style)
+            .doc_view
+            .render_document(stdout, &self.base.doc, self.base.sel)?;
+
+        let (view, prompt) = if cmd {
+            (&self.base.cmd_view, Some(COMMAND_PROMPT))
+        } else {
+            (&self.base.doc_view, None)
+        };
+        view.render_cursor(stdout, cursor_style, prompt)?;
+
+        stdout.flush()
     }
 
     fn resize(&mut self, w: usize, h: usize) {
-        if self.base.view.w == w && self.base.view.h == h {
+        if self.base.doc_view.w == w && self.base.doc_view.h == h {
             return;
         }
 
         self.base.rerender = true;
 
-        self.base.view.resize(w, h, self.base.doc.buff.len());
+        self.base.resize(w, h);
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
@@ -461,7 +482,7 @@ impl Buffer for TextBuffer {
 
     fn set_contents(&mut self, contents: &[Cow<'static, str>], path: Option<PathBuf>) {
         self.base.doc.set_contents(contents, 0, 0);
-        self.base.view.cur = Cursor::new(0, 0);
+        self.base.doc_view.cur = Cursor::new(0, 0);
         if let Some(path) = path {
             self.file = open_file(path).ok();
         }

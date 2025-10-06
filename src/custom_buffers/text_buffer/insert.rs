@@ -1,6 +1,9 @@
 use crate::{
     INFO_BUFF_IDX,
-    buffer::{edit, history::Change},
+    buffer::{
+        edit,
+        history::{Change, Replace},
+    },
     cursor,
     custom_buffers::text_buffer::TextBuffer,
     util::CommandResult,
@@ -11,7 +14,7 @@ impl TextBuffer {
     /// Inserts a new line above the current cursor position.
     /// The cursor will be on the new line.
     pub(super) fn insert_move_new_line_above(&mut self) {
-        cursor::jump_to_beginning_of_line(&mut self.base.doc, &mut self.base.view);
+        cursor::jump_to_beginning_of_line(&mut self.base.doc, &mut self.base.doc_view);
         self.base.doc.insert_line(Cow::from(""));
     }
 
@@ -21,7 +24,7 @@ impl TextBuffer {
         self.base
             .doc
             .insert_line_at(self.base.doc.cur.y + 1, Cow::from(""));
-        cursor::down(&mut self.base.doc, &mut self.base.view, 1);
+        cursor::down(&mut self.base.doc, &mut self.base.doc_view, 1);
     }
 
     /// Replaces a character at the current cursor position.
@@ -30,18 +33,17 @@ impl TextBuffer {
             return;
         };
 
-        self.history.add_change(Change::Replace {
-            delete_pos: self.base.doc.cur,
+        self.history.add_change(Change::Replace(vec![Replace {
+            pos: self.base.doc.cur,
             delete_data: Cow::from(old_ch.to_string()),
-            insert_pos: self.base.doc.cur,
             insert_data: Cow::from(ch.to_string()),
-        });
+        }]));
 
         match ch {
             '\n' => {
                 edit::write_new_line_char(
                     &mut self.base.doc,
-                    &mut self.base.view,
+                    &mut self.base.doc_view,
                     Some(&mut self.history),
                 );
 
@@ -51,7 +53,7 @@ impl TextBuffer {
             '\t' => {
                 edit::write_tab(
                     &mut self.base.doc,
-                    &mut self.base.view,
+                    &mut self.base.doc_view,
                     Some(&mut self.history),
                 );
 

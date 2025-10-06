@@ -5,7 +5,7 @@ use crate::{
     INFO_BUFF_IDX, TXT_BUFF_IDX,
     buffer::{
         Buffer,
-        base::{BaseBuffer, CommandTick, Mode, ViewAction},
+        base::{BaseBuffer, COMMAND_PROMPT, CommandTick, Mode, ViewAction},
     },
     change_buffer,
     cursor::Cursor,
@@ -13,10 +13,10 @@ use crate::{
 };
 use std::{
     borrow::Cow,
-    io::{BufWriter, Error, Stdout},
+    io::{BufWriter, Error, Stdout, Write},
     path::PathBuf,
 };
-use termion::{event::Key, raw::RawTerminal};
+use termion::{clear::All, cursor::Hide, event::Key, raw::RawTerminal};
 
 #[derive(Clone, Copy)]
 enum OtherViewAction {
@@ -65,7 +65,7 @@ impl FilesBuffer {
     fn info_line(&mut self) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
 
-        self.base.view.info_line.clear();
+        self.base.info.buff[0].to_mut().clear();
 
         let mode = match self.base.mode {
             Mode::View => "V",
@@ -84,7 +84,7 @@ impl FilesBuffer {
         let entries_label = if entries == 1 { "Entry" } else { "Entries" };
 
         write!(
-            &mut self.base.view.info_line,
+            self.base.info.buff[0].to_mut(),
             "[Files] [{mode}] [{curr_type}] [{curr}/{entries} {entries_label}]",
         )?;
 
@@ -93,7 +93,7 @@ impl FilesBuffer {
             let line = pos.y + 1;
             let col = pos.x + 1;
             write!(
-                &mut self.base.view.info_line,
+                self.base.info.buff[0].to_mut(),
                 " [Selected {line}:{col} - {}:{}]",
                 self.base.doc.cur.y + 1,
                 self.base.doc.cur.x + 1
@@ -156,29 +156,47 @@ impl Buffer for FilesBuffer {
     }
 
     fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
+        write!(stdout, "{Hide}{All}")?;
         self.base.rerender = false;
 
         self.info_line().map_err(Error::other)?;
 
-        let cursor_style = match self.base.mode {
-            Mode::View => CursorStyle::SteadyBlock,
-            Mode::Command => CursorStyle::BlinkingBar,
-            Mode::Other(()) => unreachable!("Illegal state"),
+        let (cursor_style, cmd) = match self.base.mode {
+            Mode::View | Mode::Other(()) => (CursorStyle::BlinkingBlock, false),
+            Mode::Command => (CursorStyle::BlinkingBar, true),
         };
-        self.base.view.cmd = self.base.command_line();
+
+        if cmd {
+            self.base
+                .cmd_view
+                .render_bar(stdout, &self.base.cmd, COMMAND_PROMPT)?;
+        } else {
+            self.base
+                .info_view
+                .render_bar(stdout, &self.base.info, "")?;
+        }
+
         self.base
-            .view
-            .render(stdout, &self.base.doc, self.base.sel, cursor_style)
+            .doc_view
+            .render_document(stdout, &self.base.doc, self.base.sel)?;
+
+        let (view, prompt) = if cmd {
+            (&self.base.cmd_view, Some(COMMAND_PROMPT))
+        } else {
+            (&self.base.doc_view, None)
+        };
+        view.render_cursor(stdout, cursor_style, prompt)?;
+
+        stdout.flush()
     }
 
     fn resize(&mut self, w: usize, h: usize) {
-        if self.base.view.w == w && self.base.view.h == h {
+        if self.base.doc_view.w == w && self.base.doc_view.h == h {
             return;
         }
 
         self.base.rerender = true;
-
-        self.base.view.resize(w, h, self.base.doc.buff.len());
+        self.base.resize(w, h);
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
@@ -202,7 +220,7 @@ impl Buffer for FilesBuffer {
         if let Some(path) = path {
             self.path = path;
         }
-        self.base.view.cur = Cursor::new(0, 0);
+        self.base.doc_view.cur = Cursor::new(0, 0);
 
         self.base.sel = None;
         self.base.motion_repeat.clear();
