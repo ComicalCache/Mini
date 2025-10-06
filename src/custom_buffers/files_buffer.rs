@@ -140,17 +140,11 @@ impl FilesBuffer {
     }
 
     /// Handles self apply and self defined command ticks.
-    fn command_tick(&mut self, tick: CommandTick<()>) -> CommandResult {
+    fn command_tick(tick: CommandTick<()>) -> CommandResult {
         use CommandTick::*;
 
         match tick {
-            Apply => {
-                // Commands have only one line.
-                let cmd = self.base.cmd.buff[0].clone();
-                self.base.change_mode(Mode::View);
-
-                self.apply_command(&cmd)
-            }
+            Apply(cmd) => FilesBuffer::apply_command(&cmd),
             Other(()) => unreachable!("Illegal state"),
         }
     }
@@ -197,7 +191,7 @@ impl Buffer for FilesBuffer {
             },
             Mode::Command => match self.base.command_tick(key) {
                 Ok(res) => res,
-                Err(tick) => self.command_tick(tick),
+                Err(tick) => FilesBuffer::command_tick(tick),
             },
             Mode::Other(()) => unreachable!("Illegal state"),
         }

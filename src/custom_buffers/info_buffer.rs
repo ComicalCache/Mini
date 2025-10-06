@@ -99,13 +99,7 @@ impl InfoBuffer {
         use CommandTick::*;
 
         match tick {
-            Apply => {
-                // Commands have only one line.
-                let cmd = self.base.cmd.buff[0].clone();
-                self.base.change_mode(Mode::View);
-
-                self.apply_command(&cmd)
-            }
+            Apply(cmd) => self.apply_command(&cmd),
             Other(()) => unreachable!("Illegal state"),
         }
     }

@@ -1,3 +1,5 @@
+mod apply_command;
+
 use crate::{
     buffer::{edit, yank},
     cursor::{self, Cursor},
@@ -109,11 +111,11 @@ pub enum CommandAction<T> {
     Other(T),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 /// Command mode encountered a non-standard event or can be applied.
 pub enum CommandTick<T> {
     /// The command can be applied to the buffer.
-    Apply,
+    Apply(Cow<'static, str>),
 
     /// Other actions defined by specialized buffers.
     Other(T),
@@ -361,7 +363,13 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             A(Right) => cursor::right(&mut self.cmd, &mut self.view, 1),
             A(NextWord) => cursor::next_word(&mut self.cmd, &mut self.view, 1),
             A(PrevWord) => cursor::prev_word(&mut self.cmd, &mut self.view, 1),
-            A(Newline) => return Err(CommandTick::Apply),
+            A(Newline) => {
+                // Commands have only one line.
+                let cmd = self.cmd.buff[0].clone();
+                self.change_mode(Mode::View);
+
+                return self.apply_command(cmd);
+            }
             A(Tab) => edit::write_tab(&mut self.cmd, &mut self.view, None),
             A(DeleteChar) => edit::delete_char(&mut self.cmd, &mut self.view, None),
             A(Other(tick)) => return Err(CommandTick::Other(tick)),

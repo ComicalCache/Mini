@@ -1,7 +1,7 @@
 use crate::{
-    INFO_BUFF_IDX, INFO_MSG, cursor,
+    INFO_BUFF_IDX,
     custom_buffers::text_buffer::TextBuffer,
-    util::{CommandResult, line_column, open_file, read_file_to_lines},
+    util::{CommandResult, open_file, read_file_to_lines},
 };
 use std::{borrow::Cow, io::Error};
 
@@ -14,20 +14,6 @@ impl TextBuffer {
         self.base.doc.write_to_file(file)?;
 
         Ok(true)
-    }
-
-    fn quit_command(&mut self) -> CommandResult {
-        if !self.base.doc.edited {
-            return CommandResult::Quit;
-        }
-
-        CommandResult::SetAndChangeBuffer(
-            INFO_BUFF_IDX,
-            vec![Cow::from(
-                "There are unsaved changes, save or qq to force quit",
-            )],
-            None,
-        )
     }
 
     fn open_command(&mut self, args: &str, force: bool) -> CommandResult {
@@ -129,8 +115,6 @@ impl TextBuffer {
         };
 
         match cmd {
-            "q" => self.quit_command(),
-            "qq" => CommandResult::ForceQuit,
             "wq" => match self.write_to_file() {
                 Ok(res) if !res => CommandResult::SetAndChangeBuffer(
                     INFO_BUFF_IDX,
@@ -149,17 +133,6 @@ impl TextBuffer {
             "w" => self.write_command(args),
             "o" => self.open_command(args, false),
             "oo" => self.open_command(args, true),
-            "?" => CommandResult::SetAndChangeBuffer(
-                INFO_BUFF_IDX,
-                INFO_MSG.lines().map(Cow::from).collect(),
-                None,
-            ),
-            "goto" => {
-                let (x, y) = line_column(args);
-                cursor::jump_to_line_and_column(&mut self.base.doc, &mut self.base.view, x, y);
-
-                CommandResult::Ok
-            }
             _ => CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
                 vec![Cow::from(format!("Unrecognized command: '{cmd}'"))],
