@@ -13,6 +13,12 @@ pub enum Change {
         pos: Cursor,
         data: Cow<'static, str>,
     },
+    Replace {
+        delete_pos: Cursor,
+        delete_data: Cow<'static, str>,
+        insert_pos: Cursor,
+        insert_data: Cow<'static, str>,
+    },
 }
 
 /// A history of changes to a document.
@@ -40,6 +46,11 @@ impl History {
     pub fn add_change(&mut self, change: Change) {
         self.undo.push(change);
         self.redo.clear();
+    }
+
+    /// Remove a change from the history.
+    pub fn pop_change(&mut self) {
+        self.undo.pop();
     }
 
     /// Pops the last change for undoing.

@@ -336,43 +336,11 @@ impl TextBuffer {
             ChangeToEndOfFile => change!(self, end_of_file),
             ChangeToBeginningOfFile => change!(self, beginning_of_file),
             Paste => {
-                let content = match self.base.clipboard.get_text() {
-                    Ok(content) => content,
-                    Err(err) => {
-                        self.base.motion_repeat.clear();
-                        return CommandResult::SetAndChangeBuffer(
-                            INFO_BUFF_IDX,
-                            vec![Cow::from(err.to_string())],
-                            None,
-                        );
-                    }
-                };
-
-                self.base.doc.write_str(&content);
-            }
-            ReplaceChar(ch) => {
-                if self.base.doc.buff[self.base.doc.cur.y]
-                    .chars()
-                    .nth(self.base.doc.cur.x)
-                    .is_some()
-                {
-                    self.base.doc.delete_char();
-
-                    match ch {
-                        '\n' => edit::write_new_line_char(
-                            &mut self.base.doc,
-                            &mut self.base.view,
-                            Some(&mut self.history),
-                        ),
-                        '\t' => edit::write_tab(
-                            &mut self.base.doc,
-                            &mut self.base.view,
-                            Some(&mut self.history),
-                        ),
-                        _ => self.base.doc.write_char(ch),
-                    }
+                if let Some(res) = self.paste() {
+                    return res;
                 }
             }
+            ReplaceChar(ch) => self.replace(ch),
             Undo => self.undo(),
             Redo => self.redo(),
         }

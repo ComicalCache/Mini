@@ -43,7 +43,10 @@ pub fn line(
     let start = Cursor::new(0, doc.cur.y);
     cursor::jump_to_end_of_line(doc, view);
     cursor::right(doc, view, 1);
-    let res = clipboard.set_text(doc.get_range(start, doc.cur).expect("Illegal state"));
+
+    let mut line = doc.get_range(start, doc.cur).expect("Illegal state");
+    line.to_mut().push('\n');
+    let res = clipboard.set_text(line);
 
     view.cur = tmp_view_cur;
     doc.cur = tmp_doc_cur;
