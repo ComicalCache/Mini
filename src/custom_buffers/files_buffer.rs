@@ -165,7 +165,7 @@ impl Buffer for FilesBuffer {
         self.info_line().map_err(Error::other)?;
 
         let (cursor_style, cmd) = match self.base.mode {
-            Mode::View | Mode::Other(()) => (CursorStyle::BlinkingBlock, false),
+            Mode::View | Mode::Other(()) => (CursorStyle::SteadyBlock, false),
             Mode::Command => (CursorStyle::BlinkingBar, true),
         };
 
