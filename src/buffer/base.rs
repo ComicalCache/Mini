@@ -99,19 +99,23 @@ pub enum ViewAction<T> {
 #[derive(Clone, Copy)]
 /// A base set of actions in the command mode.
 pub enum CommandAction<T> {
-    // Movement
+    // Movement.
     Left,
     Right,
     NextWord,
     PrevWord,
 
-    // Modes
+    // Modes.
     ViewMode,
 
-    // Input
+    // Input.
     Tab,
     Newline,
     DeleteChar,
+
+    // History.
+    HistoryUp,
+    HistoryDown,
 
     /// Other actions defined by specialized buffers.
     Other(T),
@@ -169,6 +173,11 @@ pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
     pub matches: Vec<(Cursor, Cursor)>,
     /// The index of the current match for navigation.
     matches_idx: Option<usize>,
+
+    /// The history of entered commands.
+    cmd_history: Vec<Cow<'static, str>>,
+    /// The current index in the command history.
+    cmd_history_idx: usize,
 
     /// The state machine handling input in view mode.
     pub view_state_machine: StateMachine<ViewAction<ViewEnum>>,
@@ -243,6 +252,8 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
                 .simple(Key::Esc, ViewMode)
                 .simple(Key::Left, Left)
                 .simple(Key::Right, Right)
+                .simple(Key::Up, HistoryUp)
+                .simple(Key::Down, HistoryDown)
                 .simple(Key::AltRight, NextWord)
                 .simple(Key::AltLeft, PrevWord)
                 .simple(Key::Char('\n'), Newline)
@@ -273,6 +284,8 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             clipboard: Clipboard::new().map_err(Error::other)?,
             matches: Vec::new(),
             matches_idx: None,
+            cmd_history: Vec::new(),
+            cmd_history_idx: 0,
             view_state_machine,
             cmd_state_machine,
             rerender: true,
@@ -318,6 +331,46 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         self.matches_idx = None;
     }
 
+    /// Loads the next command history item.
+    fn next_command_history(&mut self) {
+        if self.cmd_history_idx == self.cmd_history.len() {
+            return;
+        }
+
+        self.cmd_history_idx += 1;
+        if self.cmd_history_idx == self.cmd_history.len() {
+            self.cmd.buff[0] = Cow::from("");
+        } else {
+            self.cmd.buff[0].clone_from(&self.cmd_history[self.cmd_history_idx]);
+        }
+
+        let len = self.cmd.line_count(0).expect("Illegal state");
+        let n = self.cmd.cur.x;
+        if n < len {
+            cursor::right(&mut self.cmd, &mut self.cmd_view, len - n);
+        } else if n > len {
+            cursor::left(&mut self.cmd, &mut self.cmd_view, n - len);
+        }
+    }
+
+    /// Loads the previous command history item.
+    fn prev_command_history(&mut self) {
+        if self.cmd_history_idx == 0 {
+            return;
+        }
+
+        self.cmd_history_idx -= 1;
+        self.cmd.buff[0].clone_from(&self.cmd_history[self.cmd_history_idx]);
+
+        let len = self.cmd.line_count(0).expect("Illegal state");
+        let n = self.cmd.cur.x;
+        if n < len {
+            cursor::right(&mut self.cmd, &mut self.cmd_view, len - n);
+        } else if n > len {
+            cursor::left(&mut self.cmd, &mut self.cmd_view, n - len);
+        }
+    }
+
     /// Changes the base buffers mode.
     pub fn change_mode(&mut self, mode: Mode<ModeEnum>) {
         match self.mode {
@@ -335,7 +388,10 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         }
 
         match mode {
-            Mode::Command | Mode::View | Mode::Other(_) => {}
+            Mode::Command => {
+                self.cmd_history_idx = self.cmd_history.len();
+            }
+            Mode::View | Mode::Other(_) => {}
         }
 
         self.mode = mode;
@@ -409,11 +465,16 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             A(ViewMode) => self.change_mode(Mode::View),
             A(Left) => cursor::left(&mut self.cmd, &mut self.cmd_view, 1),
             A(Right) => cursor::right(&mut self.cmd, &mut self.cmd_view, 1),
+            A(HistoryUp) => self.prev_command_history(),
+            A(HistoryDown) => self.next_command_history(),
             A(NextWord) => cursor::next_word(&mut self.cmd, &mut self.cmd_view, 1),
             A(PrevWord) => cursor::prev_word(&mut self.cmd, &mut self.cmd_view, 1),
             A(Newline) => {
                 // Commands have only one line.
                 let cmd = self.cmd.buff[0].clone();
+                if !cmd.is_empty() {
+                    self.cmd_history.push(cmd.clone());
+                }
                 self.change_mode(Mode::View);
 
                 return self.apply_command(cmd);

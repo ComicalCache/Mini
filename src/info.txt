@@ -23,7 +23,8 @@ Additionally by pressing 'v' you can start a selection. A selection marks a char
 the selected character and the current cursor position. This is visualized through highlighting the selected area.
 Using 'yv' you can yank that selection.
 
-Furthermore, all buffers support following command:
+Furthermore, you can enter command mode by pressing space. Using the up and down arrow you can cycle through the issued
+command history. All buffers support following commands:
 - 'q' to quit
 - 'qq' to force quit, discarding unsaved changes
 - '?' to see this message
