@@ -8,7 +8,7 @@ use crate::{
         base::{BaseBuffer, COMMAND_PROMPT, CommandTick, Mode, ViewAction},
     },
     change_buffer,
-    cursor::Cursor,
+    cursor::{self, Cursor},
     util::{CommandResult, CursorStyle},
 };
 use std::{
@@ -23,6 +23,8 @@ enum OtherViewAction {
     // Interact
     Refresh,
     SelectItem,
+    Remove,
+    RecursiveRemove,
 
     // Buffers
     ChangeToTextBuffer,
@@ -52,13 +54,52 @@ impl FilesBuffer {
             .simple(Key::Char('t'), ViewAction::Other(ChangeToTextBuffer))
             .simple(Key::Char('?'), ViewAction::Other(ChangeToInfoBuffer))
             .simple(Key::Char('r'), ViewAction::Other(Refresh))
-            .simple(Key::Char('\n'), ViewAction::Other(SelectItem));
+            .simple(Key::Char('\n'), ViewAction::Other(SelectItem))
+            .simple(Key::Char('d'), ViewAction::Other(Remove))
+            .simple(Key::Char('D'), ViewAction::Other(RecursiveRemove));
 
         Ok(FilesBuffer {
             base,
             path,
             entries,
         })
+    }
+
+    fn refresh(&mut self) -> CommandResult {
+        match FilesBuffer::load_dir(&self.path, &mut self.entries) {
+            Ok(contents) => {
+                self.base.doc.set_contents(&contents, 0, 0);
+                self.base.doc_view.cur = Cursor::new(0, 0);
+
+                CommandResult::Ok
+            }
+            Err(err) => CommandResult::SetAndChangeBuffer(
+                INFO_BUFF_IDX,
+                vec![Cow::from(err.to_string())],
+                None,
+            ),
+        }
+    }
+
+    fn selected_remove_command<S: AsRef<str>>(&mut self, cmd: S) -> CommandResult {
+        if self.base.doc.cur.y == 0 {
+            return CommandResult::SetAndChangeBuffer(
+                INFO_BUFF_IDX,
+                vec![Cow::from("Cannot delete the parent directory")],
+                None,
+            );
+        }
+
+        // Set the command and move the cursor to be at the end of the input.
+        *self.base.cmd.buff[0].to_mut() = format!(
+            "{} {}",
+            cmd.as_ref(),
+            self.base.doc.buff[self.base.doc.cur.y]
+        );
+        cursor::jump_to_end_of_line(&mut self.base.cmd, &mut self.base.cmd_view);
+        self.base.change_mode(Mode::Command);
+
+        CommandResult::Ok
     }
 
     /// Creates an info line
@@ -108,46 +149,34 @@ impl FilesBuffer {
         use OtherViewAction::*;
 
         match action {
-            Refresh => match FilesBuffer::load_dir(&self.path, &mut self.entries) {
-                Ok(contents) => {
-                    self.base.doc.set_contents(&contents, 0, 0);
-                    self.base.doc_view.cur = Cursor::new(0, 0);
-                }
-                Err(err) => {
-                    return CommandResult::SetAndChangeBuffer(
+            Refresh => self.refresh(),
+            SelectItem => self
+                .select_item()
+                .or_else(|err| {
+                    Ok::<CommandResult, Error>(CommandResult::SetAndChangeBuffer(
                         INFO_BUFF_IDX,
                         vec![Cow::from(err.to_string())],
                         None,
-                    );
-                }
-            },
-            SelectItem => {
-                return self
-                    .select_item()
-                    .or_else(|err| {
-                        Ok::<CommandResult, Error>(CommandResult::SetAndChangeBuffer(
-                            INFO_BUFF_IDX,
-                            vec![Cow::from(err.to_string())],
-                            None,
-                        ))
-                    })
-                    .unwrap();
-            }
+                    ))
+                })
+                .unwrap(),
+            Remove => self.selected_remove_command("rm"),
+            RecursiveRemove => self.selected_remove_command("rm!"),
             ChangeToTextBuffer => change_buffer!(self, TXT_BUFF_IDX),
             ChangeToInfoBuffer => change_buffer!(self, INFO_BUFF_IDX),
         }
 
         // Rest motion repeat buffer after successful command.
-        self.base.motion_repeat.clear();
-        CommandResult::Ok
+        // self.base.motion_repeat.clear();
+        // CommandResult::Ok
     }
 
     /// Handles self apply and self defined command ticks.
-    fn command_tick(tick: CommandTick<()>) -> CommandResult {
+    fn command_tick(&mut self, tick: CommandTick<()>) -> CommandResult {
         use CommandTick::*;
 
         match tick {
-            Apply(cmd) => FilesBuffer::apply_command(&cmd),
+            Apply(cmd) => self.apply_command(&cmd),
             Other(()) => unreachable!("Illegal state"),
         }
     }
@@ -212,7 +241,7 @@ impl Buffer for FilesBuffer {
             },
             Mode::Command => match self.base.command_tick(key) {
                 Ok(res) => res,
-                Err(tick) => FilesBuffer::command_tick(tick),
+                Err(tick) => self.command_tick(tick),
             },
             Mode::Other(()) => unreachable!("Illegal state"),
         }
