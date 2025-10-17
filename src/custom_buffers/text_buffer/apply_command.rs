@@ -20,7 +20,7 @@ impl TextBuffer {
     }
 
     fn open_command(&mut self, args: &str, force: bool) -> CommandResult {
-        if self.base.doc.edited && !force {
+        if !force && self.base.doc.edited {
             return CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
                 vec![Cow::from(

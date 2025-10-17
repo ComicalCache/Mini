@@ -17,8 +17,10 @@ use crate::{
 };
 use polling::{Events, Poller};
 use std::{
+    borrow::Cow,
     io::{BufWriter, Write},
     os::fd::AsFd,
+    path::PathBuf,
     time::Duration,
 };
 use termion::{
@@ -42,14 +44,15 @@ fn main() -> Result<(), std::io::Error> {
     args.next();
 
     // Print help or parse read file if argument was supplied.
-    let file = if let Some(path) = args.next() {
+    let path = args.next();
+    let file = if let Some(path) = &path {
         if path == "--help" {
             let version = option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap();
             println!("Mini - A terminal text-editor (v{version})\n\n{INFO_MSG}");
             return Ok(());
         }
 
-        Some(open_file(path)?)
+        Some(open_file(path))
     } else {
         None
     };
@@ -66,13 +69,34 @@ fn main() -> Result<(), std::io::Error> {
 
     // Create an array of buffers that can be switched to.
     let (w, h) = termion::terminal_size()?;
-    let base = std::env::current_dir()?;
+    let base = if let Some(path) = path {
+        PathBuf::from(path)
+    } else {
+        std::env::current_dir()?
+    };
+
+    // Setting the current buffer and error in case of file opening error.
+    let mut info_buffer = Box::new(InfoBuffer::new(w as usize, h as usize)?);
+    let mut curr_buff = if let Some(Err(err)) = &file {
+        info_buffer.set_contents(&[Cow::from(err.to_string())], None);
+        INFO_BUFF_IDX
+    } else {
+        TXT_BUFF_IDX
+    };
+
+    // Vector of buffers.
     let mut buffs: [Box<dyn Buffer>; 3] = [
-        Box::new(TextBuffer::new(w as usize, h as usize, file)?),
+        // 1
+        Box::new(TextBuffer::new(
+            w as usize,
+            h as usize,
+            file.and_then(std::result::Result::ok),
+        )?),
+        // 2
         Box::new(FilesBuffer::new(w as usize, h as usize, base)?),
-        Box::new(InfoBuffer::new(w as usize, h as usize)?),
+        // 3
+        info_buffer,
     ];
-    let mut curr_buff = TXT_BUFF_IDX;
 
     // Init terminal by switching to alternate screen.
     write!(&mut stdout, "{ToAlternateScreen}")?;

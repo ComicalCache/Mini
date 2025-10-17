@@ -23,8 +23,15 @@ pub enum CursorStyle {
     SteadyBlock,
 }
 
-/// Opens a file as rw+truncate
+/// Opens a file as rw+truncate.
 pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
+    // Create parent directories if they don't exist.
+    let mut base = Path::new(path.as_ref());
+    if !base.is_dir() {
+        base = base.parent().unwrap_or(Path::new("/"));
+    }
+    std::fs::create_dir_all(base)?;
+
     OpenOptions::new()
         .read(true)
         .write(true)

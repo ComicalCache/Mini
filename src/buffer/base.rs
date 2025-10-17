@@ -266,11 +266,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         let mut cmd_view = Viewport::new(w, 1, 0, 0, None);
         cmd_view.set_number_width(COMMAND_PROMPT.len());
 
-        let count = if let Some(contents) = &contents {
-            contents.len()
-        } else {
-            1
-        };
+        let count = contents.as_ref().map_or(1, |buff| buff.len().max(1));
         Ok(BaseBuffer {
             doc: Document::new(0, 0, contents),
             info: Document::new(0, 0, None),

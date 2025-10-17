@@ -4,7 +4,12 @@ use crate::{
     custom_buffers::files_buffer::FilesBuffer,
     util::{CommandResult, open_file, read_file_to_lines},
 };
-use std::{borrow::Cow, fs::read_dir, io::Error, path::PathBuf};
+use std::{
+    borrow::Cow,
+    fs::read_dir,
+    io::Error,
+    path::{Path, PathBuf},
+};
 
 impl FilesBuffer {
     /// Loads a directory as path buffers and Strings.
@@ -12,6 +17,12 @@ impl FilesBuffer {
         base: &PathBuf,
         entries: &mut Vec<PathBuf>,
     ) -> Result<Vec<Cow<'static, str>>, Error> {
+        let base = if base.is_dir() {
+            base
+        } else {
+            &PathBuf::from(base.parent().unwrap_or(Path::new("/")))
+        };
+
         let mut tmp_entries = read_dir(base)?
             .map(|res| res.map(|e| e.path()))
             .collect::<Result<Vec<_>, Error>>()?;
