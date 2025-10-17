@@ -62,7 +62,7 @@ impl FilesBuffer {
             return Ok(CommandResult::Ok);
         }
 
-        let entry = &self.entries[idx - 1].clone();
+        let entry = &self.entries[idx.saturating_sub(1)].clone();
         if entry.is_file() {
             cursor::jump_to_beginning_of_file(&mut self.base.doc, &mut self.base.doc_view);
             let contents = read_file_to_lines(&mut open_file(entry)?)?;
