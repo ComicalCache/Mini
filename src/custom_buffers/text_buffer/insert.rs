@@ -6,7 +6,7 @@ use crate::{
     },
     cursor,
     custom_buffers::text_buffer::TextBuffer,
-    util::CommandResult,
+    util::{CommandResult, split_to_lines},
 };
 use std::borrow::Cow;
 
@@ -75,7 +75,7 @@ impl TextBuffer {
                 self.base.motion_repeat.clear();
                 return Some(CommandResult::SetAndChangeBuffer(
                     INFO_BUFF_IDX,
-                    vec![Cow::from(err.to_string())],
+                    split_to_lines(err.to_string()),
                     None,
                 ));
             }

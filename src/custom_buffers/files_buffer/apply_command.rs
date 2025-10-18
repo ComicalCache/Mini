@@ -1,7 +1,7 @@
 use crate::{
     INFO_BUFF_IDX,
     custom_buffers::files_buffer::FilesBuffer,
-    util::{CommandResult, open_file},
+    util::{CommandResult, open_file, split_to_lines},
 };
 use std::borrow::Cow;
 
@@ -12,7 +12,7 @@ impl FilesBuffer {
             if let Err(err) = std::fs::create_dir_all(args) {
                 return CommandResult::SetAndChangeBuffer(
                     INFO_BUFF_IDX,
-                    vec![Cow::from(err.to_string())],
+                    split_to_lines(err.to_string()),
                     None,
                 );
             }
@@ -20,7 +20,7 @@ impl FilesBuffer {
         } else if let Err(err) = open_file(args) {
             return CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
-                vec![Cow::from(err.to_string())],
+                split_to_lines(err.to_string()),
                 None,
             );
         }
@@ -34,14 +34,14 @@ impl FilesBuffer {
             if let Err(err) = std::fs::remove_dir(args) {
                 return CommandResult::SetAndChangeBuffer(
                     INFO_BUFF_IDX,
-                    vec![Cow::from(err.to_string())],
+                    split_to_lines(err.to_string()),
                     None,
                 );
             }
         } else if let Err(err) = std::fs::remove_file(args) {
             return CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
-                vec![Cow::from(err.to_string())],
+                split_to_lines(err.to_string()),
                 None,
             );
         }
@@ -55,7 +55,7 @@ impl FilesBuffer {
             if let Err(err) = std::fs::remove_dir_all(args) {
                 return CommandResult::SetAndChangeBuffer(
                     INFO_BUFF_IDX,
-                    vec![Cow::from(err.to_string())],
+                    split_to_lines(err.to_string()),
                     None,
                 );
             }

@@ -9,7 +9,7 @@ use crate::{
     },
     change_buffer,
     cursor::{self, Cursor},
-    util::{CommandResult, CursorStyle},
+    util::{CommandResult, CursorStyle, split_to_lines},
 };
 use std::{
     borrow::Cow,
@@ -75,7 +75,7 @@ impl FilesBuffer {
             }
             Err(err) => CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
-                vec![Cow::from(err.to_string())],
+                split_to_lines(err.to_string()),
                 None,
             ),
         }
@@ -155,7 +155,7 @@ impl FilesBuffer {
                 .or_else(|err| {
                     Ok::<CommandResult, Error>(CommandResult::SetAndChangeBuffer(
                         INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
+                        split_to_lines(err.to_string()),
                         None,
                     ))
                 })

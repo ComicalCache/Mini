@@ -13,11 +13,10 @@ mod viewport;
 use crate::{
     buffer::Buffer,
     custom_buffers::{files_buffer::FilesBuffer, info_buffer::InfoBuffer, text_buffer::TextBuffer},
-    util::{CommandResult, open_file},
+    util::{CommandResult, open_file, split_to_lines},
 };
 use polling::{Events, Poller};
 use std::{
-    borrow::Cow,
     io::{BufWriter, Write},
     os::fd::AsFd,
     path::PathBuf,
@@ -78,7 +77,7 @@ fn main() -> Result<(), std::io::Error> {
     // Setting the current buffer and error in case of file opening error.
     let mut info_buffer = Box::new(InfoBuffer::new(w as usize, h as usize)?);
     let mut curr_buff = if let Some(Err(err)) = &file {
-        info_buffer.set_contents(&[Cow::from(err.to_string())], None);
+        info_buffer.set_contents(&split_to_lines(err.to_string()), None);
         INFO_BUFF_IDX
     } else {
         TXT_BUFF_IDX

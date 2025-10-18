@@ -48,6 +48,13 @@ pub fn read_file_to_lines(file: &mut File) -> Result<Vec<Cow<'static, str>>, Err
         .collect::<Result<Vec<Cow<'static, str>>, _>>()
 }
 
+/// Splits a string into a vector of lines.
+pub fn split_to_lines<S: AsRef<str>>(data: S) -> Vec<Cow<'static, str>> {
+    let mut buff = Vec::new();
+    buff.extend(data.as_ref().lines().map(str::to_string).map(Cow::from));
+    buff
+}
+
 /// Parses a line column string 'y:x' where y is the line and x is the column.
 pub fn line_column(input: &str) -> (Option<usize>, Option<usize>) {
     let mut y: Option<usize> = None;

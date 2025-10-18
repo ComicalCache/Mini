@@ -2,11 +2,10 @@ use crate::{
     INFO_BUFF_IDX,
     cursor::{self, Cursor},
     document::Document,
-    util::CommandResult,
+    util::{CommandResult, split_to_lines},
     viewport::Viewport,
 };
 use arboard::Clipboard;
-use std::borrow::Cow;
 
 /// Yanks the selected area.
 pub fn selection(
@@ -25,7 +24,7 @@ pub fn selection(
         Ok(()) => Ok(()),
         Err(err) => Err(CommandResult::SetAndChangeBuffer(
             INFO_BUFF_IDX,
-            vec![Cow::from(err.to_string())],
+            split_to_lines(err.to_string()),
             None,
         )),
     }
@@ -55,7 +54,7 @@ pub fn line(
         Ok(()) => Ok(()),
         Err(err) => Err(CommandResult::SetAndChangeBuffer(
             INFO_BUFF_IDX,
-            vec![Cow::from(err.to_string())],
+            split_to_lines(err.to_string()),
             None,
         )),
     }
@@ -80,7 +79,7 @@ pub fn left(
         Ok(()) => Ok(()),
         Err(err) => Err(CommandResult::SetAndChangeBuffer(
             INFO_BUFF_IDX,
-            vec![Cow::from(err.to_string())],
+            split_to_lines(err.to_string()),
             None,
         )),
     }
@@ -105,7 +104,7 @@ pub fn right(
         Ok(()) => Ok(()),
         Err(err) => Err(CommandResult::SetAndChangeBuffer(
             INFO_BUFF_IDX,
-            vec![Cow::from(err.to_string())],
+            split_to_lines(err.to_string()),
             None,
         )),
     }
@@ -130,7 +129,7 @@ pub fn next_word(
         Ok(()) => Ok(()),
         Err(err) => Err(CommandResult::SetAndChangeBuffer(
             INFO_BUFF_IDX,
-            vec![Cow::from(err.to_string())],
+            split_to_lines(err.to_string()),
             None,
         )),
     }
@@ -155,7 +154,7 @@ pub fn prev_word(
         Ok(()) => Ok(()),
         Err(err) => Err(CommandResult::SetAndChangeBuffer(
             INFO_BUFF_IDX,
-            vec![Cow::from(err.to_string())],
+            split_to_lines(err.to_string()),
             None,
         )),
     }
@@ -180,7 +179,7 @@ pub fn beginning_of_line(
         Ok(()) => Ok(()),
         Err(err) => Err(CommandResult::SetAndChangeBuffer(
             INFO_BUFF_IDX,
-            vec![Cow::from(err.to_string())],
+            split_to_lines(err.to_string()),
             None,
         )),
     }
@@ -205,7 +204,7 @@ pub fn end_of_line(
         Ok(()) => Ok(()),
         Err(err) => Err(CommandResult::SetAndChangeBuffer(
             INFO_BUFF_IDX,
-            vec![Cow::from(err.to_string())],
+            split_to_lines(err.to_string()),
             None,
         )),
     }
@@ -230,7 +229,7 @@ pub fn matching_opposite(
         Ok(()) => Ok(()),
         Err(err) => Err(CommandResult::SetAndChangeBuffer(
             INFO_BUFF_IDX,
-            vec![Cow::from(err.to_string())],
+            split_to_lines(err.to_string()),
             None,
         )),
     }
@@ -255,7 +254,7 @@ pub fn beginning_of_file(
         Ok(()) => Ok(()),
         Err(err) => Err(CommandResult::SetAndChangeBuffer(
             INFO_BUFF_IDX,
-            vec![Cow::from(err.to_string())],
+            split_to_lines(err.to_string()),
             None,
         )),
     }
@@ -280,7 +279,7 @@ pub fn end_of_file(
         Ok(()) => Ok(()),
         Err(err) => Err(CommandResult::SetAndChangeBuffer(
             INFO_BUFF_IDX,
-            vec![Cow::from(err.to_string())],
+            split_to_lines(err.to_string()),
             None,
         )),
     }

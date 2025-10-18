@@ -84,6 +84,7 @@ impl FilesBuffer {
             self.base.doc_view.cur = Cursor::new(0, 0);
             return Ok(CommandResult::Ok);
         } else if entry.is_symlink() && entry.exists() {
+            // FIXME: this can cause an infinite loop on a circular symlink.
             self.path = entry.read_link()?;
             return self.select_item();
         }

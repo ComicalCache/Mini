@@ -3,7 +3,7 @@ use crate::{
     buffer::history::{Change, Replace},
     cursor,
     custom_buffers::text_buffer::TextBuffer,
-    util::{CommandResult, open_file, read_file_to_lines},
+    util::{CommandResult, open_file, read_file_to_lines, split_to_lines},
 };
 use regex::Regex;
 use std::{borrow::Cow, io::Error};
@@ -48,7 +48,7 @@ impl TextBuffer {
             Err(err) => {
                 return CommandResult::SetAndChangeBuffer(
                     INFO_BUFF_IDX,
-                    vec![Cow::from(err.to_string())],
+                    split_to_lines(err.to_string()),
                     None,
                 );
             }
@@ -59,7 +59,7 @@ impl TextBuffer {
             Err(err) => {
                 return CommandResult::SetAndChangeBuffer(
                     INFO_BUFF_IDX,
-                    vec![Cow::from(err.to_string())],
+                    split_to_lines(err.to_string()),
                     None,
                 );
             }
@@ -75,7 +75,7 @@ impl TextBuffer {
                 Err(err) => {
                     return CommandResult::SetAndChangeBuffer(
                         INFO_BUFF_IDX,
-                        vec![Cow::from(err.to_string())],
+                        split_to_lines(err.to_string()),
                         None,
                     );
                 }
@@ -88,7 +88,7 @@ impl TextBuffer {
             Err(err) => {
                 return CommandResult::SetAndChangeBuffer(
                     INFO_BUFF_IDX,
-                    vec![Cow::from(err.to_string())],
+                    split_to_lines(err.to_string()),
                     None,
                 );
             }
@@ -216,7 +216,7 @@ impl TextBuffer {
                 ),
                 Err(err) => CommandResult::SetAndChangeBuffer(
                     INFO_BUFF_IDX,
-                    vec![Cow::from(err.to_string())],
+                    split_to_lines(err.to_string()),
                     None,
                 ),
                 _ => CommandResult::Quit,
