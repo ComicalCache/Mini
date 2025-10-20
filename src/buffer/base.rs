@@ -61,6 +61,8 @@ pub enum ViewAction<T> {
     Right,
     NextWord,
     PrevWord,
+    NextEmptyLine,
+    PrevEmptyLine,
     JumpToBeginningOfLine,
     JumpToEndOfLine,
     JumpToMatchingOpposite,
@@ -207,6 +209,8 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
                 .simple(Key::Char('l'), Right)
                 .simple(Key::Char('w'), NextWord)
                 .simple(Key::Char('b'), PrevWord)
+                .simple(Key::Char('}'), NextEmptyLine)
+                .simple(Key::Char('{'), PrevEmptyLine)
                 .simple(Key::Char('<'), JumpToBeginningOfLine)
                 .simple(Key::Char('>'), JumpToEndOfLine)
                 .simple(Key::Char('.'), JumpToMatchingOpposite)
@@ -408,6 +412,8 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             A(Right) => movement!(self, right),
             A(NextWord) => movement!(self, next_word),
             A(PrevWord) => movement!(self, prev_word),
+            A(NextEmptyLine) => movement!(self, next_empty_line),
+            A(PrevEmptyLine) => movement!(self, prev_empty_line),
             A(JumpToBeginningOfLine) => jump!(self, jump_to_beginning_of_line),
             A(JumpToEndOfLine) => jump!(self, jump_to_end_of_line),
             A(JumpToMatchingOpposite) => jump!(self, jump_to_matching_opposite),

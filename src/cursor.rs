@@ -290,6 +290,49 @@ fn __prev_word(doc: &mut Document, view: &mut Viewport) {
     }
 }
 
+/// Jumps to the next empty line.
+pub fn next_empty_line(doc: &mut Document, view: &mut Viewport, n: usize) {
+    for _ in 0..n {
+        __next_empty_line(doc, view);
+    }
+}
+
+fn __next_empty_line(doc: &mut Document, view: &mut Viewport) {
+    if let Some((y, _)) = doc
+        .buff
+        .iter()
+        .enumerate()
+        .skip(doc.cur.y + 1)
+        .find(|(_, l)| l.is_empty())
+    {
+        down(doc, view, y - doc.cur.y);
+    } else {
+        jump_to_end_of_file(doc, view);
+    }
+}
+
+/// Jumps to the previous empty line.
+pub fn prev_empty_line(doc: &mut Document, view: &mut Viewport, n: usize) {
+    for _ in 0..n {
+        __prev_empty_line(doc, view);
+    }
+}
+
+pub fn __prev_empty_line(doc: &mut Document, view: &mut Viewport) {
+    if let Some((y, _)) = doc
+        .buff
+        .iter()
+        .enumerate()
+        .rev()
+        .skip(doc.buff.len() - doc.cur.y)
+        .find(|(_, l)| l.is_empty())
+    {
+        up(doc, view, doc.cur.y - y);
+    } else {
+        jump_to_beginning_of_file(doc, view);
+    }
+}
+
 /// Jumps the cursors the the beginning of a line.
 pub fn jump_to_beginning_of_line(doc: &mut Document, view: &mut Viewport) {
     left(doc, view, doc.cur.x);

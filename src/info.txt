@@ -10,6 +10,8 @@ basic motions:
 - 'h' | 'j' | 'k' | 'l' to move the cursor
 - 'w' to skip to the next word
 - 'b' to go back one word
+- '}' to skip to the next empty line
+- '{' to go to the previous empty line
 - '<' | '>' to jump to the beginning/end of a line
 - '.' to jump to the matching opposite bracket
 - 'g' to go to the end of the file
