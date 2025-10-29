@@ -166,12 +166,8 @@ impl Document {
     /// Writes a str at a specified position.
     /// Creates new lines if the content contains new lines.
     pub fn write_str_at(&mut self, x: usize, mut y: usize, r#str: &str) {
-        let Some(count) = self.line_count(y) else {
-            return;
-        };
-        if x > count {
-            return;
-        }
+        let count = self.line_count(y).expect("Illegal state");
+        assert!(x <= count, "Illegal state");
 
         let mut lines = r#str.split('\n');
 
@@ -262,11 +258,11 @@ impl Document {
             let start_idx = line
                 .char_indices()
                 .nth(start.x)
-                .map_or(start_len, |(idx, _)| idx);
+                .map_or(line.len(), |(idx, _)| idx);
             let end_idx = line
                 .char_indices()
                 .nth(end.x)
-                .map_or(end_len, |(idx, _)| idx);
+                .map_or(line.len(), |(idx, _)| idx);
 
             return Some(Cow::from(line[start_idx..end_idx].to_string()));
         }
@@ -276,7 +272,7 @@ impl Document {
         let start_idx = first_line
             .char_indices()
             .nth(start.x)
-            .map_or(start_len, |(idx, _)| idx);
+            .map_or(first_line.len(), |(idx, _)| idx);
         let mut result = Cow::from(first_line[start_idx..].to_string());
         result.to_mut().push('\n');
 
@@ -291,7 +287,7 @@ impl Document {
         let end_idx = last_line
             .char_indices()
             .nth(end.x)
-            .map_or(end_len, |(idx, _)| idx);
+            .map_or(last_line.len(), |(idx, _)| idx);
         result.to_mut().push_str(&last_line[..end_idx]);
 
         Some(result)

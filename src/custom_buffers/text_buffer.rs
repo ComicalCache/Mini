@@ -87,6 +87,7 @@ enum OtherViewAction {
     ChangeToFilesBuffer,
 
     // Delete
+    DeleteChar,
     DeleteSelection,
     DeleteLine,
     DeleteLeft,
@@ -185,7 +186,7 @@ impl TextBuffer {
                     Key::Char('G') => Some(ChainResult::Action(Other(DeleteToBeginningOfFile))),
                     _ => None,
                 })
-                .simple(Key::Char('x'), Other(DeleteRight))
+                .simple(Key::Char('x'), Other(DeleteChar))
                 .operator(Key::Char('c'), |key| match key {
                     Key::Char('v') => Some(ChainResult::Action(Other(ChangeSelection))),
                     Key::Char('c') => Some(ChainResult::Action(Other(ChangeLine))),
@@ -300,6 +301,19 @@ impl TextBuffer {
             }
             ChangeToInfoBuffer => change_buffer!(self, INFO_BUFF_IDX),
             ChangeToFilesBuffer => change_buffer!(self, FILES_BUFF_IDX),
+            DeleteChar => {
+                delete!(self, right, REPEAT);
+                let x = self
+                    .base
+                    .doc
+                    .line_count(self.base.doc.cur.y)
+                    .expect("Illegal state");
+
+                // Go one to the left if at the end of the line.
+                if self.base.doc.cur.x == x {
+                    cursor::left(&mut self.base.doc, &mut self.base.doc_view, 1);
+                }
+            }
             DeleteSelection => delete!(self, selection, SELECTION),
             DeleteLine => delete!(self, line, REPEAT),
             DeleteLeft => delete!(self, left, REPEAT),

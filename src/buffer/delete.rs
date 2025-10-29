@@ -4,7 +4,6 @@ use crate::{
     document::Document,
     viewport::Viewport,
 };
-use std::borrow::Cow;
 
 /// Deletes the selected area.
 pub fn selection(
@@ -34,108 +33,98 @@ pub fn selection(
 
 /// Deletes a line.
 pub fn line(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
-    let end = (doc.cur.y + n).min(doc.buff.len());
+    if doc.buff.len() == 1 && doc.buff[0].is_empty() {
+        return;
+    }
 
-    // Only collect the delete data if a history exists.
-    let mut data = if history.is_some() {
-        Some(doc.buff[doc.cur.y..end].join("\n"))
+    if doc.cur.y + n >= doc.buff.len() {
+        cursor::up(doc, view, doc.cur.y + n - doc.buff.len());
+    }
+
+    // Begin of selection at the end of one line above the first line.
+    cursor::up(doc, view, 1);
+    if doc.cur.y != 0 {
+        cursor::jump_to_end_of_line(doc, view);
     } else {
-        None
-    };
-
-    // Now perform the deletion.
-    if !doc.buff.is_empty() {
-        doc.buff.drain(doc.cur.y..end);
+        cursor::jump_to_beginning_of_line(doc, view);
     }
+    let tmp = doc.cur;
 
-    if doc.buff.is_empty() {
-        // Ensure one line always exists.
-        doc.buff.push(Cow::from(""));
-    } else if data.is_some() {
-        // Append a new line if it was not the only line to be deleted.
-        data.as_mut().expect("Illegal state").push('\n');
+    // End selection at the end of the last line.
+    cursor::down(doc, view, n);
+    if tmp.y != 0 {
+        cursor::jump_to_end_of_line(doc, view);
+    } else {
+        cursor::jump_to_beginning_of_line(doc, view);
     }
+    selection(doc, view, &mut Some(tmp), history);
 
-    if let Some(history) = history
-        && !data.as_ref().expect("Illegal state").is_empty()
-    {
-        history.add_change(Change::Delete {
-            pos: Cursor::new(0, doc.cur.y),
-            data: Cow::from(data.expect("Illegal state")),
-        });
+    // Fix cursor moving up.
+    if tmp.y != 0 {
+        cursor::down(doc, view, 1);
     }
-
-    // Adjust cursor.
-    if doc.cur.y >= doc.buff.len() {
-        cursor::up(doc, view, doc.cur.y - doc.buff.len());
-    }
-    let bound = doc.line_count(doc.cur.y).expect("Illegal state");
-    if doc.cur.x > bound {
-        cursor::left(doc, view, doc.cur.x - bound);
-    }
-
-    doc.edited = true;
+    cursor::jump_to_beginning_of_line(doc, view);
 }
 
 /// Deletes left of the cursor.
 pub fn left(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
-    let mut tmp = Some(doc.cur);
+    let tmp = doc.cur;
     cursor::left(doc, view, n);
-    selection(doc, view, &mut tmp, history);
+    selection(doc, view, &mut Some(tmp), history);
 }
 
 /// Deletes right of the cursor.
 pub fn right(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
-    let mut tmp = Some(doc.cur);
+    let tmp = doc.cur;
     cursor::right(doc, view, n);
-    selection(doc, view, &mut tmp, history);
+    selection(doc, view, &mut Some(tmp), history);
 }
 
 /// Deletes the next word.
 pub fn next_word(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
-    let mut tmp = Some(doc.cur);
+    let tmp = doc.cur;
     cursor::next_word(doc, view, n);
-    selection(doc, view, &mut tmp, history);
+    selection(doc, view, &mut Some(tmp), history);
 }
 
 /// Deletes the previous word.
 pub fn prev_word(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
-    let mut tmp = Some(doc.cur);
+    let tmp = doc.cur;
     cursor::prev_word(doc, view, n);
-    selection(doc, view, &mut tmp, history);
+    selection(doc, view, &mut Some(tmp), history);
 }
 
 /// Deletes until the beginning of the line.
 pub fn beginning_of_line(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>) {
-    let mut tmp = Some(doc.cur);
+    let tmp = doc.cur;
     cursor::jump_to_beginning_of_line(doc, view);
-    selection(doc, view, &mut tmp, history);
+    selection(doc, view, &mut Some(tmp), history);
 }
 
 /// Deletes until the end of the line.
 pub fn end_of_line(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>) {
-    let mut tmp = Some(doc.cur);
+    let tmp = doc.cur;
     cursor::jump_to_end_of_line(doc, view);
-    selection(doc, view, &mut tmp, history);
+    selection(doc, view, &mut Some(tmp), history);
 }
 
 /// Deletes until the matching opposite bracket.
 pub fn matching_opposite(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>) {
-    let mut tmp = Some(doc.cur);
+    let tmp = doc.cur;
     cursor::jump_to_matching_opposite(doc, view);
-    selection(doc, view, &mut tmp, history);
+    selection(doc, view, &mut Some(tmp), history);
 }
 
 /// Deletes until the beginning of the file.
 pub fn beginning_of_file(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>) {
-    let mut tmp = Some(doc.cur);
+    let tmp = doc.cur;
     cursor::jump_to_beginning_of_file(doc, view);
-    selection(doc, view, &mut tmp, history);
+    selection(doc, view, &mut Some(tmp), history);
 }
 
 /// Deletes until the end of the file.
 pub fn end_of_file(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>) {
-    let mut tmp = Some(doc.cur);
+    let tmp = doc.cur;
     cursor::jump_to_end_of_file(doc, view);
-    selection(doc, view, &mut tmp, history);
+    selection(doc, view, &mut Some(tmp), history);
 }
