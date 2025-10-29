@@ -66,6 +66,20 @@ pub fn line(doc: &mut Document, view: &mut Viewport, history: Option<&mut Histor
     cursor::jump_to_beginning_of_line(doc, view);
 }
 
+/// Deletes a character.
+pub fn char(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
+    let len = doc.line_count(doc.cur.y).expect("Illegal state");
+    if doc.cur.x + n > len {
+        cursor::left(doc, view, doc.cur.x + n - len - 1);
+    }
+
+    right(doc, view, history, n);
+
+    if doc.cur.x == doc.line_count(doc.cur.y).expect("Illegal state") {
+        cursor::left(doc, view, 1);
+    }
+}
+
 /// Deletes left of the cursor.
 pub fn left(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
     let tmp = doc.cur;
