@@ -23,7 +23,7 @@ pub fn write_char(
         });
     }
 
-    doc.write_char(ch);
+    doc.write_char(ch, doc.cur.x, doc.cur.y);
     cursor::right(doc, view, 1);
 }
 
@@ -44,11 +44,10 @@ pub fn write_new_line_char(doc: &mut Document, view: &mut Viewport, history: Opt
         .map_or(line.len(), |(idx, _)| idx);
 
     let new_line = line.to_mut().split_off(idx);
-    doc.insert_line_at(doc.cur.y + 1, Cow::from(new_line));
+    doc.insert_line(Cow::from(new_line), doc.cur.y + 1);
 
     cursor::down(doc, view, 1);
-    let n = doc.cur.x;
-    cursor::left(doc, view, n);
+    cursor::jump_to_beginning_of_line(doc, view);
 }
 
 /// Writes a tab at the current cursor position.
@@ -73,9 +72,9 @@ pub fn delete_char(doc: &mut Document, view: &mut Viewport, history: Option<&mut
     if cur.x > 0 {
         // If deleting a character in a line.
         cursor::left(doc, view, 1);
-        let Some(ch) = doc.delete_char() else {
-            return;
-        };
+        let ch = doc
+            .delete_char(doc.cur.x, doc.cur.y)
+            .expect("Illegal state");
 
         if let Some(history) = history {
             history.add_change(Change::Delete {
@@ -84,13 +83,12 @@ pub fn delete_char(doc: &mut Document, view: &mut Viewport, history: Option<&mut
             });
         }
     } else if cur.y > 0 {
-        // If deleting at the beginning of a line (don't delete the first line).
-        let prev_line_len = doc.line_count(cur.y - 1).expect("Illegal state");
-        let line = doc.remove_line().expect("Illegal state");
-        doc.buff[cur.y - 1].to_mut().push_str(&line);
-
+        // If deleting at the beginning of a line and it's not the first line.
         cursor::up(doc, view, 1);
-        cursor::right(doc, view, prev_line_len);
+        cursor::jump_to_end_of_line(doc, view);
+
+        let line = doc.remove_line(doc.cur.y + 1).expect("Illegal state");
+        doc.buff[cur.y - 1].to_mut().push_str(&line);
 
         if let Some(history) = history {
             history.add_change(Change::Delete {

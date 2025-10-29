@@ -6,7 +6,7 @@ use crate::{
         Buffer,
         base::{BaseBuffer, COMMAND_PROMPT, CommandTick, Mode, ViewAction},
     },
-    change_buffer,
+    c_buff,
     cursor::Cursor,
     util::{CommandResult, CursorStyle},
 };
@@ -77,8 +77,7 @@ impl InfoBuffer {
             )?;
         }
 
-        let edited = if self.base.doc.edited { '*' } else { ' ' };
-        write!(self.base.info.buff[0].to_mut(), " {edited}")
+        Ok(())
     }
 
     /// Handles self defined view actions.
@@ -86,12 +85,13 @@ impl InfoBuffer {
         use OtherViewAction::*;
 
         match action {
-            ChangeToTextBuffer => change_buffer!(self, TXT_BUFF_IDX),
-            ChangeToFilesBuffer => change_buffer!(self, FILES_BUFF_IDX),
+            ChangeToTextBuffer => c_buff!(self, TXT_BUFF_IDX),
+            ChangeToFilesBuffer => c_buff!(self, FILES_BUFF_IDX),
         }
 
         // Rest motion repeat buffer after successful command.
         // self.base.motion_repeat.clear();
+        // CommandResult::Ok
     }
 
     /// Handles self apply and self defined command ticks.
@@ -171,7 +171,7 @@ impl Buffer for InfoBuffer {
     }
 
     fn set_contents(&mut self, contents: &[Cow<'static, str>], _: Option<PathBuf>) {
-        self.base.doc.set_contents(contents, 0, 0);
+        self.base.doc.set_contents(contents);
         self.base.doc_view.cur = Cursor::new(0, 0);
 
         self.base.sel = None;

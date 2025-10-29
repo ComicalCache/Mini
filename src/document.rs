@@ -30,10 +30,10 @@ impl Document {
     }
 
     /// Clears the document and sets the cursor to a specified position.
-    pub fn clear(&mut self, x: usize, y: usize) {
+    pub fn clear(&mut self) {
         self.buff.truncate(1);
         self.buff[0].to_mut().clear();
-        self.cur = Cursor::new(x, y);
+        self.cur = Cursor::new(0, 0);
         self.edited = false;
     }
 
@@ -50,6 +50,7 @@ impl Document {
 
         // Plus one for the newline.
         let size: u64 = self.buff.iter().map(|s| s.len() as u64 + 1).sum();
+        // Minus one because the last line doesn't have a newline.
         file.set_len(size.saturating_sub(1))?;
 
         // Write line by line.
@@ -65,7 +66,7 @@ impl Document {
     }
 
     /// Replaces the document buffer and sets the cursor to a specified position.
-    pub fn set_contents(&mut self, buff: &[Cow<'static, str>], x: usize, y: usize) {
+    pub fn set_contents(&mut self, buff: &[Cow<'static, str>]) {
         if buff.is_empty() {
             // Always have at least one line in the document.
             self.buff.truncate(1);
@@ -76,32 +77,20 @@ impl Document {
                 self.buff[idx].clone_from(line);
             }
         }
-        self.cur = Cursor::new(x, y);
+        self.cur = Cursor::new(0, 0);
         self.edited = false;
     }
 
-    /// Inserts a new line at the current cursor y position.
-    pub fn insert_line(&mut self, line: Cow<'static, str>) {
-        self.insert_line_at(self.cur.y, line);
-    }
-
     /// Inserts a new line at a specified y position.
-    pub fn insert_line_at(&mut self, y: usize, line: Cow<'static, str>) {
-        if y > self.buff.len() {
-            return;
-        }
+    pub fn insert_line(&mut self, line: Cow<'static, str>, y: usize) {
+        assert!(y <= self.buff.len(), "Illegal state");
 
         self.buff.insert(y, line);
         self.edited = true;
     }
 
-    /// Removes a line at the current cursor y position.
-    pub fn remove_line(&mut self) -> Option<Cow<'static, str>> {
-        self.remove_line_at(self.cur.y)
-    }
-
     /// Removes a line at a specified y position.
-    pub fn remove_line_at(&mut self, y: usize) -> Option<Cow<'static, str>> {
+    pub fn remove_line(&mut self, y: usize) -> Option<Cow<'static, str>> {
         if y >= self.buff.len() {
             return None;
         }
@@ -114,19 +103,12 @@ impl Document {
         Some(line)
     }
 
-    /// Writes a char at the current cursor position.
-    pub fn write_char(&mut self, ch: char) {
-        self.write_char_at(self.cur.x, self.cur.y, ch);
-    }
-
     /// Writes a char at a specified position.
-    pub fn write_char_at(&mut self, x: usize, y: usize, ch: char) {
-        let Some(count) = self.line_count(y) else {
-            return;
-        };
-        if x > count {
-            return;
-        }
+    pub fn write_char(&mut self, ch: char, x: usize, y: usize) {
+        assert!(
+            self.line_count(y).expect("Illegal state") <= x,
+            "Illegal state"
+        );
 
         let idx = self.buff[y]
             .char_indices()
@@ -137,13 +119,8 @@ impl Document {
         self.edited = true;
     }
 
-    /// Deletes a char at the current cursor position.
-    pub fn delete_char(&mut self) -> Option<char> {
-        self.delete_char_at(self.cur.x, self.cur.y)
-    }
-
     /// Deletes a char at a specified position.
-    pub fn delete_char_at(&mut self, x: usize, y: usize) -> Option<char> {
+    pub fn delete_char(&mut self, x: usize, y: usize) -> Option<char> {
         if y >= self.buff.len() {
             return None;
         }
@@ -185,7 +162,7 @@ impl Document {
         // Insert lines.
         for new_line in lines {
             y += 1;
-            self.insert_line_at(y, Cow::from(new_line.to_string()));
+            self.insert_line(Cow::from(new_line.to_string()), y);
         }
 
         // Append tail.

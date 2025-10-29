@@ -1,6 +1,7 @@
 use crate::{
     INFO_BUFF_IDX,
     custom_buffers::files_buffer::FilesBuffer,
+    sc_buff,
     util::{CommandResult, open_file, split_to_lines},
 };
 use std::borrow::Cow;
@@ -10,19 +11,11 @@ impl FilesBuffer {
         // Create only directories.
         if args.ends_with('/') {
             if let Err(err) = std::fs::create_dir_all(args) {
-                return CommandResult::SetAndChangeBuffer(
-                    INFO_BUFF_IDX,
-                    split_to_lines(err.to_string()),
-                    None,
-                );
+                return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
             }
         // open_file creates the directory hierarchy and file.
         } else if let Err(err) = open_file(args) {
-            return CommandResult::SetAndChangeBuffer(
-                INFO_BUFF_IDX,
-                split_to_lines(err.to_string()),
-                None,
-            );
+            return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
         }
 
         self.refresh()
@@ -32,18 +25,10 @@ impl FilesBuffer {
         // Remove only directories.
         if args.ends_with('/') {
             if let Err(err) = std::fs::remove_dir(args) {
-                return CommandResult::SetAndChangeBuffer(
-                    INFO_BUFF_IDX,
-                    split_to_lines(err.to_string()),
-                    None,
-                );
+                return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
             }
         } else if let Err(err) = std::fs::remove_file(args) {
-            return CommandResult::SetAndChangeBuffer(
-                INFO_BUFF_IDX,
-                split_to_lines(err.to_string()),
-                None,
-            );
+            return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
         }
 
         self.refresh()
@@ -53,19 +38,15 @@ impl FilesBuffer {
         // Remove only directories.
         if args.ends_with('/') {
             if let Err(err) = std::fs::remove_dir_all(args) {
-                return CommandResult::SetAndChangeBuffer(
-                    INFO_BUFF_IDX,
-                    split_to_lines(err.to_string()),
-                    None,
-                );
+                return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
             }
 
             return self.refresh();
         }
 
-        CommandResult::SetAndChangeBuffer(
+        sc_buff!(
             INFO_BUFF_IDX,
-            vec![Cow::from("Recursive removal only works for directories")],
+            ["Recursive removal only works for directories"],
             None,
         )
     }
@@ -85,9 +66,9 @@ impl FilesBuffer {
             "mk" => self.create_command(args),
             "rm" => self.remove_command(args),
             "rm!" => self.recursive_remove_command(args),
-            _ => CommandResult::SetAndChangeBuffer(
+            _ => sc_buff!(
                 INFO_BUFF_IDX,
-                vec![Cow::from(format!("Unrecognized command: '{cmd}'"))],
+                [format!("Unrecognized command: '{cmd}'")],
                 None,
             ),
         }

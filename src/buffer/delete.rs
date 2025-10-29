@@ -26,6 +26,7 @@ pub fn selection(
     }
     doc.remove_range(start, end);
 
+    // Place cursor at the beginning of the deleted area.
     cursor::move_to(doc, view, start);
 
     *sel = None;
@@ -41,7 +42,8 @@ pub fn line(doc: &mut Document, view: &mut Viewport, history: Option<&mut Histor
         cursor::up(doc, view, doc.cur.y + n - doc.buff.len());
     }
 
-    // Begin of selection at the end of one line above the first line.
+    // Begin of selection at the end of one line above the first line or at beginning of current line
+    // if in the first line.
     cursor::up(doc, view, 1);
     if doc.cur.y != 0 {
         cursor::jump_to_end_of_line(doc, view);
@@ -50,16 +52,18 @@ pub fn line(doc: &mut Document, view: &mut Viewport, history: Option<&mut Histor
     }
     let tmp = doc.cur;
 
-    // End selection at the end of the last line.
+    // End selection at the end of the last line or at the beginning of the next line if selection started
+    // in the first line.
     cursor::down(doc, view, n);
     if tmp.y != 0 {
         cursor::jump_to_end_of_line(doc, view);
     } else {
         cursor::jump_to_beginning_of_line(doc, view);
     }
+
     selection(doc, view, &mut Some(tmp), history);
 
-    // Fix cursor moving up.
+    // Fix cursor moving up due to moving it one line up.
     if tmp.y != 0 {
         cursor::down(doc, view, 1);
     }
@@ -68,6 +72,9 @@ pub fn line(doc: &mut Document, view: &mut Viewport, history: Option<&mut Histor
 
 /// Deletes a character.
 pub fn char(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
+    // Move left so that all n - 1 characters can be deleted. Minus one because deleting the place
+    // after the line causes it to move left by one. This all aids usability, otherwise it would be
+    // identical to the right deletion, however this is a more expected behaviour.
     let len = doc.line_count(doc.cur.y).expect("Illegal state");
     if doc.cur.x + n > len {
         cursor::left(doc, view, doc.cur.x + n - len - 1);
@@ -75,6 +82,7 @@ pub fn char(doc: &mut Document, view: &mut Viewport, history: Option<&mut Histor
 
     right(doc, view, history, n);
 
+    // Move the cursor one to the left so it can't end up after the last character after deletion.
     if doc.cur.x == doc.line_count(doc.cur.y).expect("Illegal state") {
         cursor::left(doc, view, 1);
     }

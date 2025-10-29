@@ -3,6 +3,7 @@ use crate::{
     buffer::history::{Change, Replace},
     cursor,
     custom_buffers::text_buffer::TextBuffer,
+    sc_buff,
     util::{CommandResult, open_file, read_file_to_lines, split_to_lines},
 };
 use regex::Regex;
@@ -21,18 +22,16 @@ impl TextBuffer {
 
     fn open_command(&mut self, args: &str, force: bool) -> CommandResult {
         if !force && self.base.doc.edited {
-            return CommandResult::SetAndChangeBuffer(
+            return sc_buff!(
                 INFO_BUFF_IDX,
-                vec![Cow::from(
-                    "There are unsaved changes, save or oo to force open new",
-                )],
+                ["There are unsaved changes, save or oo to force open a new document"],
                 None,
             );
         }
 
         // Reset state.
-        self.base.doc.clear(0, 0);
-        self.base.cmd.clear(0, 0);
+        self.base.doc.clear();
+        self.base.cmd.clear();
         self.base
             .doc_view
             .init(self.base.doc_view.w, self.base.doc_view.h, 0, 0, Some(1));
@@ -46,22 +45,14 @@ impl TextBuffer {
         self.file = match open_file(args) {
             Ok(file) => Some(file),
             Err(err) => {
-                return CommandResult::SetAndChangeBuffer(
-                    INFO_BUFF_IDX,
-                    split_to_lines(err.to_string()),
-                    None,
-                );
+                return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
             }
         };
 
         match read_file_to_lines(self.file.as_mut().unwrap()) {
-            Ok(lines) => self.base.doc.set_contents(&lines, 0, 0),
+            Ok(lines) => self.base.doc.set_contents(&lines),
             Err(err) => {
-                return CommandResult::SetAndChangeBuffer(
-                    INFO_BUFF_IDX,
-                    split_to_lines(err.to_string()),
-                    None,
-                );
+                return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
             }
         }
 
@@ -73,32 +64,22 @@ impl TextBuffer {
             self.file = match open_file(args) {
                 Ok(file) => Some(file),
                 Err(err) => {
-                    return CommandResult::SetAndChangeBuffer(
-                        INFO_BUFF_IDX,
-                        split_to_lines(err.to_string()),
-                        None,
-                    );
+                    return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
                 }
             };
         }
 
-        // Failed to write file.
         let res = match self.write_to_file() {
             Ok(res) => res,
             Err(err) => {
-                return CommandResult::SetAndChangeBuffer(
-                    INFO_BUFF_IDX,
-                    split_to_lines(err.to_string()),
-                    None,
-                );
+                return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
             }
         };
+        // Failed to write file because no path exists.
         if !res {
-            return CommandResult::SetAndChangeBuffer(
+            return sc_buff!(
                 INFO_BUFF_IDX,
-                vec![Cow::from(
-                    "Please specify a file location using 'w <path>' to write the file to",
-                )],
+                ["Please specify a file location using 'w <path>' to write the file to"],
                 None,
             );
         }
@@ -108,16 +89,16 @@ impl TextBuffer {
 
     fn replace_command(&mut self, args: &str) -> CommandResult {
         let Some(end) = self.base.sel else {
-            return CommandResult::SetAndChangeBuffer(
+            return sc_buff!(
                 INFO_BUFF_IDX,
-                vec![Cow::from("Replace command requires a selection.")],
+                ["Replace command requires a selection."],
                 None,
             );
         };
 
-        let err = CommandResult::SetAndChangeBuffer(
+        let err = sc_buff!(
             INFO_BUFF_IDX,
-            vec![Cow::from("Invalid format. Expected: r /<regex>/<replace>/")],
+            ["Invalid format. Expected: r /<regex>/<replace>/"],
             None,
         );
         let Some(args) = args.strip_prefix('/') else {
@@ -139,8 +120,8 @@ impl TextBuffer {
                 let mut buff = vec![Cow::from(format!(
                     "'{regex_str}' is not a valid regular expression:",
                 ))];
-                buff.extend(err.to_string().lines().map(str::to_string).map(Cow::from));
-                return CommandResult::SetAndChangeBuffer(INFO_BUFF_IDX, buff, None);
+                buff.extend(split_to_lines(err.to_string()));
+                return sc_buff!(INFO_BUFF_IDX, buff, None);
             }
         };
 
@@ -207,27 +188,21 @@ impl TextBuffer {
 
         match cmd {
             "wq" => match self.write_to_file() {
-                Ok(res) if !res => CommandResult::SetAndChangeBuffer(
+                Ok(res) if !res => sc_buff!(
                     INFO_BUFF_IDX,
-                    vec![Cow::from(
-                        "Please specify a file location using 'w <path>' to write the file to",
-                    )],
+                    ["Please specify a file location using 'w <path>' to write the file to"],
                     None,
                 ),
-                Err(err) => CommandResult::SetAndChangeBuffer(
-                    INFO_BUFF_IDX,
-                    split_to_lines(err.to_string()),
-                    None,
-                ),
+                Err(err) => sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None),
                 _ => CommandResult::Quit,
             },
             "w" => self.write_command(args),
             "o" => self.open_command(args, false),
             "oo" => self.open_command(args, true),
             "r" => self.replace_command(args),
-            _ => CommandResult::SetAndChangeBuffer(
+            _ => sc_buff!(
                 INFO_BUFF_IDX,
-                vec![Cow::from(format!("Unrecognized command: '{cmd}'"))],
+                [format!("Unrecognized command: '{cmd}'")],
                 None,
             ),
         }

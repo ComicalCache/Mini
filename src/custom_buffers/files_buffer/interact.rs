@@ -1,7 +1,7 @@
 use crate::{
-    TXT_BUFF_IDX,
-    cursor::{self, Cursor},
+    TXT_BUFF_IDX, cursor,
     custom_buffers::files_buffer::FilesBuffer,
+    sc_buff,
     util::{CommandResult, open_file, read_file_to_lines},
 };
 use std::{
@@ -23,11 +23,10 @@ impl FilesBuffer {
             &PathBuf::from(base.parent().unwrap_or(Path::new("/")))
         };
 
-        let mut tmp_entries = read_dir(base)?
+        *entries = read_dir(base)?
             .map(|res| res.map(|e| e.path()))
             .collect::<Result<Vec<_>, Error>>()?;
-        tmp_entries.sort();
-        *entries = tmp_entries;
+        entries.sort();
 
         let mut contents = vec![Cow::from("..")];
         for entry in &mut entries.iter() {
@@ -53,35 +52,32 @@ impl FilesBuffer {
         let idx = self.base.doc.cur.y;
 
         // Move directory up.
-        if idx == 0 && self.path.pop() {
-            self.base.doc.set_contents(
-                &FilesBuffer::load_dir(&self.path, &mut self.entries)?,
-                0,
-                0,
-            );
+        if idx == 0 {
+            if self.path.pop() {
+                self.base
+                    .doc
+                    .set_contents(&FilesBuffer::load_dir(&self.path, &mut self.entries)?);
+            }
+
             return Ok(CommandResult::Ok);
         }
 
         let entry = &self.entries[idx.saturating_sub(1)].clone();
         if entry.is_file() {
-            cursor::jump_to_beginning_of_file(&mut self.base.doc, &mut self.base.doc_view);
-            let contents = read_file_to_lines(&mut open_file(entry)?)?;
             self.path.clone_from(entry);
 
-            return Ok(CommandResult::SetAndChangeBuffer(
+            return Ok(sc_buff!(
                 TXT_BUFF_IDX,
-                contents,
-                Some(self.path.clone()),
+                read_file_to_lines(&mut open_file(entry)?)?,
+                Some(self.path.clone())
             ));
         } else if entry.is_dir() {
             self.path.clone_from(entry);
 
-            self.base.doc.set_contents(
-                &FilesBuffer::load_dir(&self.path, &mut self.entries)?,
-                0,
-                0,
-            );
-            self.base.doc_view.cur = Cursor::new(0, 0);
+            cursor::jump_to_beginning_of_file(&mut self.base.doc, &mut self.base.doc_view);
+            self.base
+                .doc
+                .set_contents(&FilesBuffer::load_dir(&self.path, &mut self.entries)?);
             return Ok(CommandResult::Ok);
         } else if entry.is_symlink() && entry.exists() {
             // FIXME: this can cause an infinite loop on a circular symlink.

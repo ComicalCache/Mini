@@ -5,6 +5,21 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// SetAndChangeBuffer
+#[macro_export]
+macro_rules! sc_buff {
+    ($buffer:ident, [$($content:expr),+], $path:expr $(,)?) => {
+        CommandResult::SetAndChangeBuffer(
+            $buffer,
+            vec![$(Cow::from($content),)+],
+            $path,
+        )
+    };
+    ($buffer:ident, $contents:expr, $path:expr $(,)?) => {
+        CommandResult::SetAndChangeBuffer($buffer, $contents, $path)
+    };
+}
+
 #[derive(PartialEq, Eq)]
 /// The result of a command entered by the user.
 pub enum CommandResult {

@@ -1,8 +1,8 @@
 use crate::{
     INFO_BUFF_IDX, INFO_MSG,
     buffer::base::{BaseBuffer, CommandTick},
-    cursor,
-    util::{CommandResult, line_column},
+    cursor, sc_buff,
+    util::{CommandResult, line_column, split_to_lines},
 };
 use regex::Regex;
 use std::borrow::Cow;
@@ -12,19 +12,17 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
 {
     fn search(&mut self, args: &str) -> CommandResult {
         let Some(end) = self.sel else {
-            return CommandResult::SetAndChangeBuffer(
+            return sc_buff!(
                 INFO_BUFF_IDX,
-                vec![Cow::from("Search command requires a selection.")],
+                ["Search command requires a selection."],
                 None,
             );
         };
 
-        if !args.starts_with('/') || !args.ends_with('/') || args.len() == 2 {
-            return CommandResult::SetAndChangeBuffer(
+        if args.len() == 2 || !args.starts_with('/') || !args.ends_with('/') {
+            return sc_buff!(
                 INFO_BUFF_IDX,
-                vec![Cow::from(
-                    "Expected a valid regular expression like '/<regex>/'",
-                )],
+                ["Expected a valid regular expression like '/<regex>/'"],
                 None,
             );
         }
@@ -35,8 +33,8 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
                 let mut buff = vec![Cow::from(format!(
                     "'{args}' is not a valid regular expression:",
                 ))];
-                buff.extend(err.to_string().lines().map(str::to_string).map(Cow::from));
-                return CommandResult::SetAndChangeBuffer(INFO_BUFF_IDX, buff, None);
+                buff.extend(split_to_lines(err.to_string()));
+                return sc_buff!(INFO_BUFF_IDX, buff, None);
             }
         };
 
@@ -59,11 +57,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         self.matches_idx = None;
 
         if self.matches.is_empty() {
-            return CommandResult::SetAndChangeBuffer(
-                INFO_BUFF_IDX,
-                vec![Cow::from("No matches found")],
-                None,
-            );
+            return sc_buff!(INFO_BUFF_IDX, ["No matches found"], None);
         }
 
         self.matches_idx = self
@@ -91,7 +85,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             return Ok(CommandResult::Ok);
         }
 
-        //let cmd1 = cmd.clone();
         let (cmd, args) = match input.split_once(char::is_whitespace) {
             Some((cmd, args)) => (cmd.trim(), args.trim()),
             None => (input.trim(), ""),
@@ -100,14 +93,22 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         match cmd {
             "q" => Ok(CommandResult::Quit),
             "qq" => Ok(CommandResult::ForceQuit),
-            "?" => Ok(CommandResult::SetAndChangeBuffer(
+            "?" => Ok(sc_buff!(
                 INFO_BUFF_IDX,
                 INFO_MSG.lines().map(Cow::from).collect(),
                 None,
             )),
             "goto" => {
                 let (x, y) = line_column(args);
-                cursor::jump_to_line_and_column(&mut self.doc, &mut self.doc_view, x, y);
+
+                let mut pos = self.doc.cur;
+                if let Some(x) = x {
+                    pos.x = x.saturating_sub(1);
+                }
+                if let Some(y) = y {
+                    pos.y = y.saturating_sub(1);
+                }
+                cursor::move_to(&mut self.doc, &mut self.doc_view, pos);
 
                 Ok(CommandResult::Ok)
             }

@@ -133,40 +133,6 @@ pub fn down(doc: &mut Document, view: &mut Viewport, n: usize) {
     view.cur.x = doc.cur.x.min(view.buff_w - 1);
 }
 
-/// Jumps the cursors to a specific line and column
-/// (or the first/last line/character if out of bounds).
-pub fn jump_to_line_and_column(
-    doc: &mut Document,
-    view: &mut Viewport,
-    x: Option<usize>,
-    y: Option<usize>,
-) {
-    if let Some(mut y) = y {
-        // At most the len of the buffer, at least 1, then subtract one to get the correct index.
-        y = y.min(doc.buff.len()).max(1) - 1;
-
-        if y < doc.cur.y {
-            up(doc, view, doc.cur.y - y);
-        } else if y > doc.cur.y {
-            down(doc, view, y - doc.cur.y);
-        }
-    }
-
-    if let Some(mut x) = x {
-        // At most the len of the line, at least 1, then subtract one to get the correct index.
-        x = x
-            .min(doc.line_count(doc.cur.y).expect("Illegal state"))
-            .max(1)
-            - 1;
-
-        if x < doc.cur.x {
-            left(doc, view, doc.cur.x - x);
-        } else if x > doc.cur.x {
-            right(doc, view, x - doc.cur.x);
-        }
-    }
-}
-
 /// Jumps the cursors to the next "word".
 pub fn next_word(doc: &mut Document, view: &mut Viewport, n: usize) {
     for _ in 0..n {
@@ -199,9 +165,7 @@ fn __next_word(doc: &mut Document, view: &mut Viewport) {
         line = &doc.buff[cur.y];
     }
 
-    let Some(curr) = line.chars().nth(cur.x) else {
-        return;
-    };
+    let curr = line.chars().nth(cur.x).expect("Illegal state");
 
     // Find next not alphanumeric character or alphanumeric character if the current character is not.
     let Some((idx, ch)) =
@@ -343,11 +307,17 @@ pub fn jump_to_end_of_line(doc: &mut Document, view: &mut Viewport) {
     right(
         doc,
         view,
-        doc.buff[doc.cur.y]
-            .chars()
-            .count()
+        doc.line_count(doc.cur.y)
+            .expect("Illegal state")
             .saturating_sub(doc.cur.x),
     );
+}
+
+/// Jumps the cursors to the matching opposite bracket (if exists).
+pub fn jump_to_matching_opposite(doc: &mut Document, view: &mut Viewport) {
+    if let Some((x, y)) = find_matching_bracket(doc) {
+        move_to(doc, view, Cursor::new(x, y));
+    }
 }
 
 fn find_matching_bracket(doc: &Document) -> Option<(usize, usize)> {
@@ -412,25 +382,6 @@ fn find_matching_bracket(doc: &Document) -> Option<(usize, usize)> {
     }
 
     None
-}
-
-/// Jumps the cursors to the matching opposite bracket (if exists).
-pub fn jump_to_matching_opposite(doc: &mut Document, view: &mut Viewport) {
-    let Some((x, y)) = find_matching_bracket(doc) else {
-        return;
-    };
-
-    if y < doc.cur.y {
-        up(doc, view, doc.cur.y - y);
-    } else if y > doc.cur.y {
-        down(doc, view, y - doc.cur.y);
-    }
-
-    if x < doc.cur.x {
-        left(doc, view, doc.cur.x - x);
-    } else if x > doc.cur.x {
-        right(doc, view, x - doc.cur.x);
-    }
 }
 
 /// Jumps the cursors to the last line of the file.

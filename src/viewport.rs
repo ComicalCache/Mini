@@ -295,9 +295,7 @@ impl Viewport {
             "{}{INFO}{TXT}{prompt}{cmd}{}{BG}",
             Goto(1, 1),
             " ".repeat(padding)
-        )?;
-
-        Ok(())
+        )
     }
 
     pub fn render_cursor(
@@ -327,14 +325,12 @@ impl Viewport {
 
         // Set cursor.
         match cursor_style {
-            CursorStyle::BlinkingBar => write!(stdout, "{cur}{BlinkingBar}{NO_TXT}{NO_BG}{Show}",)?,
+            CursorStyle::BlinkingBar => write!(stdout, "{cur}{BlinkingBar}{NO_TXT}{NO_BG}{Show}"),
             CursorStyle::BlinkingBlock => {
-                write!(stdout, "{cur}{BlinkingBlock}{NO_TXT}{NO_BG}{Show}",)?;
+                write!(stdout, "{cur}{BlinkingBlock}{NO_TXT}{NO_BG}{Show}")
             }
-            CursorStyle::SteadyBlock => write!(stdout, "{cur}{SteadyBlock}{NO_TXT}{NO_BG}{Show}")?,
+            CursorStyle::SteadyBlock => write!(stdout, "{cur}{SteadyBlock}{NO_TXT}{NO_BG}{Show}"),
         }
-
-        Ok(())
     }
 
     /// Resizes the viewport.

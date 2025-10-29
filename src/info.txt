@@ -30,7 +30,7 @@ command history. All buffers support following commands:
 - 'q' to quit
 - 'qq' to force quit, discarding unsaved changes
 - '?' to see this message
-- 'goto <line>:<column>' to jump to an absolute line number and column. If the column is omitted it jums to the
+- 'goto <line>:<column>' to jump to an absolute line number and column. If the column is omitted it jumps to the
     beginning of the line. If the line is missing it jumps to the column in the current line. Particularly ':' does
     nothing.
 - 's /<regex>/' to search text in a selection. See https://docs.rs/regex/latest/regex/index.html for information about

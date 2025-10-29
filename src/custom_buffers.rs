@@ -4,7 +4,7 @@ pub mod text_buffer;
 
 #[macro_export]
 /// Sends a change buffer result, clearing the motion repeat buffer.
-macro_rules! change_buffer {
+macro_rules! c_buff {
     ($self:ident, $buff:ident) => {{
         use $crate::util::CommandResult;
 

@@ -1,5 +1,6 @@
 use crate::{
-    INFO_BUFF_IDX, buffer::Buffer, custom_buffers::info_buffer::InfoBuffer, util::CommandResult,
+    INFO_BUFF_IDX, buffer::Buffer, custom_buffers::info_buffer::InfoBuffer, sc_buff,
+    util::CommandResult,
 };
 use std::borrow::Cow;
 
@@ -20,9 +21,9 @@ impl InfoBuffer {
                 self.set_contents(&[Cow::from("")], None);
                 CommandResult::Ok
             }
-            _ => CommandResult::SetAndChangeBuffer(
+            _ => sc_buff!(
                 INFO_BUFF_IDX,
-                vec![Cow::from(format!("Unrecognized command: '{cmd}'"))],
+                [format!("Unrecognized command: '{cmd}'")],
                 None,
             ),
         }

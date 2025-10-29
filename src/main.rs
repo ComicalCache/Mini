@@ -58,12 +58,11 @@ fn main() -> Result<(), std::io::Error> {
     // Setup stdin and stdout.
     let mut stdout = BufWriter::new(std::io::stdout().into_raw_mode()?);
     let stdin = std::io::stdin();
-    let stdin_fd = stdin.as_fd();
     let mut stdin_keys = std::io::stdin().keys();
 
     // Use polling to periodically read stdin.
     let poller = Poller::new()?;
-    unsafe { poller.add(&stdin_fd, polling::Event::readable(STDIN_EVENT_KEY))? };
+    unsafe { poller.add(&stdin.as_fd(), polling::Event::readable(STDIN_EVENT_KEY))? };
 
     // Create an array of buffers that can be switched to.
     let (w, h) = termion::terminal_size()?;
@@ -165,7 +164,7 @@ fn main() -> Result<(), std::io::Error> {
             buffs[curr_buff].render(&mut stdout)?;
         }
         // Re-enable polling.
-        poller.modify(stdin_fd, polling::Event::readable(STDIN_EVENT_KEY))?;
+        poller.modify(stdin.as_fd(), polling::Event::readable(STDIN_EVENT_KEY))?;
     }
 
     // Switch back to the main screen before exiting.

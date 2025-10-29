@@ -38,6 +38,20 @@ macro_rules! yank {
             }
         }
     };
+    ($self:ident, $func:ident, REPEAT) => {{
+        let res = yank::$func(
+            &mut $self.doc,
+            &mut $self.doc_view,
+            &mut $self.clipboard,
+            $self.motion_repeat.parse::<usize>().unwrap_or(1),
+        );
+        $self.motion_repeat.clear();
+
+        match res {
+            Ok(()) => {}
+            Err(err) => return Ok(err),
+        }
+    }};
     ($self:ident, $func:ident, SELECTION) => {
         match yank::$func(&mut $self.doc, &mut $self.sel, &mut $self.clipboard) {
             Ok(()) => {}
@@ -307,7 +321,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             return;
         }
         let idx = self.matches_idx.as_mut().expect("Illegal state");
-        *idx = (*idx + 1).min(self.matches.len() - 1);
+        *idx = (*idx + 1) % self.matches.len();
 
         self.sel = Some(self.matches[*idx].1);
         cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[*idx].0);
@@ -319,7 +333,11 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             return;
         }
         let idx = self.matches_idx.as_mut().expect("Illegal state");
-        *idx = idx.saturating_sub(1);
+        if *idx != 0 {
+            *idx -= 1;
+        } else {
+            *idx = self.matches.len() - 1;
+        }
 
         self.sel = Some(self.matches[*idx].1);
         cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[*idx].0);
@@ -423,10 +441,10 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             A(ExitSelectMode) => self.sel = None,
             A(YankSelection) => yank!(self, selection, SELECTION),
             A(YankLine) => yank!(self, line),
-            A(YankLeft) => yank!(self, left),
-            A(YankRight) => yank!(self, right),
-            A(YankNextWord) => yank!(self, next_word),
-            A(YankPrevWord) => yank!(self, prev_word),
+            A(YankLeft) => yank!(self, left, REPEAT),
+            A(YankRight) => yank!(self, right, REPEAT),
+            A(YankNextWord) => yank!(self, next_word, REPEAT),
+            A(YankPrevWord) => yank!(self, prev_word, REPEAT),
             A(YankToBeginningOfLine) => yank!(self, beginning_of_line),
             A(YankToEndOfLine) => yank!(self, end_of_line),
             A(YankToMatchingOpposite) => yank!(self, matching_opposite),

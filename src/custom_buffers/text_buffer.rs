@@ -10,7 +10,7 @@ use crate::{
         delete, edit,
         history::History,
     },
-    change_buffer,
+    c_buff,
     cursor::{self, Cursor},
     state_machine::{ChainResult, CommandMap, StateMachine},
     util::{CommandResult, CursorStyle, open_file, read_file_to_lines},
@@ -271,9 +271,7 @@ impl TextBuffer {
         }
 
         let edited = if self.base.doc.edited { '*' } else { ' ' };
-        write!(self.base.info.buff[0].to_mut(), " {edited}")?;
-
-        Ok(())
+        write!(self.base.info.buff[0].to_mut(), " {edited}")
     }
 
     /// Handles self defined view actions.
@@ -299,8 +297,8 @@ impl TextBuffer {
                 self.insert_move_new_line_above();
                 self.base.change_mode(Mode::Other(Write));
             }
-            ChangeToInfoBuffer => change_buffer!(self, INFO_BUFF_IDX),
-            ChangeToFilesBuffer => change_buffer!(self, FILES_BUFF_IDX),
+            ChangeToInfoBuffer => c_buff!(self, INFO_BUFF_IDX),
+            ChangeToFilesBuffer => c_buff!(self, FILES_BUFF_IDX),
             DeleteChar => delete!(self, char, REPEAT),
             DeleteSelection => delete!(self, selection, SELECTION),
             DeleteLine => delete!(self, line, REPEAT),
@@ -342,6 +340,7 @@ impl TextBuffer {
             ChangeToBeginningOfFile => change!(self, beginning_of_file),
             Paste => {
                 if let Some(res) = self.paste() {
+                    self.base.motion_repeat.clear();
                     return res;
                 }
                 self.base.clear_matches();
@@ -483,7 +482,7 @@ impl Buffer for TextBuffer {
     }
 
     fn set_contents(&mut self, contents: &[Cow<'static, str>], path: Option<PathBuf>) {
-        self.base.doc.set_contents(contents, 0, 0);
+        self.base.doc.set_contents(contents);
         self.base.doc_view.cur = Cursor::new(0, 0);
         if let Some(path) = path {
             self.file = open_file(path).ok();

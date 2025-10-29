@@ -50,11 +50,6 @@ impl History {
         self.redo.clear();
     }
 
-    /// Remove a change from the history.
-    pub fn pop_change(&mut self) {
-        self.undo.pop();
-    }
-
     /// Pops the last change for undoing.
     pub fn undo(&mut self) -> Option<Change> {
         self.undo.pop()
