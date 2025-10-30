@@ -105,7 +105,7 @@ impl Document {
 
     /// Writes a char at a specified position.
     pub fn write_char(&mut self, ch: char, x: usize, y: usize) {
-        assert!(self.line_count(y).unwrap() <= x);
+        assert!(x <= self.line_count(y).unwrap());
 
         let idx = self.buff[y]
             .char_indices()

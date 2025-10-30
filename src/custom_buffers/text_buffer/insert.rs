@@ -46,6 +46,10 @@ impl TextBuffer {
 
     /// Replaces a character at the current cursor position.
     pub(super) fn replace(&mut self, ch: char) {
+        if self.base.doc.line_count(self.base.doc.cur.y).unwrap() <= self.base.doc.cur.x {
+            return;
+        }
+
         let old_ch = self
             .base
             .doc
