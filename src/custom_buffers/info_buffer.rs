@@ -52,7 +52,7 @@ impl InfoBuffer {
         let mode = match self.base.mode {
             Mode::View => "V",
             Mode::Command => "C",
-            Mode::Other(()) => unreachable!("Illegal state"),
+            Mode::Other(()) => unreachable!(),
         };
         // Plus 1 since text coordinates are 0 indexed.
         let line = self.base.doc.cur.y + 1;
@@ -100,7 +100,7 @@ impl InfoBuffer {
 
         match tick {
             Apply(cmd) => self.apply_command(&cmd),
-            Other(()) => unreachable!("Illegal state"),
+            Other(()) => unreachable!(),
         }
     }
 }
@@ -166,7 +166,7 @@ impl Buffer for InfoBuffer {
                 Ok(res) => res,
                 Err(tick) => self.command_tick(tick),
             },
-            Mode::Other(()) => unreachable!("Illegal state"),
+            Mode::Other(()) => unreachable!(),
         }
     }
 

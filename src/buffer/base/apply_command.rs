@@ -54,7 +54,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             (end, start)
         };
 
-        let hay = self.doc.get_range(start, end).expect("Illegal state");
+        let hay = self.doc.get_range(start, end).unwrap();
         self.matches = regex
             .find_iter(&hay)
             .map(|mat| {

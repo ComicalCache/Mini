@@ -72,9 +72,7 @@ pub fn delete_char(doc: &mut Document, view: &mut Viewport, history: Option<&mut
     if cur.x > 0 {
         // If deleting a character in a line.
         cursor::left(doc, view, 1);
-        let ch = doc
-            .delete_char(doc.cur.x, doc.cur.y)
-            .expect("Illegal state");
+        let ch = doc.delete_char(doc.cur.x, doc.cur.y).unwrap();
 
         if let Some(history) = history {
             history.add_change(Change::Delete {
@@ -87,7 +85,7 @@ pub fn delete_char(doc: &mut Document, view: &mut Viewport, history: Option<&mut
         cursor::up(doc, view, 1);
         cursor::jump_to_end_of_line(doc, view);
 
-        let line = doc.remove_line(doc.cur.y + 1).expect("Illegal state");
+        let line = doc.remove_line(doc.cur.y + 1).unwrap();
         doc.buff[cur.y - 1].to_mut().push_str(&line);
 
         if let Some(history) = history {

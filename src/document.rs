@@ -83,7 +83,7 @@ impl Document {
 
     /// Inserts a new line at a specified y position.
     pub fn insert_line(&mut self, line: Cow<'static, str>, y: usize) {
-        assert!(y <= self.buff.len(), "Illegal state");
+        assert!(y <= self.buff.len());
 
         self.buff.insert(y, line);
         self.edited = true;
@@ -105,10 +105,7 @@ impl Document {
 
     /// Writes a char at a specified position.
     pub fn write_char(&mut self, ch: char, x: usize, y: usize) {
-        assert!(
-            self.line_count(y).expect("Illegal state") <= x,
-            "Illegal state"
-        );
+        assert!(self.line_count(y).unwrap() <= x);
 
         let idx = self.buff[y]
             .char_indices()
@@ -143,8 +140,8 @@ impl Document {
     /// Writes a str at a specified position.
     /// Creates new lines if the content contains new lines.
     pub fn write_str_at(&mut self, x: usize, mut y: usize, r#str: &str) {
-        let count = self.line_count(y).expect("Illegal state");
-        assert!(x <= count, "Illegal state");
+        let count = self.line_count(y).unwrap();
+        assert!(x <= count);
 
         let mut lines = r#str.split('\n');
 

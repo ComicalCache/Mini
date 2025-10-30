@@ -168,10 +168,13 @@ impl Viewport {
                     // Use all remaining bytes if they don't fill the entire line.
                     .map_or(content.len(), |(idx, _)| idx);
 
+                // Add a newline character for visual clarity of trailing whitespaces.
+                let nl = if end_idx == content.len() { "⏎" } else { "" };
+
                 match sel {
                     // Empty selection
                     Some((start, end)) if start == end => {
-                        write!(stdout, "{}", &content[start_idx..end_idx])?;
+                        write!(stdout, "{}{REL_NUMS}{nl}", &content[start_idx..end_idx])?;
                     }
                     // Selection on one line.
                     Some((start, end)) if start.y == end.y && start.y == doc_idx => {
@@ -196,13 +199,25 @@ impl Viewport {
                         };
 
                         if sel_start_idx > start_idx {
-                            write!(stdout, "{}", &content[start_idx..sel_start_idx])?;
+                            write!(
+                                stdout,
+                                "{}{REL_NUMS}{nl}",
+                                &content[start_idx..sel_start_idx]
+                            )?;
                         }
-                        write!(stdout, "{SEL}{}", &content[sel_start_idx..sel_end_idx])?;
+                        write!(
+                            stdout,
+                            "{SEL}{}{REL_NUMS}{nl}",
+                            &content[sel_start_idx..sel_end_idx]
+                        )?;
                         if sel_end_idx < end_idx {
-                            write!(stdout, "{sel_bg}{}", &content[sel_end_idx..end_idx])?;
+                            write!(
+                                stdout,
+                                "{sel_bg}{}{REL_NUMS}{nl}",
+                                &content[sel_end_idx..end_idx]
+                            )?;
                         } else {
-                            write!(stdout, "{sel_bg}")?;
+                            write!(stdout, "{sel_bg}{REL_NUMS}{nl}")?;
                         }
                     }
                     // Start line of selection
@@ -219,13 +234,25 @@ impl Viewport {
                         };
 
                         if sel_start_idx > start_idx {
-                            write!(stdout, "{}", &content[start_idx..sel_start_idx])?;
+                            write!(
+                                stdout,
+                                "{}{REL_NUMS}{nl}",
+                                &content[start_idx..sel_start_idx]
+                            )?;
                         }
-                        write!(stdout, "{SEL}{}{sel_bg}", &content[sel_start_idx..end_idx],)?;
+                        write!(
+                            stdout,
+                            "{SEL}{}{sel_bg}{REL_NUMS}{nl}",
+                            &content[sel_start_idx..end_idx],
+                        )?;
                     }
                     // Inbetween lines of selection
                     Some((start, end)) if start.y < doc_idx && doc_idx < end.y => {
-                        write!(stdout, "{SEL}{}{sel_bg}", &content[start_idx..end_idx],)?;
+                        write!(
+                            stdout,
+                            "{SEL}{}{sel_bg}{REL_NUMS}{nl}",
+                            &content[start_idx..end_idx],
+                        )?;
                     }
                     // End line of selection
                     Some((_, end)) if end.y == doc_idx => {
@@ -239,14 +266,22 @@ impl Viewport {
                                 .map_or(content.len(), |(idx, _)| idx)
                         };
 
-                        write!(stdout, "{SEL}{}", &content[start_idx..sel_end_idx])?;
+                        write!(
+                            stdout,
+                            "{SEL}{}{REL_NUMS}{nl}",
+                            &content[start_idx..sel_end_idx]
+                        )?;
                         if sel_end_idx < end_idx {
-                            write!(stdout, "{sel_bg}{}", &content[sel_end_idx..end_idx])?;
+                            write!(
+                                stdout,
+                                "{sel_bg}{}{REL_NUMS}{nl}",
+                                &content[sel_end_idx..end_idx]
+                            )?;
                         } else {
-                            write!(stdout, "{sel_bg}")?;
+                            write!(stdout, "{sel_bg}{REL_NUMS}{nl}")?;
                         }
                     }
-                    _ => write!(stdout, "{}", &content[start_idx..end_idx])?,
+                    _ => write!(stdout, "{}{REL_NUMS}{nl}", &content[start_idx..end_idx])?,
                 }
 
                 // Stretch current line to end to show highlight properly.
@@ -254,7 +289,11 @@ impl Viewport {
                     write!(
                         stdout,
                         "{}{BG}",
-                        " ".repeat(self.buff_w - content[start_idx..end_idx].chars().count())
+                        " ".repeat(
+                            self.buff_w
+                                - content[start_idx..end_idx].chars().count()
+                                - !nl.is_empty() as usize
+                        )
                     )?;
                 }
             } else {

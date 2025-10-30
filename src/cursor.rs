@@ -103,7 +103,7 @@ pub fn left(doc: &mut Document, view: &mut Viewport, n: usize) {
 
 /// Moves the cursors to the right
 pub fn right(doc: &mut Document, view: &mut Viewport, n: usize) {
-    let line_bound = doc.line_count(doc.cur.y).expect("Illegal state");
+    let line_bound = doc.line_count(doc.cur.y).unwrap();
     doc.cur.right(n, line_bound);
     view.cur.right(n, (doc.cur.x).min(view.buff_w - 1));
 }
@@ -115,7 +115,7 @@ pub fn up(doc: &mut Document, view: &mut Viewport, n: usize) {
     view.cur.up(n, 0);
 
     // When moving up, handle case that new line contains less text than previous.
-    let line_bound = doc.line_count(doc.cur.y).expect("Illegal state");
+    let line_bound = doc.line_count(doc.cur.y).unwrap();
     doc.cur.x = doc.cur.target_x.min(line_bound);
     view.cur.x = doc.cur.x.min(view.buff_w - 1);
 }
@@ -128,7 +128,7 @@ pub fn down(doc: &mut Document, view: &mut Viewport, n: usize) {
     view.cur.down(n, (view.h - 1).min(bound));
 
     // When moving down, handle case that new line contains less text than previous.
-    let line_bound = doc.line_count(doc.cur.y).expect("Illegal state");
+    let line_bound = doc.line_count(doc.cur.y).unwrap();
     doc.cur.x = doc.cur.target_x.min(line_bound);
     view.cur.x = doc.cur.x.min(view.buff_w - 1);
 }
@@ -165,7 +165,7 @@ fn __next_word(doc: &mut Document, view: &mut Viewport) {
         line = &doc.buff[cur.y];
     }
 
-    let curr = line.chars().nth(cur.x).expect("Illegal state");
+    let curr = line.chars().nth(cur.x).unwrap();
 
     // Find next not alphanumeric character or alphanumeric character if the current character is not.
     let Some((idx, ch)) =
@@ -307,9 +307,7 @@ pub fn jump_to_end_of_line(doc: &mut Document, view: &mut Viewport) {
     right(
         doc,
         view,
-        doc.line_count(doc.cur.y)
-            .expect("Illegal state")
-            .saturating_sub(doc.cur.x),
+        doc.line_count(doc.cur.y).unwrap().saturating_sub(doc.cur.x),
     );
 }
 

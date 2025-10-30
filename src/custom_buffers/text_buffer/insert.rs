@@ -4,7 +4,7 @@ use crate::{
         edit,
         history::{Change, Replace},
     },
-    cursor,
+    cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
     sc_buff,
     util::{CommandResult, split_to_lines},
@@ -16,6 +16,11 @@ impl TextBuffer {
     /// The cursor will be on the new line.
     pub(super) fn insert_move_new_line_above(&mut self) {
         cursor::jump_to_beginning_of_line(&mut self.base.doc, &mut self.base.doc_view);
+        self.history.add_change(Change::Insert {
+            pos: self.base.doc.cur,
+            data: Cow::from("\n"),
+        });
+
         self.base
             .doc
             .insert_line(Cow::from(""), self.base.doc.cur.y);
@@ -24,6 +29,12 @@ impl TextBuffer {
     /// Inserts a new line bellow the current cursor position.
     /// The cursor will be on the new line.
     pub(super) fn insert_move_new_line_bellow(&mut self) {
+        let y = self.base.doc.cur.y;
+        self.history.add_change(Change::Insert {
+            pos: Cursor::new(self.base.doc.line_count(y).unwrap(), y),
+            data: Cow::from("\n"),
+        });
+
         self.base
             .doc
             .insert_line(Cow::from(""), self.base.doc.cur.y + 1);
@@ -39,7 +50,7 @@ impl TextBuffer {
             .base
             .doc
             .delete_char(self.base.doc.cur.x, self.base.doc.cur.y)
-            .expect("Illegal state");
+            .unwrap();
 
         self.history.add_change(Change::Replace(vec![Replace {
             pos: self.base.doc.cur,
@@ -76,8 +87,8 @@ impl TextBuffer {
     }
 
     /// Paste the system clipboard contents after the current cursor.
-    pub(super) fn paste(&mut self) -> Option<CommandResult> {
-        let content = match self.base.clipboard.get_text() {
+    pub(super) fn paste(&mut self, trim_newline: bool) -> Option<CommandResult> {
+        let mut content = match self.base.clipboard.get_text() {
             Ok(content) => content,
             Err(err) => {
                 return Some(sc_buff!(
@@ -87,6 +98,10 @@ impl TextBuffer {
                 ));
             }
         };
+
+        if trim_newline && content.ends_with('\n') {
+            content.truncate(content.len() - 1);
+        }
 
         self.base.doc.write_str(&content);
 

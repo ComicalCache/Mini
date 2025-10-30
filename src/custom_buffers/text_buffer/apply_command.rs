@@ -140,7 +140,7 @@ impl TextBuffer {
             (end, start)
         };
 
-        let hay = self.base.doc.get_range(start, end).expect("Illegal state");
+        let hay = self.base.doc.get_range(start, end).unwrap();
 
         let mut new = String::new();
         let mut last_match = 0;

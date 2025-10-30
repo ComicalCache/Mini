@@ -116,6 +116,7 @@ enum OtherViewAction {
 
     // Paste
     Paste,
+    PasteAbove,
 
     // History
     Undo,
@@ -202,6 +203,7 @@ impl TextBuffer {
                     _ => None,
                 })
                 .simple(Key::Char('p'), Other(Paste))
+                .simple(Key::Char('P'), Other(PasteAbove))
                 .prefix(Key::Char('r'), |key| match key {
                     Key::Char(ch) => Some(ChainResult::Action(Other(ReplaceChar(ch)))),
                     _ => None,
@@ -339,7 +341,15 @@ impl TextBuffer {
             ChangeToEndOfFile => change!(self, end_of_file),
             ChangeToBeginningOfFile => change!(self, beginning_of_file),
             Paste => {
-                if let Some(res) = self.paste() {
+                if let Some(res) = self.paste(false) {
+                    self.base.motion_repeat.clear();
+                    return res;
+                }
+                self.base.clear_matches();
+            }
+            PasteAbove => {
+                self.insert_move_new_line_above();
+                if let Some(res) = self.paste(true) {
                     self.base.motion_repeat.clear();
                     return res;
                 }
@@ -409,7 +419,7 @@ impl TextBuffer {
 
         match tick {
             Apply(cmd) => self.apply_command(&cmd),
-            Other(()) => unreachable!("Illegal state"),
+            Other(()) => unreachable!(),
         }
     }
 }

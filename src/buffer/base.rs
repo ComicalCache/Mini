@@ -320,7 +320,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         if self.matches.is_empty() {
             return;
         }
-        let idx = self.matches_idx.as_mut().expect("Illegal state");
+        let idx = self.matches_idx.as_mut().unwrap();
         *idx = (*idx + 1) % self.matches.len();
 
         self.sel = Some(self.matches[*idx].1);
@@ -332,7 +332,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         if self.matches.is_empty() {
             return;
         }
-        let idx = self.matches_idx.as_mut().expect("Illegal state");
+        let idx = self.matches_idx.as_mut().unwrap();
         if *idx != 0 {
             *idx -= 1;
         } else {
@@ -362,7 +362,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             self.cmd.buff[0].clone_from(&self.cmd_history[self.cmd_history_idx]);
         }
 
-        let len = self.cmd.line_count(0).expect("Illegal state");
+        let len = self.cmd.line_count(0).unwrap();
         let n = self.cmd.cur.x;
         if n < len {
             cursor::right(&mut self.cmd, &mut self.cmd_view, len - n);
@@ -380,7 +380,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         self.cmd_history_idx -= 1;
         self.cmd.buff[0].clone_from(&self.cmd_history[self.cmd_history_idx]);
 
-        let len = self.cmd.line_count(0).expect("Illegal state");
+        let len = self.cmd.line_count(0).unwrap();
         let n = self.cmd.cur.x;
         if n < len {
             cursor::right(&mut self.cmd, &mut self.cmd_view, len - n);

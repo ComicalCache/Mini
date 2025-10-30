@@ -75,7 +75,7 @@ pub fn char(doc: &mut Document, view: &mut Viewport, history: Option<&mut Histor
     // Move left so that all n - 1 characters can be deleted. Minus one because deleting the place
     // after the line causes it to move left by one. This all aids usability, otherwise it would be
     // identical to the right deletion, however this is a more expected behaviour.
-    let len = doc.line_count(doc.cur.y).expect("Illegal state");
+    let len = doc.line_count(doc.cur.y).unwrap();
     if doc.cur.x + n > len {
         cursor::left(doc, view, doc.cur.x + n - len - 1);
     }
@@ -83,7 +83,7 @@ pub fn char(doc: &mut Document, view: &mut Viewport, history: Option<&mut Histor
     right(doc, view, history, n);
 
     // Move the cursor one to the left so it can't end up after the last character after deletion.
-    if doc.cur.x == doc.line_count(doc.cur.y).expect("Illegal state") {
+    if doc.cur.x == doc.line_count(doc.cur.y).unwrap() {
         cursor::left(doc, view, 1);
     }
 }
