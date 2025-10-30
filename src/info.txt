@@ -33,8 +33,8 @@ command history. All buffers support following commands:
 - 'goto <line>:<column>' to jump to an absolute line number and column. If the column is omitted it jumps to the
     beginning of the line. If the line is missing it jumps to the column in the current line. Particularly ':' does
     nothing.
-- 's /<regex>/' to search text in a selection. See https://docs.rs/regex/latest/regex/index.html for information about
-    the regex syntax.
+- 's /<regex>/' to search text. If text was selected, it will only search in that selection. See
+    https://docs.rs/regex/latest/regex/index.html for information about the regex syntax.
 
 Text Buffer:
 This is probably the most important buffer. It contains the editor window where you can edit your files and is the
@@ -76,8 +76,8 @@ mode.
         backing file is created)
     - 'oo ?<path>' to open a file and replace the buffer, discarding unsaved changes (if the path is omitted a new
         "scratchpad" buffer with no backing file is created)
-     - 'r /<regex>/<replace>/' to replace text in a selection. See https://docs.rs/regex/latest/regex/index.html for
-        information about the regex and replace syntax.
+     - 'r /<regex>/<replace>/' to replace text. If text was selected it will only replace in that selection. See
+        https://docs.rs/regex/latest/regex/index.html for information about the regex and replace syntax.
 
 Info Buffer:
 The info buffer is a read only buffer that displays errors, warnings or other types of information. It has two modes:

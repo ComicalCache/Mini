@@ -387,11 +387,10 @@ fn find_matching_bracket(doc: &Document) -> Option<(usize, usize)> {
 /// Jumps the cursors to the last line of the file.
 pub fn jump_to_end_of_file(doc: &mut Document, view: &mut Viewport) {
     down(doc, view, doc.buff.len() - (doc.cur.y + 1));
-    left(doc, view, doc.cur.x);
+    jump_to_end_of_line(doc, view);
 }
 
 /// Jumps the cursors to the first line of the file.
 pub fn jump_to_beginning_of_file(doc: &mut Document, view: &mut Viewport) {
-    up(doc, view, doc.cur.y + 1);
-    left(doc, view, doc.cur.x);
+    move_to(doc, view, Cursor::new(0, 0));
 }

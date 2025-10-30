@@ -1,7 +1,8 @@
 use crate::{
     INFO_BUFF_IDX, INFO_MSG,
     buffer::base::{BaseBuffer, CommandTick},
-    cursor, sc_buff,
+    cursor::{self, Cursor},
+    sc_buff,
     util::{CommandResult, line_column, split_to_lines},
 };
 use regex::Regex;
@@ -11,14 +12,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     BaseBuffer<ModeEnum, ViewEnum, CommandEnum>
 {
     fn search(&mut self, args: &str) -> CommandResult {
-        let Some(end) = self.sel else {
-            return sc_buff!(
-                INFO_BUFF_IDX,
-                ["Search command requires a selection."],
-                None,
-            );
-        };
-
         if args.len() == 2 || !args.starts_with('/') || !args.ends_with('/') {
             return sc_buff!(
                 INFO_BUFF_IDX,
@@ -38,7 +31,23 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             }
         };
 
-        let start = self.doc.cur;
+        let (start, end) = if let Some(end) = self.sel {
+            (self.doc.cur, end)
+        } else {
+            // Save previous cursor position.
+            let tmp_view_cur = self.doc_view.cur;
+            let tmp_doc_cur = self.doc.cur;
+
+            let start = Cursor::new(0, 0);
+            cursor::jump_to_end_of_file(&mut self.doc, &mut self.doc_view);
+            let end = self.doc.cur;
+
+            // Restore previous cursor position.
+            self.doc.cur = tmp_doc_cur;
+            self.doc_view.cur = tmp_view_cur;
+
+            (start, end)
+        };
         let (start, end) = if start < end {
             (start, end)
         } else {
@@ -93,11 +102,16 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         match cmd {
             "q" => Ok(CommandResult::Quit),
             "qq" => Ok(CommandResult::ForceQuit),
-            "?" => Ok(sc_buff!(
-                INFO_BUFF_IDX,
-                INFO_MSG.lines().map(Cow::from).collect(),
-                None,
-            )),
+            "?" => {
+                let version = option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap();
+                Ok(sc_buff!(
+                    INFO_BUFF_IDX,
+                    split_to_lines(format!(
+                        "Mini - A terminal text-editor (v{version})\n\n{INFO_MSG}"
+                    )),
+                    None,
+                ))
+            }
             "goto" => {
                 let (x, y) = line_column(args);
 

@@ -1,7 +1,7 @@
 use crate::{
     INFO_BUFF_IDX,
     buffer::history::{Change, Replace},
-    cursor,
+    cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
     sc_buff,
     util::{CommandResult, open_file, read_file_to_lines, split_to_lines},
@@ -88,14 +88,6 @@ impl TextBuffer {
     }
 
     fn replace_command(&mut self, args: &str) -> CommandResult {
-        let Some(end) = self.base.sel else {
-            return sc_buff!(
-                INFO_BUFF_IDX,
-                ["Replace command requires a selection."],
-                None,
-            );
-        };
-
         let err = sc_buff!(
             INFO_BUFF_IDX,
             ["Invalid format. Expected: r /<regex>/<replace>/"],
@@ -125,7 +117,23 @@ impl TextBuffer {
             }
         };
 
-        let start = self.base.doc.cur;
+        let (start, end) = if let Some(end) = self.base.sel {
+            (self.base.doc.cur, end)
+        } else {
+            // Save previous cursor position.
+            let tmp_view_cur = self.base.doc_view.cur;
+            let tmp_doc_cur = self.base.doc.cur;
+
+            let start = Cursor::new(0, 0);
+            cursor::jump_to_end_of_file(&mut self.base.doc, &mut self.base.doc_view);
+            let end = self.base.doc.cur;
+
+            // Restore previous cursor position.
+            self.base.doc.cur = tmp_doc_cur;
+            self.base.doc_view.cur = tmp_view_cur;
+
+            (start, end)
+        };
         let (start, end) = if start < end {
             (start, end)
         } else {
