@@ -320,6 +320,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         if self.matches.is_empty() {
             return;
         }
+
         let idx = self.matches_idx.as_mut().unwrap();
         *idx = (*idx + 1) % self.matches.len();
 
@@ -332,6 +333,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         if self.matches.is_empty() {
             return;
         }
+
         let idx = self.matches_idx.as_mut().unwrap();
         if *idx != 0 {
             *idx -= 1;
@@ -362,13 +364,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             self.cmd.buff[0].clone_from(&self.cmd_history[self.cmd_history_idx]);
         }
 
-        let len = self.cmd.line_count(0).unwrap();
-        let n = self.cmd.cur.x;
-        if n < len {
-            cursor::right(&mut self.cmd, &mut self.cmd_view, len - n);
-        } else if n > len {
-            cursor::left(&mut self.cmd, &mut self.cmd_view, n - len);
-        }
+        cursor::jump_to_end_of_line(&mut self.cmd, &mut self.cmd_view);
     }
 
     /// Loads the previous command history item.
@@ -380,13 +376,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         self.cmd_history_idx -= 1;
         self.cmd.buff[0].clone_from(&self.cmd_history[self.cmd_history_idx]);
 
-        let len = self.cmd.line_count(0).unwrap();
-        let n = self.cmd.cur.x;
-        if n < len {
-            cursor::right(&mut self.cmd, &mut self.cmd_view, len - n);
-        } else if n > len {
-            cursor::left(&mut self.cmd, &mut self.cmd_view, n - len);
-        }
+        cursor::jump_to_end_of_line(&mut self.cmd, &mut self.cmd_view);
     }
 
     /// Changes the base buffers mode.
@@ -406,9 +396,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         }
 
         match mode {
-            Mode::Command => {
-                self.cmd_history_idx = self.cmd_history.len();
-            }
+            Mode::Command => self.cmd_history_idx = self.cmd_history.len(),
             Mode::View | Mode::Other(_) => {}
         }
 

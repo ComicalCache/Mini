@@ -145,7 +145,8 @@ fn __next_word(doc: &mut Document, view: &mut Viewport) {
     let line;
 
     // Move line down if at end of line and not at end of document.
-    if doc.buff[doc.cur.y].chars().count() <= doc.cur.x && doc.cur.y < doc.buff.len() - 1 {
+    let len = doc.line_count(doc.cur.y).unwrap();
+    if len <= doc.cur.x && doc.cur.y < doc.buff.len() - 1 {
         jump_to_beginning_of_line(doc, view);
         down(doc, view, 1);
 
@@ -165,7 +166,7 @@ fn __next_word(doc: &mut Document, view: &mut Viewport) {
         line = &doc.buff[cur.y];
     }
 
-    let curr = line.chars().nth(cur.x).unwrap();
+    let curr = line.chars().nth(cur.x.min(len.saturating_sub(1))).unwrap();
 
     // Find next not alphanumeric character or alphanumeric character if the current character is not.
     let Some((idx, ch)) =
@@ -182,7 +183,7 @@ fn __next_word(doc: &mut Document, view: &mut Viewport) {
         // Find next non-whitespace after whitespace.
         let Some((jdx, _)) = line
             .chars()
-            .skip(view.cur.x + 1 + idx)
+            .skip(doc.cur.x + 1 + idx)
             .enumerate()
             .find(|(_, ch)| !ch.is_whitespace())
         else {

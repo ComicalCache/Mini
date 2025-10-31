@@ -8,19 +8,27 @@ use crate::{
 };
 use arboard::Clipboard;
 
-macro_rules! yank {
-    ($doc:ident, $view:ident, $clipboard:ident, $func:ident $(,$n:ident)?) => {{
-        let tmp_view_cur = $view.cur;
-        let tmp_doc_cur = $doc.cur;
+macro_rules! yank_fn {
+    ($func:ident, $func_call:ident, $comment:meta $(,$n:ident)?) => {
+        #[$comment]
+        pub fn $func(
+            doc: &mut Document,
+            view: &mut Viewport,
+            clipboard: &mut Clipboard,
+            $($n: usize,)?
+        ) -> Result<(), CommandResult> {
+            let tmp_view_cur = view.cur;
+            let tmp_doc_cur = doc.cur;
 
-        cursor::$func($doc, $view $(,$n)?);
-        let res = selection($doc, &mut Some(tmp_doc_cur), $clipboard);
+            cursor::$func_call(doc, view $(,$n)?);
+            let res = selection(doc, &mut Some(tmp_doc_cur), clipboard);
 
-        $view.cur = tmp_view_cur;
-        $doc.cur = tmp_doc_cur;
+            view.cur = tmp_view_cur;
+            doc.cur = tmp_doc_cur;
 
-        return res;
-    }};
+            return res;
+        }
+    };
 }
 
 /// Yanks the selected area.
@@ -76,87 +84,32 @@ pub fn line(
     }
 }
 
-/// Yanks left of the cursor.
-pub fn left(
-    doc: &mut Document,
-    view: &mut Viewport,
-    clipboard: &mut Clipboard,
-    n: usize,
-) -> Result<(), CommandResult> {
-    yank!(doc, view, clipboard, left, n)
-}
-
-/// Yanks right of the cursor.
-pub fn right(
-    doc: &mut Document,
-    view: &mut Viewport,
-    clipboard: &mut Clipboard,
-    n: usize,
-) -> Result<(), CommandResult> {
-    yank!(doc, view, clipboard, right, n)
-}
-
-/// Yanks the next word.
-pub fn next_word(
-    doc: &mut Document,
-    view: &mut Viewport,
-    clipboard: &mut Clipboard,
-    n: usize,
-) -> Result<(), CommandResult> {
-    yank!(doc, view, clipboard, next_word, n)
-}
-
-/// Yanks the previous word.
-pub fn prev_word(
-    doc: &mut Document,
-    view: &mut Viewport,
-    clipboard: &mut Clipboard,
-    n: usize,
-) -> Result<(), CommandResult> {
-    yank!(doc, view, clipboard, prev_word, n)
-}
-
-/// Yanks until the beginning of the line.
-pub fn beginning_of_line(
-    doc: &mut Document,
-    view: &mut Viewport,
-    clipboard: &mut Clipboard,
-) -> Result<(), CommandResult> {
-    yank!(doc, view, clipboard, jump_to_beginning_of_line)
-}
-
-/// Yanks until the end of the line.
-pub fn end_of_line(
-    doc: &mut Document,
-    view: &mut Viewport,
-    clipboard: &mut Clipboard,
-) -> Result<(), CommandResult> {
-    yank!(doc, view, clipboard, jump_to_end_of_line)
-}
-
-/// Yanks until the matching opposite bracket.
-pub fn matching_opposite(
-    doc: &mut Document,
-    view: &mut Viewport,
-    clipboard: &mut Clipboard,
-) -> Result<(), CommandResult> {
-    yank!(doc, view, clipboard, jump_to_matching_opposite)
-}
-
-/// Yanks until the beginning of the file.
-pub fn beginning_of_file(
-    doc: &mut Document,
-    view: &mut Viewport,
-    clipboard: &mut Clipboard,
-) -> Result<(), CommandResult> {
-    yank!(doc, view, clipboard, jump_to_beginning_of_file)
-}
-
-/// Yanks until the end of the file.
-pub fn end_of_file(
-    doc: &mut Document,
-    view: &mut Viewport,
-    clipboard: &mut Clipboard,
-) -> Result<(), CommandResult> {
-    yank!(doc, view, clipboard, jump_to_end_of_file)
-}
+yank_fn!(left, left, doc = "Yanks left of the cursor.", n);
+yank_fn!(right, right, doc = "Yanks right of the cursor.", n);
+yank_fn!(next_word, next_word, doc = "Yanks the next word.", n);
+yank_fn!(prev_word, prev_word, doc = "Yanks the previous word.", n);
+yank_fn!(
+    beginning_of_line,
+    jump_to_beginning_of_line,
+    doc = "Yanks until the beginning of the line."
+);
+yank_fn!(
+    end_of_line,
+    jump_to_end_of_line,
+    doc = "Yanks until the end of the line."
+);
+yank_fn!(
+    matching_opposite,
+    jump_to_matching_opposite,
+    doc = "Yanks until the matching opposite bracket."
+);
+yank_fn!(
+    beginning_of_file,
+    jump_to_beginning_of_file,
+    doc = "Yanks until the beginning of the file."
+);
+yank_fn!(
+    end_of_file,
+    jump_to_end_of_file,
+    doc = "Yanks until the end of the file."
+);

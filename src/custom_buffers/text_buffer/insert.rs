@@ -1,7 +1,7 @@
 use crate::{
     INFO_BUFF_IDX,
     buffer::{
-        edit,
+        edit::{self, TAB},
         history::{Change, Replace},
     },
     cursor::{self, Cursor},
@@ -56,33 +56,23 @@ impl TextBuffer {
             .delete_char(self.base.doc.cur.x, self.base.doc.cur.y)
             .unwrap();
 
-        self.history.add_change(Change::Replace(vec![Replace {
-            pos: self.base.doc.cur,
-            delete_data: Cow::from(old_ch.to_string()),
-            insert_data: Cow::from(ch.to_string()),
-        }]));
+        {
+            let ch = if ch == '\t' {
+                TAB.to_string()
+            } else {
+                ch.to_string()
+            };
+
+            self.history.add_change(Change::Replace(vec![Replace {
+                pos: self.base.doc.cur,
+                delete_data: Cow::from(old_ch.to_string()),
+                insert_data: Cow::from(ch),
+            }]));
+        }
 
         match ch {
-            '\n' => {
-                edit::write_new_line_char(
-                    &mut self.base.doc,
-                    &mut self.base.doc_view,
-                    Some(&mut self.history),
-                );
-
-                // Pop the change added by the write method above.
-                let _ = self.history.undo();
-            }
-            '\t' => {
-                edit::write_tab(
-                    &mut self.base.doc,
-                    &mut self.base.doc_view,
-                    Some(&mut self.history),
-                );
-
-                // Pop the change added by the write method above.
-                let _ = self.history.undo();
-            }
+            '\n' => edit::write_new_line_char(&mut self.base.doc, &mut self.base.doc_view, None),
+            '\t' => edit::write_tab(&mut self.base.doc, &mut self.base.doc_view, None),
             _ => self
                 .base
                 .doc

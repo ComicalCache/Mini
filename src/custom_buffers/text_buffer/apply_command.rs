@@ -117,8 +117,13 @@ impl TextBuffer {
             }
         };
 
+        // Use selection or replace in entire buffer.
         let (start, end) = if let Some(end) = self.base.sel {
-            (self.base.doc.cur, end)
+            if self.base.doc.cur < end {
+                (self.base.doc.cur, end)
+            } else {
+                (end, self.base.doc.cur)
+            }
         } else {
             // Save previous cursor position.
             let tmp_view_cur = self.base.doc_view.cur;
@@ -133,11 +138,6 @@ impl TextBuffer {
             self.base.doc_view.cur = tmp_view_cur;
 
             (start, end)
-        };
-        let (start, end) = if start < end {
-            (start, end)
-        } else {
-            (end, start)
         };
 
         let hay = self.base.doc.get_range(start, end).unwrap();

@@ -6,7 +6,7 @@ use crate::{
 };
 use std::borrow::Cow;
 
-const TAB: &str = "    ";
+pub const TAB: &str = "    ";
 
 /// Writes a char at the current cursor position.
 /// The cursor will be after the new char.

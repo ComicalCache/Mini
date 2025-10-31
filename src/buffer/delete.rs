@@ -5,6 +5,22 @@ use crate::{
     viewport::Viewport,
 };
 
+macro_rules! delete_fn {
+    ($func:ident, $func_call:ident, $comment:meta $(,$n:ident)?) => {
+        #[$comment]
+        pub fn $func(
+            doc: &mut Document,
+            view: &mut Viewport,
+            history: Option<&mut History>,
+            $($n: usize,)?
+        ) {
+            let tmp = doc.cur;
+            cursor::$func_call(doc, view $(,$n)?);
+            selection(doc, view, &mut Some(tmp), history);
+        }
+    };
+}
+
 /// Deletes the selected area.
 pub fn selection(
     doc: &mut Document,
@@ -24,6 +40,7 @@ pub fn selection(
     {
         history.add_change(Change::Delete { pos: start, data });
     }
+
     doc.remove_range(start, end);
 
     // Place cursor at the beginning of the deleted area.
@@ -88,65 +105,32 @@ pub fn char(doc: &mut Document, view: &mut Viewport, history: Option<&mut Histor
     }
 }
 
-/// Deletes left of the cursor.
-pub fn left(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
-    let tmp = doc.cur;
-    cursor::left(doc, view, n);
-    selection(doc, view, &mut Some(tmp), history);
-}
-
-/// Deletes right of the cursor.
-pub fn right(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
-    let tmp = doc.cur;
-    cursor::right(doc, view, n);
-    selection(doc, view, &mut Some(tmp), history);
-}
-
-/// Deletes the next word.
-pub fn next_word(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
-    let tmp = doc.cur;
-    cursor::next_word(doc, view, n);
-    selection(doc, view, &mut Some(tmp), history);
-}
-
-/// Deletes the previous word.
-pub fn prev_word(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
-    let tmp = doc.cur;
-    cursor::prev_word(doc, view, n);
-    selection(doc, view, &mut Some(tmp), history);
-}
-
-/// Deletes until the beginning of the line.
-pub fn beginning_of_line(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>) {
-    let tmp = doc.cur;
-    cursor::jump_to_beginning_of_line(doc, view);
-    selection(doc, view, &mut Some(tmp), history);
-}
-
-/// Deletes until the end of the line.
-pub fn end_of_line(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>) {
-    let tmp = doc.cur;
-    cursor::jump_to_end_of_line(doc, view);
-    selection(doc, view, &mut Some(tmp), history);
-}
-
-/// Deletes until the matching opposite bracket.
-pub fn matching_opposite(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>) {
-    let tmp = doc.cur;
-    cursor::jump_to_matching_opposite(doc, view);
-    selection(doc, view, &mut Some(tmp), history);
-}
-
-/// Deletes until the beginning of the file.
-pub fn beginning_of_file(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>) {
-    let tmp = doc.cur;
-    cursor::jump_to_beginning_of_file(doc, view);
-    selection(doc, view, &mut Some(tmp), history);
-}
-
-/// Deletes until the end of the file.
-pub fn end_of_file(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>) {
-    let tmp = doc.cur;
-    cursor::jump_to_end_of_file(doc, view);
-    selection(doc, view, &mut Some(tmp), history);
-}
+delete_fn!(left, left, doc = "Deletes left of the cursor.", n);
+delete_fn!(right, right, doc = "Deletes right of the cursor.", n);
+delete_fn!(next_word, next_word, doc = "Deletes the next word.", n);
+delete_fn!(prev_word, prev_word, doc = "Deletes the previous word.", n);
+delete_fn!(
+    beginning_of_line,
+    jump_to_beginning_of_line,
+    doc = "Deletes until the beginning of the line."
+);
+delete_fn!(
+    end_of_line,
+    jump_to_end_of_line,
+    doc = "Deletes until the end of the line."
+);
+delete_fn!(
+    matching_opposite,
+    jump_to_matching_opposite,
+    doc = "Deletes until the matching opposite bracket."
+);
+delete_fn!(
+    beginning_of_file,
+    jump_to_beginning_of_file,
+    doc = "Deletes until the beginning of the file."
+);
+delete_fn!(
+    end_of_file,
+    jump_to_end_of_file,
+    doc = "Deletes until the end of the file."
+);

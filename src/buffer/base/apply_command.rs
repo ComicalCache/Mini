@@ -31,8 +31,13 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             }
         };
 
+        // Use selection or search entire buffer.
         let (start, end) = if let Some(end) = self.sel {
-            (self.doc.cur, end)
+            if self.doc.cur < end {
+                (self.doc.cur, end)
+            } else {
+                (end, self.doc.cur)
+            }
         } else {
             // Save previous cursor position.
             let tmp_view_cur = self.doc_view.cur;
@@ -47,11 +52,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             self.doc_view.cur = tmp_view_cur;
 
             (start, end)
-        };
-        let (start, end) = if start < end {
-            (start, end)
-        } else {
-            (end, start)
         };
 
         let hay = self.doc.get_range(start, end).unwrap();
@@ -77,10 +77,24 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             // Or use last match if before current cursor position.
             .or(Some(self.matches.len() - 1));
 
-        if let Some(idx) = self.matches_idx {
-            self.sel = Some(self.matches[idx].1);
-            cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[idx].0);
+        let idx = self.matches_idx.unwrap();
+        self.sel = Some(self.matches[idx].1);
+        cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[idx].0);
+
+        CommandResult::Ok
+    }
+
+    fn goto(&mut self, args: &str) -> CommandResult {
+        let (x, y) = line_column(args);
+
+        let mut pos = self.doc.cur;
+        if let Some(x) = x {
+            pos.x = x.saturating_sub(1);
         }
+        if let Some(y) = y {
+            pos.y = y.saturating_sub(1);
+        }
+        cursor::move_to(&mut self.doc, &mut self.doc_view, pos);
 
         CommandResult::Ok
     }
@@ -102,30 +116,15 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         match cmd {
             "q" => Ok(CommandResult::Quit),
             "qq" => Ok(CommandResult::ForceQuit),
-            "?" => {
-                let version = option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap();
-                Ok(sc_buff!(
-                    INFO_BUFF_IDX,
-                    split_to_lines(format!(
-                        "Mini - A terminal text-editor (v{version})\n\n{INFO_MSG}"
-                    )),
-                    None,
-                ))
-            }
-            "goto" => {
-                let (x, y) = line_column(args);
-
-                let mut pos = self.doc.cur;
-                if let Some(x) = x {
-                    pos.x = x.saturating_sub(1);
-                }
-                if let Some(y) = y {
-                    pos.y = y.saturating_sub(1);
-                }
-                cursor::move_to(&mut self.doc, &mut self.doc_view, pos);
-
-                Ok(CommandResult::Ok)
-            }
+            "?" => Ok(sc_buff!(
+                INFO_BUFF_IDX,
+                split_to_lines(format!(
+                    "Mini - A terminal text-editor (v{})\n\n{INFO_MSG}",
+                    option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap()
+                )),
+                None,
+            )),
+            "goto" => Ok(self.goto(args)),
             "s" => Ok(self.search(args)),
             _ => Err(CommandTick::Apply(input)),
         }
