@@ -20,7 +20,7 @@ impl FilesBuffer {
         let base = if base.is_dir() {
             base
         } else {
-            &PathBuf::from(base.parent().unwrap_or(Path::new("/")))
+            &PathBuf::from(base.parent().unwrap_or_else(|| Path::new("/")))
         };
 
         *entries = read_dir(base)?
@@ -56,7 +56,7 @@ impl FilesBuffer {
             if self.path.pop() {
                 self.base
                     .doc
-                    .set_contents(&FilesBuffer::load_dir(&self.path, &mut self.entries)?);
+                    .set_contents(&Self::load_dir(&self.path, &mut self.entries)?);
             }
 
             return Ok(CommandResult::Ok);
@@ -77,7 +77,7 @@ impl FilesBuffer {
             cursor::jump_to_beginning_of_file(&mut self.base.doc, &mut self.base.doc_view);
             self.base
                 .doc
-                .set_contents(&FilesBuffer::load_dir(&self.path, &mut self.entries)?);
+                .set_contents(&Self::load_dir(&self.path, &mut self.entries)?);
             return Ok(CommandResult::Ok);
         } else if entry.is_symlink() && entry.exists() {
             // FIXME: this can cause an infinite loop on a circular symlink.

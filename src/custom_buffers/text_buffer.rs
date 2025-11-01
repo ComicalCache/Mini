@@ -12,17 +12,12 @@ use crate::{
     },
     c_buff,
     cursor::{self, Cursor},
+    display::Display,
     state_machine::{ChainResult, CommandMap, StateMachine},
     util::{CommandResult, CursorStyle, open_file, read_file_to_lines},
 };
-use std::{
-    borrow::Cow,
-    fs::File,
-    io::{BufWriter, Error, Stdout, Write},
-    path::PathBuf,
-    time::Duration,
-};
-use termion::{clear::All, cursor::Hide, event::Key, raw::RawTerminal};
+use std::{borrow::Cow, fs::File, io::Error, path::PathBuf, time::Duration};
+use termion::event::Key;
 
 macro_rules! delete {
     ($self:ident, $func:ident) => {{
@@ -230,7 +225,7 @@ impl TextBuffer {
             StateMachine::new(command_map, Duration::from_secs(1))
         };
 
-        Ok(TextBuffer {
+        Ok(Self {
             base,
             file,
             history: History::new(),
@@ -239,7 +234,7 @@ impl TextBuffer {
     }
 
     /// Creates an info line
-    fn info_line(&mut self) -> Result<(), std::fmt::Error> {
+    fn info_line(&mut self) {
         use std::fmt::Write;
 
         self.base.info.buff[0].to_mut().clear();
@@ -259,7 +254,8 @@ impl TextBuffer {
         write!(
             self.base.info.buff[0].to_mut(),
             "[Text] [{mode}] [{line}:{col}/{total} {percentage}%] [{size}B]",
-        )?;
+        )
+        .unwrap();
         if let Some(pos) = self.base.sel {
             // Plus 1 since text coordinates are 0 indexed.
             let line = pos.y + 1;
@@ -269,11 +265,12 @@ impl TextBuffer {
                 " [Selected {line}:{col} - {}:{}]",
                 self.base.doc.cur.y + 1,
                 self.base.doc.cur.x + 1
-            )?;
+            )
+            .unwrap();
         }
 
         let edited = if self.base.doc.edited { '*' } else { ' ' };
-        write!(self.base.info.buff[0].to_mut(), " {edited}")
+        write!(self.base.info.buff[0].to_mut(), " {edited}").unwrap();
     }
 
     /// Handles self defined view actions.
@@ -429,11 +426,10 @@ impl Buffer for TextBuffer {
         self.base.rerender
     }
 
-    fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
-        write!(stdout, "{Hide}{All}")?;
+    fn render(&mut self, display: &mut Display) {
         self.base.rerender = false;
 
-        self.info_line().map_err(Error::other)?;
+        self.info_line();
 
         let (cursor_style, cmd) = match self.base.mode {
             Mode::View => (CursorStyle::BlinkingBlock, false),
@@ -444,25 +440,23 @@ impl Buffer for TextBuffer {
         if cmd {
             self.base
                 .cmd_view
-                .render_bar(stdout, &self.base.cmd, COMMAND_PROMPT)?;
+                .render_bar(display, &self.base.cmd, COMMAND_PROMPT);
         } else {
-            self.base
-                .info_view
-                .render_bar(stdout, &self.base.info, "")?;
+            self.base.info_view.render_bar(display, &self.base.info, "");
         }
+
+        self.base.doc_view.render_gutter(display, &self.base.doc);
 
         self.base
             .doc_view
-            .render_document(stdout, &self.base.doc, self.base.sel)?;
+            .render_document(display, &self.base.doc, self.base.sel);
 
         let (view, prompt) = if cmd {
             (&self.base.cmd_view, Some(COMMAND_PROMPT))
         } else {
             (&self.base.doc_view, None)
         };
-        view.render_cursor(stdout, cursor_style, prompt)?;
-
-        stdout.flush()
+        view.render_cursor(display, cursor_style, prompt);
     }
 
     fn resize(&mut self, w: usize, h: usize) {

@@ -1,9 +1,11 @@
+#![warn(clippy::all, clippy::pedantic, clippy::nursery)]
+#![allow(clippy::too_many_lines, clippy::enum_glob_use, clippy::similar_names)]
 #![feature(trait_alias)]
-#![allow(clippy::too_many_lines, clippy::enum_glob_use)]
 
 mod buffer;
 mod cursor;
 mod custom_buffers;
+mod display;
 mod document;
 mod state_machine;
 mod util;
@@ -12,6 +14,7 @@ mod viewport;
 use crate::{
     buffer::Buffer,
     custom_buffers::{files_buffer::FilesBuffer, info_buffer::InfoBuffer, text_buffer::TextBuffer},
+    display::Display,
     util::{CommandResult, open_file, split_to_lines},
 };
 use polling::{Events, Poller};
@@ -64,13 +67,15 @@ fn main() -> Result<(), std::io::Error> {
     let poller = Poller::new()?;
     unsafe { poller.add(&stdin.as_fd(), polling::Event::readable(STDIN_EVENT_KEY))? };
 
-    // Create an array of buffers that can be switched to.
     let (w, h) = termion::terminal_size()?;
     let base = if let Some(path) = path {
         PathBuf::from(path)
     } else {
         std::env::current_dir()?
     };
+
+    // Create a display buffer.
+    let mut display = Display::new(w as usize, h as usize);
 
     // Setting the current buffer and error in case of file opening error.
     let mut info_buffer = Box::new(InfoBuffer::new(w as usize, h as usize)?);
@@ -97,21 +102,22 @@ fn main() -> Result<(), std::io::Error> {
 
     // Init terminal by switching to alternate screen.
     write!(&mut stdout, "{ToAlternateScreen}")?;
-    buffs[curr_buff].render(&mut stdout)?;
-    stdout.flush()?;
+    buffs[curr_buff].render(&mut display);
+    display.draw(&mut stdout)?;
 
     let mut quit = false;
     let mut events = Events::new();
     while !quit {
         // Handle terminal resizing.
         let (w, h) = termion::terminal_size()?;
+        display.resize(w as usize, h as usize);
         for buff in &mut buffs {
             buff.resize(w as usize, h as usize);
         }
 
         // Clear previous iterations events and fetch new ones.
         events.clear();
-        poller.wait(&mut events, Some(Duration::from_millis(50)))?;
+        poller.wait(&mut events, Some(Duration::from_millis(100)))?;
 
         let key = if events.iter().any(|e| e.key == STDIN_EVENT_KEY) {
             // If a new event exists, send a tick with the key immediately.
@@ -161,7 +167,8 @@ fn main() -> Result<(), std::io::Error> {
 
         // Render the "new" state if necessary.
         if !quit && (rerender_changed_buff || buffs[curr_buff].need_rerender()) {
-            buffs[curr_buff].render(&mut stdout)?;
+            buffs[curr_buff].render(&mut display);
+            display.draw(&mut stdout)?;
         }
         // Re-enable polling.
         poller.modify(stdin.as_fd(), polling::Event::readable(STDIN_EVENT_KEY))?;

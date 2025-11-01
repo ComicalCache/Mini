@@ -22,7 +22,7 @@ impl Document {
             .filter(|c| !c.is_empty())
             .map_or_else(|| vec![Cow::from("")], |c| c.into_iter().collect());
 
-        Document {
+        Self {
             buff,
             cur: Cursor::new(x, y),
             edited: false,

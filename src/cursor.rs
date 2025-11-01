@@ -12,8 +12,8 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    pub fn new(x: usize, y: usize) -> Self {
-        Cursor { y, target_x: x, x }
+    pub const fn new(x: usize, y: usize) -> Self {
+        Self { y, target_x: x, x }
     }
 
     /// Moves the cursor to the left.
@@ -141,9 +141,6 @@ pub fn next_word(doc: &mut Document, view: &mut Viewport, n: usize) {
 }
 
 fn __next_word(doc: &mut Document, view: &mut Viewport) {
-    let cur;
-    let line;
-
     // Move line down if at end of line and not at end of document.
     let len = doc.line_count(doc.cur.y).unwrap();
     if len <= doc.cur.x && doc.cur.y < doc.buff.len() - 1 {
@@ -158,13 +155,10 @@ fn __next_word(doc: &mut Document, view: &mut Viewport) {
         {
             return;
         }
-
-        cur = doc.cur;
-        line = &doc.buff[cur.y];
-    } else {
-        cur = doc.cur;
-        line = &doc.buff[cur.y];
     }
+
+    let cur = doc.cur;
+    let line = &doc.buff[cur.y];
 
     let curr = line.chars().nth(cur.x.min(len.saturating_sub(1))).unwrap();
 
@@ -207,9 +201,6 @@ pub fn prev_word(doc: &mut Document, view: &mut Viewport, n: usize) {
 }
 
 fn __prev_word(doc: &mut Document, view: &mut Viewport) {
-    let cur;
-    let line;
-
     // Move line up if at beginning of line and not at beginning of document.
     if doc.cur.x == 0 && doc.cur.y > 0 {
         up(doc, view, 1);
@@ -219,13 +210,10 @@ fn __prev_word(doc: &mut Document, view: &mut Viewport) {
         if doc.buff[doc.cur.y].is_empty() {
             return;
         }
-
-        cur = doc.cur;
-        line = &doc.buff[cur.y];
-    } else {
-        cur = doc.cur;
-        line = &doc.buff[cur.y];
     }
+
+    let cur = doc.cur;
+    let line = &doc.buff[cur.y];
 
     // Find next non-whitespace character.
     if let Some((idx, ch)) = line

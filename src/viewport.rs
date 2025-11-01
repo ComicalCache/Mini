@@ -1,15 +1,13 @@
-use crate::{cursor::Cursor, document::Document, util::CursorStyle};
-use std::io::{BufWriter, Error, Stdout, Write};
-use termion::{
-    color::{self, Bg, Fg, Reset},
-    cursor::{BlinkingBar, BlinkingBlock, Goto, Show, SteadyBlock},
-    raw::RawTerminal,
+use crate::{
+    cursor::Cursor,
+    display::{Cell, Display},
+    document::Document,
+    util::CursorStyle,
 };
+use termion::color::{self, Bg, Fg};
 
 /// Background color.
 const BG: Bg<color::Rgb> = Bg(color::Rgb(41, 44, 51));
-/// Reset background color.
-const NO_BG: Bg<Reset> = Bg(Reset);
 /// Line highlight background color.
 const HIGHLIGHT: Bg<color::Rgb> = Bg(color::Rgb(51, 53, 59));
 /// Info line background color.
@@ -20,8 +18,6 @@ const SEL: Bg<color::Rgb> = Bg(color::Rgb(75, 78, 87));
 const TXT: Fg<color::Rgb> = Fg(color::Rgb(172, 178, 190));
 /// Relative number text color.
 const REL_NUMS: Fg<color::Rgb> = Fg(color::Rgb(101, 103, 105));
-/// Reset text color.
-const NO_TXT: Fg<Reset> = Fg(Reset);
 
 /// The viewport of a (section of a) terminal.
 pub struct Viewport {
@@ -30,106 +26,175 @@ pub struct Viewport {
     /// The total height of the viewport.
     pub h: usize,
     /// The width of the line number colon.
-    pub nums_w: usize,
+    pub gutter_w: usize,
     /// The width of the buffer content.
     pub buff_w: usize,
     /// The (visible) cursor in the viewport.
     pub cur: Cursor,
     /// If the viewport displays line numbers or not.
-    line_nums: bool,
+    gutter: bool,
 }
 
 impl Viewport {
     pub fn new(w: usize, h: usize, x: usize, y: usize, count: Option<usize>) -> Self {
-        let (nums_w, buff_w) = if let Some(count) = count {
+        let (gutter_w, buff_w) = count.map_or((0, w), |count| {
             let digits = count.ilog10() as usize + 1;
             (digits + 4, w - digits - 4)
-        } else {
-            (0, w)
-        };
+        });
 
-        Viewport {
+        Self {
             w,
             h,
-            nums_w,
+            gutter_w,
             buff_w,
             cur: Cursor::new(x, y),
-            line_nums: count.is_some(),
+            gutter: count.is_some(),
         }
-    }
-
-    /// Re-initializes the viewport.
-    pub fn init(&mut self, w: usize, h: usize, x: usize, y: usize, count: Option<usize>) {
-        let (nums_w, buff_w) = if let Some(count) = count {
-            let digits = count.ilog10() as usize + 1;
-            (digits + 4, w - digits - 4)
-        } else {
-            (0, w)
-        };
-
-        self.w = w;
-        self.h = h;
-        self.nums_w = nums_w;
-        self.buff_w = buff_w;
-        self.cur = Cursor::new(x, y);
-        self.line_nums = count.is_some();
     }
 
     /// Sets the absolute line number width.
-    pub fn set_number_width(&mut self, n: usize) {
-        self.nums_w = n;
+    pub const fn set_number_width(&mut self, n: usize) {
+        self.gutter_w = n;
         self.buff_w = self.w - n;
     }
 
-    /// Renders a document to the viewport.
-    pub fn render_document(
-        &mut self,
-        stdout: &mut BufWriter<RawTerminal<Stdout>>,
-        doc: &Document,
-        sel: Option<Cursor>,
-    ) -> Result<(), Error> {
-        // Update the nums width if the supplied buffer is not correct.
-        // log10 + 1 for length + 4 for whitespace and separator.
-        if self.line_nums && doc.buff.len().ilog10() as usize + 5 != self.nums_w {
-            self.resize(self.w, self.h, Some(doc.buff.len()));
-        }
-
+    /// Renders a document to the `Display`.
+    pub fn render_document(&self, display: &mut Display, doc: &Document, sel: Option<Cursor>) {
         // Prepre the selection to be in order if a selection state is active.
-        let sel = if let Some(sel) = sel {
+        let sel = sel.map(|sel| {
             if doc.cur < sel {
-                Some((doc.cur, sel))
+                (doc.cur, sel)
             } else {
-                Some((sel, doc.cur))
+                (sel, doc.cur)
             }
-        } else {
-            None
-        };
+        });
 
         // Calculate which line of text is visible at what line on the screen.
         #[allow(clippy::cast_possible_wrap)]
         let offset = doc.cur.y as isize - self.cur.y as isize;
-        // Shifted by one because of info/command line.
-        for (idx, doc_idx) in (1..=self.h).zip(offset..) {
-            // Set the trailing background color to match if its the cursor line.
-            let sel_bg = if idx == self.cur.y + 1 { HIGHLIGHT } else { BG };
 
-            // Set highlight or rel nums.
-            if idx == self.cur.y + 1 {
-                // The idx is bound by the height which is bound by u16 when passed by the terminal.
-                #[allow(clippy::cast_possible_truncation)]
-                write!(stdout, "{}{HIGHLIGHT}{TXT}", Goto(1, idx as u16 + 1))?;
-            } else {
-                // The idx is bound by the height which is bound by u16 when passed by the terminal.
-                #[allow(clippy::cast_possible_truncation)]
-                write!(stdout, "{}{REL_NUMS}", Goto(1, idx as u16 + 1))?;
-            }
+        // Shifted by one because of info/command line.
+        // FIXME: this limits the bar to always be exactly one in height.
+        for (y, doc_idx) in (1..=self.h).zip(offset..) {
+            let mut x = self.gutter_w;
+
+            // Set base background color depending on if its the cursors line.
+            let base_bg = if y == self.cur.y + 1 { HIGHLIGHT } else { BG };
+            let base_fg = TXT;
 
             // Skip screen lines outside the text line bounds.
             // The value is guaranteed positive at that point.
             #[allow(clippy::cast_sign_loss)]
             if doc_idx < 0 || (doc_idx as usize) >= doc.buff.len() {
-                if self.line_nums {
-                    write!(stdout, "{}┃", " ".repeat(self.nums_w - 2))?;
+                for ch in " ".repeat(self.buff_w).chars() {
+                    display.update(Cell::new(ch, base_fg, base_bg), x, y);
+                    x += 1;
+                }
+                continue;
+            }
+
+            // The value is guaranteed positive at that point.
+            #[allow(clippy::cast_sign_loss)]
+            let doc_idx = doc_idx as usize;
+
+            let content = &doc.buff[doc_idx];
+            let x_offset = doc.cur.x.saturating_sub(self.cur.x);
+            let chars = content.chars().skip(x_offset).take(self.buff_w);
+            for (idx, mut ch) in chars.enumerate() {
+                let mut fg = base_fg;
+                let mut bg = base_bg;
+
+                // Layer 1: Selection.
+                let char_idx = x_offset + idx;
+                if let Some((start, end)) = sel {
+                    // Selection on one line and in range.
+                    if (start.y == end.y && doc_idx == start.y && char_idx >= start.x && char_idx < end.x)
+                    // Start line of selection.
+                    || (doc_idx == start.y && start.y < end.y && char_idx >= start.x)
+                    // Inbetween lines of selection.
+                    || (doc_idx > start.y && doc_idx < end.y)
+                    // End line of selection.
+                    || (doc_idx == end.y && start.y < end.y && char_idx < end.x)
+                    {
+                        bg = SEL;
+                    }
+                }
+
+                // Layer 2: Replace spaces with interdot.
+                if ch == ' ' {
+                    ch = '·';
+                    fg = REL_NUMS;
+                }
+
+                // TODO: Layer 3: Syntax Highlighting.
+
+                display.update(Cell::new(ch, fg, bg), x, y);
+                x += 1;
+            }
+
+            // Add a newline character for visual clarity of trailing whitespaces.
+            let len = content.chars().count();
+            let mut true_len = len.saturating_sub(x_offset);
+            if len >= x_offset && true_len < self.buff_w {
+                // If part of selection, highlight the newline character for visual clarity.
+                if let Some((start, end)) = sel
+                    && start.y <= doc_idx
+                    && end.y > doc_idx
+                {
+                    display.update(Cell::new('⏎', REL_NUMS, SEL), x, y);
+                } else {
+                    display.update(Cell::new('⏎', REL_NUMS, base_bg), x, y);
+                }
+
+                x += 1;
+                true_len += 1;
+            }
+
+            // Stretch current line to end to show highlight properly.
+            if true_len < self.buff_w {
+                for ch in " ".repeat(self.buff_w - true_len).chars() {
+                    display.update(Cell::new(ch, TXT, base_bg), x, y);
+                    x += 1;
+                }
+            }
+        }
+    }
+
+    /// Renders line numbers to the `Display`.
+    pub fn render_gutter(&mut self, display: &mut Display, doc: &Document) {
+        if !self.gutter {
+            return;
+        }
+
+        // Update the nums width if the supplied buffer is not correct.
+        // log10 + 1 for length + 4 for whitespace and separator.
+        if self.gutter && doc.buff.len().ilog10() as usize + 5 != self.gutter_w {
+            self.resize(self.w, self.h, Some(doc.buff.len()));
+        }
+
+        // Calculate which line of text is visible at what line on the screen.
+        #[allow(clippy::cast_possible_wrap)]
+        let offset = doc.cur.y as isize - self.cur.y as isize;
+
+        // Shifted by one because of info/command line.
+        // FIXME: this limits the bar to always be exactly one in height.
+        for (y, doc_idx) in (1..=self.h).zip(offset..) {
+            let mut x = 0;
+
+            // Set base background color and move to the start of the line.
+            let (base_bg, base_fg) = if y == self.cur.y + 1 {
+                (HIGHLIGHT, TXT)
+            } else {
+                (BG, REL_NUMS)
+            };
+
+            // Skip screen lines outside the text line bounds.
+            // The value is guaranteed positive at that point.
+            #[allow(clippy::cast_sign_loss)]
+            if doc_idx < 0 || (doc_idx as usize) >= doc.buff.len() {
+                for ch in format!("{}┃ ", " ".repeat(self.gutter_w - 2)).chars() {
+                    display.update(Cell::new(ch, base_fg, base_bg), x, y);
+                    x += 1;
                 }
                 continue;
             }
@@ -139,161 +204,23 @@ impl Viewport {
             let doc_idx = doc_idx as usize;
 
             // Write line numbers.
-            if self.line_nums {
-                let padding = self.nums_w - 3;
-                if doc_idx == doc.cur.y {
-                    write!(stdout, "{:>padding$} ┃ ", doc_idx + 1)?;
-                } else {
-                    write!(stdout, "{:>padding$} ┃ ", doc.cur.y.abs_diff(doc_idx))?;
+            let padding = self.gutter_w - 3;
+            if doc_idx == doc.cur.y {
+                for ch in format!("{:>padding$} ┃ ", doc_idx + 1).chars() {
+                    display.update(Cell::new(ch, base_fg, base_bg), x, y);
+                    x += 1;
                 }
-            }
-
-            // Switch from relative line number color to regular text.
-            if idx != self.cur.y + 1 {
-                write!(stdout, "{TXT}")?;
-            }
-
-            let content = &doc.buff[doc_idx];
-            let lower = doc.cur.x.saturating_sub(self.cur.x);
-
-            // Only print lines if their content is visible on the screen (horizontal movement).
-            // Otherwise only print background and continue.
-            if content.chars().count() <= lower {
-                // Stretch current line to end to show highlight properly.
-                write!(stdout, "{}{BG}", " ".repeat(self.buff_w))?;
-                continue;
-            }
-
-            let upper = (lower + self.buff_w).min(content.chars().count());
-            let start_idx = content
-                .char_indices()
-                .nth(lower)
-                .map_or(content.len(), |(idx, _)| idx);
-            let end_idx = content
-                .char_indices()
-                .nth(upper)
-                // Use all remaining bytes if they don't fill the entire line.
-                .map_or(content.len(), |(idx, _)| idx);
-
-            // Add a newline character for visual clarity of trailing whitespaces.
-            let nl = if end_idx == content.len() && upper - lower != self.buff_w {
-                "⏎"
             } else {
-                ""
-            };
-
-            match sel {
-                // Empty selection
-                Some((start, end)) if start == end => {
-                    write!(stdout, "{}{REL_NUMS}{nl}", &content[start_idx..end_idx])?;
+                for ch in format!("{:>padding$} ┃ ", doc.cur.y.abs_diff(doc_idx)).chars() {
+                    display.update(Cell::new(ch, base_fg, base_bg), x, y);
+                    x += 1;
                 }
-                // Selection on one line.
-                Some((start, end)) if start.y == end.y && start.y == doc_idx => {
-                    let sel_start_idx = if start.x <= lower {
-                        // Selection started outside of visible line.
-                        start_idx
-                    } else {
-                        // Find selection start index.
-                        content
-                            .char_indices()
-                            .nth(start.x)
-                            .map_or(content.len(), |(idx, _)| idx)
-                    };
-                    let sel_end_idx = if end.x >= upper {
-                        // Selection started outside of window.
-                        end_idx
-                    } else {
-                        content
-                            .char_indices()
-                            .nth(end.x)
-                            .map_or(content.len(), |(idx, _)| idx)
-                    };
-
-                    if sel_start_idx > start_idx {
-                        let visible = &content[start_idx..sel_start_idx];
-                        write!(stdout, "{visible}",)?;
-                    }
-
-                    let vis = &content[sel_start_idx..sel_end_idx];
-                    write!(stdout, "{SEL}{vis}",)?;
-                    if sel_end_idx < end_idx {
-                        let visible = &content[sel_end_idx..end_idx];
-                        write!(stdout, "{sel_bg}{visible}{REL_NUMS}{nl}",)?;
-                    } else {
-                        write!(stdout, "{REL_NUMS}{nl}{sel_bg}")?;
-                    }
-                }
-                // Start line of selection
-                Some((start, _)) if start.y == doc_idx => {
-                    let sel_start_idx = if start.x <= lower {
-                        // Selection started outside of visible line.
-                        start_idx
-                    } else {
-                        // Find selection start index.
-                        content
-                            .char_indices()
-                            .nth(start.x)
-                            .map_or(content.len(), |(idx, _)| idx)
-                    };
-
-                    if sel_start_idx > start_idx {
-                        let visible = &content[start_idx..sel_start_idx];
-                        write!(stdout, "{visible}",)?;
-                    }
-
-                    let visible = &content[sel_start_idx..end_idx];
-                    write!(stdout, "{SEL}{visible}{REL_NUMS}{nl}{sel_bg}",)?;
-                }
-                // Inbetween lines of selection
-                Some((start, end)) if start.y < doc_idx && doc_idx < end.y => {
-                    let visible = &content[start_idx..end_idx];
-                    write!(stdout, "{SEL}{visible}{REL_NUMS}{nl}{sel_bg}",)?;
-                }
-                // End line of selection
-                Some((_, end)) if end.y == doc_idx => {
-                    let sel_end_idx = if end.x >= upper {
-                        // Selection started outside of window.
-                        end_idx
-                    } else {
-                        content
-                            .char_indices()
-                            .nth(end.x)
-                            .map_or(content.len(), |(idx, _)| idx)
-                    };
-
-                    let visible = &content[start_idx..sel_end_idx];
-                    write!(stdout, "{SEL}{visible}",)?;
-                    if sel_end_idx < end_idx {
-                        let visible = &content[sel_end_idx..end_idx];
-                        write!(stdout, "{sel_bg}{visible}{REL_NUMS}{nl}",)?;
-                    } else {
-                        write!(stdout, "{REL_NUMS}{nl}{sel_bg}")?;
-                    }
-                }
-                _ => write!(stdout, "{}{REL_NUMS}{nl}", &content[start_idx..end_idx])?,
-            }
-
-            // Stretch current line to end to show highlight properly.
-            if idx == self.cur.y + 1 {
-                let padding = " ".repeat(
-                    self.buff_w
-                        - content[start_idx..end_idx].chars().count()
-                        - !nl.is_empty() as usize,
-                );
-                write!(stdout, "{padding}{BG}",)?;
             }
         }
-
-        Ok(())
     }
 
-    /// Renders a bar to the viewport.
-    pub fn render_bar(
-        &self,
-        stdout: &mut BufWriter<RawTerminal<Stdout>>,
-        doc: &Document,
-        prompt: &str,
-    ) -> Result<(), Error> {
+    /// Renders a bar to the `Display`.
+    pub fn render_bar(&self, display: &mut Display, doc: &Document, prompt: &str) {
         let line = &doc.buff[0];
         let w = self.w.saturating_sub(prompt.len());
 
@@ -311,63 +238,50 @@ impl Viewport {
         let cmd = &line[start_idx..end_idx];
         let padding = self.w.saturating_sub(prompt.len() + cmd.chars().count());
 
-        write!(
-            stdout,
-            "{}{INFO}{TXT}{prompt}{cmd}{}{BG}",
-            Goto(1, 1),
-            " ".repeat(padding)
-        )
+        for (x, ch) in format!("{prompt}{cmd}{}", " ".repeat(padding))
+            .chars()
+            .enumerate()
+        {
+            display.update(Cell::new(ch, TXT, INFO), x, 0);
+        }
     }
 
+    /// Renders a `Cursor` to the `Display`.
     pub fn render_cursor(
         &self,
-        stdout: &mut BufWriter<RawTerminal<Stdout>>,
+        display: &mut Display,
         cursor_style: CursorStyle,
         prompt: Option<&str>,
-    ) -> Result<(), Error> {
-        let cur = if let Some(prompt) = prompt {
-            // Plus one because one based.
-            // The cursor is bound by the buffer width which is bound by terminal width.
-            #[allow(clippy::cast_possible_truncation)]
-            Goto(((self.cur.x + prompt.len()) as u16).saturating_add(1), 1)
-        } else {
-            Goto(
-                // Plus one because one based.
-                // The cursor is bound by the buffer width which is bound by terminal width.
-                #[allow(clippy::cast_possible_truncation)]
-                ((self.nums_w + self.cur.x) as u16).saturating_add(1),
-                // Plus one because one based, plus one because of the info/command bar.
-                // FIXME: this limits the bar to always be exactly two in width.
-                // The cursor is bound by the buffer width which is bound by terminal width.
-                #[allow(clippy::cast_possible_truncation)]
-                (self.cur.y as u16).saturating_add(2),
-            )
-        };
+    ) {
+        // The cursor is bound by the buffer width which is bound by terminal width.
+        #[allow(clippy::cast_possible_truncation)]
+        let cur = prompt.map_or_else(
+            || {
+                Cursor::new(
+                    self.gutter_w + self.cur.x,
+                    // Plus  one because of the info/command bar.
+                    // FIXME: this limits the bar to always be exactly one in height.
+                    self.cur.y + 1,
+                )
+            },
+            |prompt| Cursor::new(self.cur.x + prompt.len(), 0),
+        );
 
-        // Set cursor.
-        match cursor_style {
-            CursorStyle::BlinkingBar => write!(stdout, "{cur}{BlinkingBar}{NO_TXT}{NO_BG}{Show}"),
-            CursorStyle::BlinkingBlock => {
-                write!(stdout, "{cur}{BlinkingBlock}{NO_TXT}{NO_BG}{Show}")
-            }
-            CursorStyle::SteadyBlock => write!(stdout, "{cur}{SteadyBlock}{NO_TXT}{NO_BG}{Show}"),
-        }
+        display.set_cursor(cur, cursor_style);
     }
 
     /// Resizes the viewport.
     pub fn resize(&mut self, w: usize, h: usize, count: Option<usize>) {
-        let (nums_w, buff_w) = if let Some(count) = count {
+        let (gutter_w, buff_w) = count.map_or((0, w), |count| {
             let digits = count.ilog10() as usize + 1;
             (digits + 4, w - digits - 4)
-        } else {
-            (0, w)
-        };
+        });
 
         self.w = w;
         self.h = h;
-        self.nums_w = nums_w;
+        self.gutter_w = gutter_w;
         self.buff_w = buff_w;
-        self.line_nums = count.is_some();
+        self.gutter = count.is_some();
 
         self.cur.x = self.cur.x.min(self.buff_w - 1);
         self.cur.y = self.cur.y.min(self.h - 1);

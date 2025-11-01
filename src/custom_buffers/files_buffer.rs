@@ -9,15 +9,12 @@ use crate::{
     },
     c_buff,
     cursor::{self, Cursor},
+    display::Display,
     sc_buff,
     util::{CommandResult, CursorStyle, split_to_lines},
 };
-use std::{
-    borrow::Cow,
-    io::{BufWriter, Error, Stdout, Write},
-    path::PathBuf,
-};
-use termion::{clear::All, cursor::Hide, event::Key, raw::RawTerminal};
+use std::{borrow::Cow, io::Error, path::PathBuf};
+use termion::event::Key;
 
 #[derive(Clone, Copy)]
 enum OtherViewAction {
@@ -46,7 +43,7 @@ impl FilesBuffer {
         use OtherViewAction::*;
 
         let mut entries = Vec::new();
-        let contents = FilesBuffer::load_dir(&path, &mut entries)?;
+        let contents = Self::load_dir(&path, &mut entries)?;
 
         let mut base = BaseBuffer::new(w, h, Some(contents))?;
         base.view_state_machine.command_map = base
@@ -59,7 +56,7 @@ impl FilesBuffer {
             .simple(Key::Char('d'), ViewAction::Other(Remove))
             .simple(Key::Char('D'), ViewAction::Other(RecursiveRemove));
 
-        Ok(FilesBuffer {
+        Ok(Self {
             base,
             path,
             entries,
@@ -67,7 +64,7 @@ impl FilesBuffer {
     }
 
     fn refresh(&mut self) -> CommandResult {
-        match FilesBuffer::load_dir(&self.path, &mut self.entries) {
+        match Self::load_dir(&self.path, &mut self.entries) {
             Ok(contents) => {
                 self.base.doc.set_contents(&contents);
                 self.base.doc_view.cur = Cursor::new(0, 0);
@@ -96,7 +93,7 @@ impl FilesBuffer {
     }
 
     /// Creates an info line
-    fn info_line(&mut self) -> Result<(), std::fmt::Error> {
+    fn info_line(&mut self) {
         use std::fmt::Write;
 
         self.base.info.buff[0].to_mut().clear();
@@ -120,7 +117,8 @@ impl FilesBuffer {
         write!(
             self.base.info.buff[0].to_mut(),
             "[Files] [{mode}] [{curr_type}] [{curr}/{entries} {entries_label}]",
-        )?;
+        )
+        .unwrap();
 
         if let Some(pos) = self.base.sel {
             // Plus 1 since text coordinates are 0 indexed.
@@ -131,10 +129,9 @@ impl FilesBuffer {
                 " [Selected {line}:{col} - {}:{}]",
                 self.base.doc.cur.y + 1,
                 self.base.doc.cur.x + 1
-            )?;
+            )
+            .unwrap();
         }
-
-        Ok(())
     }
 
     /// Handles self defined view actions.
@@ -180,11 +177,10 @@ impl Buffer for FilesBuffer {
         self.base.rerender
     }
 
-    fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
-        write!(stdout, "{Hide}{All}")?;
+    fn render(&mut self, display: &mut Display) {
         self.base.rerender = false;
 
-        self.info_line().map_err(Error::other)?;
+        self.info_line();
 
         let (cursor_style, cmd) = match self.base.mode {
             Mode::View | Mode::Other(()) => (CursorStyle::SteadyBlock, false),
@@ -194,25 +190,23 @@ impl Buffer for FilesBuffer {
         if cmd {
             self.base
                 .cmd_view
-                .render_bar(stdout, &self.base.cmd, COMMAND_PROMPT)?;
+                .render_bar(display, &self.base.cmd, COMMAND_PROMPT);
         } else {
-            self.base
-                .info_view
-                .render_bar(stdout, &self.base.info, "")?;
+            self.base.info_view.render_bar(display, &self.base.info, "");
         }
+
+        self.base.doc_view.render_gutter(display, &self.base.doc);
 
         self.base
             .doc_view
-            .render_document(stdout, &self.base.doc, self.base.sel)?;
+            .render_document(display, &self.base.doc, self.base.sel);
 
         let (view, prompt) = if cmd {
             (&self.base.cmd_view, Some(COMMAND_PROMPT))
         } else {
             (&self.base.doc_view, None)
         };
-        view.render_cursor(stdout, cursor_style, prompt)?;
-
-        stdout.flush()
+        view.render_cursor(display, cursor_style, prompt);
     }
 
     fn resize(&mut self, w: usize, h: usize) {

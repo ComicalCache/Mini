@@ -5,6 +5,7 @@ use crate::{
     custom_buffers::text_buffer::TextBuffer,
     sc_buff,
     util::{CommandResult, open_file, read_file_to_lines, split_to_lines},
+    viewport::Viewport,
 };
 use regex::Regex;
 use std::{borrow::Cow, io::Error};
@@ -32,9 +33,8 @@ impl TextBuffer {
         // Reset state.
         self.base.doc.clear();
         self.base.cmd.clear();
-        self.base
-            .doc_view
-            .init(self.base.doc_view.w, self.base.doc_view.h, 0, 0, Some(1));
+        self.base.doc_view =
+            Viewport::new(self.base.doc_view.w, self.base.doc_view.h, 0, 0, Some(1));
         self.file = None;
 
         // Open blank buffer if no path is specified.

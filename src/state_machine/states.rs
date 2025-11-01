@@ -13,10 +13,7 @@ pub enum Input {
 
 impl From<Option<Key>> for Input {
     fn from(value: Option<Key>) -> Self {
-        match value {
-            Some(key) => Input::Key(key),
-            None => Input::Timeout,
-        }
+        value.map_or(Self::Timeout, Self::Key)
     }
 }
 

@@ -4,21 +4,17 @@ pub mod edit;
 pub mod history;
 pub mod yank;
 
-use crate::util::CommandResult;
-use std::{
-    borrow::Cow,
-    io::{BufWriter, Error, Stdout},
-    path::PathBuf,
-};
-use termion::{event::Key, raw::RawTerminal};
+use crate::{display::Display, util::CommandResult};
+use std::{borrow::Cow, path::PathBuf};
+use termion::event::Key;
 
 /// The buffer trait defines the basic primitives a buffer needs.
 pub trait Buffer {
     /// Checks if the buffer needs to be rerendered.
     fn need_rerender(&self) -> bool;
 
-    /// Renders the buffer to stdout.
-    fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error>;
+    /// Renders the buffer to a `Display`.
+    fn render(&mut self, display: &mut Display);
 
     /// Handles the event, that the terminal was resized.
     fn resize(&mut self, w: usize, h: usize);

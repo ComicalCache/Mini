@@ -8,14 +8,11 @@ use crate::{
     },
     c_buff,
     cursor::Cursor,
+    display::Display,
     util::{CommandResult, CursorStyle},
 };
-use std::{
-    borrow::Cow,
-    io::{BufWriter, Error, Stdout, Write},
-    path::PathBuf,
-};
-use termion::{clear::All, cursor::Hide, event::Key, raw::RawTerminal};
+use std::{borrow::Cow, io::Error, path::PathBuf};
+use termion::event::Key;
 
 #[derive(Clone, Copy)]
 enum OtherViewAction {
@@ -40,11 +37,11 @@ impl InfoBuffer {
             .simple(Key::Char('t'), ViewAction::Other(ChangeToTextBuffer))
             .simple(Key::Char('e'), ViewAction::Other(ChangeToFilesBuffer));
 
-        Ok(InfoBuffer { base })
+        Ok(Self { base })
     }
 
     /// Creates an info line
-    fn info_line(&mut self) -> Result<(), std::fmt::Error> {
+    fn info_line(&mut self) {
         use std::fmt::Write;
 
         self.base.info.buff[0].to_mut().clear();
@@ -63,7 +60,8 @@ impl InfoBuffer {
         write!(
             self.base.info.buff[0].to_mut(),
             "[Info] [{mode}] [{line}:{col}/{total} {percentage}%]",
-        )?;
+        )
+        .unwrap();
 
         if let Some(pos) = self.base.sel {
             // Plus 1 since text coordinates are 0 indexed.
@@ -74,10 +72,9 @@ impl InfoBuffer {
                 " [Selected {line}:{col} - {}:{}]",
                 self.base.doc.cur.y + 1,
                 self.base.doc.cur.x + 1
-            )?;
+            )
+            .unwrap();
         }
-
-        Ok(())
     }
 
     /// Handles self defined view actions.
@@ -110,11 +107,10 @@ impl Buffer for InfoBuffer {
         self.base.rerender
     }
 
-    fn render(&mut self, stdout: &mut BufWriter<RawTerminal<Stdout>>) -> Result<(), Error> {
-        write!(stdout, "{Hide}{All}")?;
+    fn render(&mut self, display: &mut Display) {
         self.base.rerender = false;
 
-        self.info_line().map_err(Error::other)?;
+        self.info_line();
 
         let (cursor_style, cmd) = match self.base.mode {
             Mode::View | Mode::Other(()) => (CursorStyle::BlinkingBlock, false),
@@ -124,25 +120,23 @@ impl Buffer for InfoBuffer {
         if cmd {
             self.base
                 .cmd_view
-                .render_bar(stdout, &self.base.cmd, COMMAND_PROMPT)?;
+                .render_bar(display, &self.base.cmd, COMMAND_PROMPT);
         } else {
-            self.base
-                .info_view
-                .render_bar(stdout, &self.base.info, "")?;
+            self.base.info_view.render_bar(display, &self.base.info, "");
         }
+
+        self.base.doc_view.render_gutter(display, &self.base.doc);
 
         self.base
             .doc_view
-            .render_document(stdout, &self.base.doc, self.base.sel)?;
+            .render_document(display, &self.base.doc, self.base.sel);
 
         let (view, prompt) = if cmd {
             (&self.base.cmd_view, Some(COMMAND_PROMPT))
         } else {
             (&self.base.doc_view, None)
         };
-        view.render_cursor(stdout, cursor_style, prompt)?;
-
-        stdout.flush()
+        view.render_cursor(display, cursor_style, prompt);
     }
 
     fn resize(&mut self, w: usize, h: usize) {

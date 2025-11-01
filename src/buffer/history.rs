@@ -32,8 +32,8 @@ pub struct History {
 }
 
 impl History {
-    pub fn new() -> Self {
-        History {
+    pub const fn new() -> Self {
+        Self {
             undo: Vec::new(),
             redo: Vec::new(),
         }

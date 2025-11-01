@@ -1,6 +1,6 @@
 [package]
 name = "mini"
-version = "4.6.2"
+version = "5.0.0"
 edition = "2024"
 
 [dependencies]
@@ -10,6 +10,7 @@ arboard = "3.6.1"
 regex = "1.11.3"
 
 [profile.release]
-strip = true
+strip = "symbols"
 codegen-units = 1
 lto = "fat"
+panic = "abort"

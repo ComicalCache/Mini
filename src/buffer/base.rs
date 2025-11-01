@@ -285,7 +285,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         cmd_view.set_number_width(COMMAND_PROMPT.len());
 
         let count = contents.as_ref().map_or(1, |buff| buff.len().max(1));
-        Ok(BaseBuffer {
+        Ok(Self {
             doc: Document::new(0, 0, contents),
             info: Document::new(0, 0, None),
             cmd: Document::new(0, 0, None),

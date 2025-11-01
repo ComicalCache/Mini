@@ -14,7 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 /// The result of ticking the state machine.
 pub enum StateMachineResult<A: Action> {
     /// An action should be taken.
@@ -36,7 +36,7 @@ pub struct StateMachine<A: Action> {
 }
 
 impl<A: Action> StateMachine<A> {
-    pub fn new(command_map: CommandMap<A>, timeout_duration: Duration) -> Self {
+    pub const fn new(command_map: CommandMap<A>, timeout_duration: Duration) -> Self {
         Self {
             command_map,
             state: State::Normal,

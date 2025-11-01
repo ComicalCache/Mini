@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// SetAndChangeBuffer
+/// `SetAndChangeBuffer`
 #[macro_export]
 macro_rules! sc_buff {
     ($buffer:ident, [$($content:expr),+], $path:expr $(,)?) => {
@@ -43,7 +43,7 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
     // Create parent directories if they don't exist.
     let mut base = Path::new(path.as_ref());
     if !base.is_dir() {
-        base = base.parent().unwrap_or(Path::new("/"));
+        base = base.parent().unwrap_or_else(|| Path::new("/"));
     }
     std::fs::create_dir_all(base)?;
 

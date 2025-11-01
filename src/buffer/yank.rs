@@ -33,7 +33,7 @@ macro_rules! yank_fn {
 
 /// Yanks the selected area.
 pub fn selection(
-    doc: &mut Document,
+    doc: &Document,
     sel: &mut Option<Cursor>,
     clipboard: &mut Clipboard,
 ) -> Result<(), CommandResult> {
