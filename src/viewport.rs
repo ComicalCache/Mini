@@ -18,6 +18,8 @@ const SEL: Bg<color::Rgb> = Bg(color::Rgb(75, 78, 87));
 const TXT: Fg<color::Rgb> = Fg(color::Rgb(172, 178, 190));
 /// Relative number text color.
 const REL_NUMS: Fg<color::Rgb> = Fg(color::Rgb(101, 103, 105));
+/// Whitespace symbol text color.
+const WHITESPACE: Fg<color::Rgb> = Fg(color::Rgb(68, 71, 79));
 
 /// The viewport of a (section of a) terminal.
 pub struct Viewport {
@@ -123,7 +125,7 @@ impl Viewport {
                 // Layer 2: Replace spaces with interdot.
                 if ch == ' ' {
                     ch = '·';
-                    fg = REL_NUMS;
+                    fg = WHITESPACE;
                 }
 
                 // TODO: Layer 3: Syntax Highlighting.
@@ -142,9 +144,9 @@ impl Viewport {
                     && start.y <= doc_idx
                     && end.y > doc_idx
                 {
-                    display.update(Cell::new('⏎', REL_NUMS, SEL), x, y);
+                    display.update(Cell::new('⏎', WHITESPACE, SEL), x, y);
                 } else {
-                    display.update(Cell::new('⏎', REL_NUMS, base_bg), x, y);
+                    display.update(Cell::new('⏎', WHITESPACE, base_bg), x, y);
                 }
 
                 x += 1;
