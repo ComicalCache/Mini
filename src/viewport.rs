@@ -132,10 +132,11 @@ impl Viewport {
                 x += 1;
             }
 
-            // Add a newline character for visual clarity of trailing whitespaces.
+            // Add a newline character for visual clarity of trailing whitespaces. Don't show the
+            // newline character on the last line of the file.
             let len = content.chars().count();
             let mut true_len = len.saturating_sub(x_offset);
-            if len >= x_offset && true_len < self.buff_w {
+            if doc_idx + 1 != doc.buff.len() && len >= x_offset && true_len < self.buff_w {
                 // If part of selection, highlight the newline character for visual clarity.
                 if let Some((start, end)) = sel
                     && start.y <= doc_idx
