@@ -231,8 +231,9 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
                 .simple(Key::Char('g'), JumpToEndOfFile)
                 .simple(Key::Char('G'), JumpToBeginningOfFile)
                 .simple(Key::Char(' '), CommandMode)
-                .simple(Key::Char('v'), SelectMode)
                 .simple(Key::Esc, ExitSelectMode)
+                .simple(Key::Char('v'), SelectMode)
+                .simple(Key::Ctrl('c'), YankSelection)
                 .operator(Key::Char('y'), |key| match key {
                     Key::Char('v') => Some(ChainResult::Action(YankSelection)),
                     Key::Char('y') => Some(ChainResult::Action(YankLine)),

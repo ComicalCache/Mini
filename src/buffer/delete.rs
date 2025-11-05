@@ -72,7 +72,7 @@ pub fn line(doc: &mut Document, view: &mut Viewport, history: Option<&mut Histor
     // End selection at the end of the last line or at the beginning of the next line if selection started
     // in the first line.
     cursor::down(doc, view, n);
-    if tmp.y != 0 {
+    if tmp.y != 0 || tmp.y + 1 == doc.buff.len() {
         cursor::jump_to_end_of_line(doc, view);
     } else {
         cursor::jump_to_beginning_of_line(doc, view);

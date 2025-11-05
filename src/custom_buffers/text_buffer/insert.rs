@@ -81,7 +81,7 @@ impl TextBuffer {
     }
 
     /// Paste the system clipboard contents after the current cursor.
-    pub(super) fn paste(&mut self, trim_newline: bool) -> Option<CommandResult> {
+    pub(super) fn paste(&mut self, trim_newline: bool, move_to: bool) -> Option<CommandResult> {
         let mut content = match self.base.clipboard.get_text() {
             Ok(content) => content,
             Err(err) => {
@@ -97,10 +97,15 @@ impl TextBuffer {
             content.truncate(content.len() - 1);
         }
 
-        self.base.doc.write_str(&content);
+        self.base.doc.write_str(content.as_str());
+        let pos = self.base.doc.cur;
+        if move_to {
+            let end_pos = cursor::end_pos(&pos, content.as_str());
+            cursor::move_to(&mut self.base.doc, &mut self.base.doc_view, end_pos);
+        }
 
         self.history.add_change(Change::Insert {
-            pos: self.base.doc.cur,
+            pos,
             data: Cow::from(content),
         });
 

@@ -130,6 +130,7 @@ enum WriteAction {
     Newline,
     Tab,
     DeleteChar,
+    Paste,
 }
 
 #[derive(Clone, Copy)]
@@ -197,6 +198,7 @@ impl TextBuffer {
                     Key::Char('G') => Some(ChainResult::Action(Other(ChangeToBeginningOfFile))),
                     _ => None,
                 })
+                .simple(Key::Ctrl('v'), Other(Paste))
                 .simple(Key::Char('p'), Other(Paste))
                 .simple(Key::Char('P'), Other(PasteAbove))
                 .prefix(Key::Char('r'), |key| match key {
@@ -221,6 +223,7 @@ impl TextBuffer {
                 .simple(Key::AltLeft, PrevWord)
                 .simple(Key::Char('\n'), Newline)
                 .simple(Key::Char('\t'), Tab)
+                .simple(Key::Ctrl('v'), Paste)
                 .simple(Key::Backspace, DeleteChar);
             StateMachine::new(command_map, Duration::from_secs(1))
         };
@@ -338,7 +341,7 @@ impl TextBuffer {
             ChangeToEndOfFile => change!(self, end_of_file),
             ChangeToBeginningOfFile => change!(self, beginning_of_file),
             Paste => {
-                if let Some(res) = self.paste(false) {
+                if let Some(res) = self.paste(false, false) {
                     self.base.motion_repeat.clear();
                     return res;
                 }
@@ -346,7 +349,7 @@ impl TextBuffer {
             }
             PasteAbove => {
                 self.insert_move_new_line_above();
-                if let Some(res) = self.paste(true) {
+                if let Some(res) = self.paste(true, false) {
                     self.base.motion_repeat.clear();
                     return res;
                 }
@@ -394,6 +397,10 @@ impl TextBuffer {
                 &mut self.base.doc_view,
                 Some(&mut self.history),
             ),
+            A(Paste) => match self.paste(false, true) {
+                Some(res) => return res,
+                None => self.base.clear_matches(),
+            },
             Invalid => {
                 if let Some(Key::Char(ch)) = key {
                     edit::write_char(

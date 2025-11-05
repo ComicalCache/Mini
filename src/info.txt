@@ -16,14 +16,13 @@ basic motions:
 - '.' to jump to the matching opposite bracket
 - 'g' to go to the end of the file
 - 'G' to go to the start of the file
+- 'v' to start a selection. A selection marks a character and selects the text "between" the selected character and the
+    current cursor position. This is visualized through highlighting the selected area.
+- '<ctrl>c' to yank a selection
 - 'y' + motion to yank characters that would be skipped by the motion to the clipboard
 - 'yy' to yank a line to the clipboard
 - 'n' to jump to the next search match
 - 'N' to jump to the previous search match
-
-Additionally by pressing 'v' you can start a selection. A selection marks a character and selects the text "between"
-the selected character and the current cursor position. This is visualized through highlighting the selected area.
-Using 'yv' you can yank that selection.
 
 Furthermore, you can enter command mode by pressing space. Using the up and down arrow you can cycle through the issued
 command history. All buffers support following commands:
@@ -49,6 +48,7 @@ mode.
     - 'c' + motion to change characters that would be skipped by the motion
     - 'cc' to change a line
     - 'r' + char to replace the character under the cursor
+    - '<ctrl>v' to paste the clipboard at the cursor
     - 'p' to paste the clipboard at the cursor
     - 'P' to paste the clipbiard in a new line above the cursor. If the clipboard contents have a trailing '\n', it
         won't be written.
