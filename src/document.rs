@@ -1,4 +1,9 @@
+#[cfg(feature = "syntax-highlighting")]
+mod highlighter;
+
 use crate::cursor::Cursor;
+#[cfg(feature = "syntax-highlighting")]
+use highlighter::Highlighter;
 use std::{
     borrow::Cow,
     fs::File,
@@ -13,6 +18,13 @@ pub struct Document {
     pub cur: Cursor,
     // Flag if the buffer was modified.
     pub edited: bool,
+
+    // The highlighter component responsible for syntax highlighting.
+    #[cfg(feature = "syntax-highlighting")]
+    pub highlighter: Highlighter,
+    // A contiguous buffer of the contents required by the highlighter.
+    #[cfg(feature = "syntax-highlighting")]
+    pub contiguous_buff: String,
 }
 
 impl Document {
@@ -22,10 +34,17 @@ impl Document {
             .filter(|c| !c.is_empty())
             .map_or_else(|| vec![Cow::from("")], |c| c.into_iter().collect());
 
+        #[cfg(feature = "syntax-highlighting")]
+        let contiguous_buff = buff.join("\n");
+
         Self {
             buff,
             cur: Cursor::new(x, y),
             edited: false,
+            #[cfg(feature = "syntax-highlighting")]
+            highlighter: Highlighter::new(),
+            #[cfg(feature = "syntax-highlighting")]
+            contiguous_buff,
         }
     }
 
