@@ -7,7 +7,7 @@ use highlighter::Highlighter;
 use std::{
     borrow::Cow,
     fs::File,
-    io::{BufWriter, Error, Seek, SeekFrom, Write},
+    io::{Error, Seek, SeekFrom, Write},
 };
 
 // The document of a buffer containing its contents.
@@ -73,18 +73,30 @@ impl Document {
             return Ok(());
         }
 
-        // Plus one for the newline.
-        let size: u64 = self.buff.iter().map(|s| s.len() as u64 + 1).sum();
-        // Minus one because the last line doesn't have a newline.
-        file.set_len(size.saturating_sub(1))?;
-
-        // Write line by line.
-        file.seek(SeekFrom::Start(0))?;
-        let mut writer = BufWriter::new(file);
-        for line in &self.buff {
-            writeln!(writer, "{line}")?;
+        #[cfg(feature = "syntax-highlighting")]
+        {
+            file.set_len(self.contiguous_buff.len() as u64)?;
+            file.seek(SeekFrom::Start(0))?;
+            file.write_all(self.contiguous_buff.as_bytes())?;
         }
-        writer.flush()?;
+
+        #[cfg(not(feature = "syntax-highlighting"))]
+        {
+            use std::io::BufWriter;
+
+            // Plus one for the newline.
+            let size: u64 = self.buff.iter().map(|s| s.len() as u64 + 1).sum();
+            // Minus one because the last line doesn't have a newline.
+            file.set_len(size.saturating_sub(1))?;
+
+            // Write line by line.
+            file.seek(SeekFrom::Start(0))?;
+            let mut writer = BufWriter::new(file);
+            for line in &self.buff {
+                writeln!(writer, "{line}")?;
+            }
+            writer.flush()?;
+        }
 
         self.edited = false;
         Ok(())

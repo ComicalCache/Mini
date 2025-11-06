@@ -183,6 +183,7 @@ impl TextBuffer {
         CommandResult::Ok
     }
 
+    #[cfg(feature = "syntax-highlighting")]
     fn syntax_command(&mut self, args: &str) -> CommandResult {
         if !self.base.doc.highlighter.configure(args) {
             return sc_buff!(INFO_BUFF_IDX, ["Invalid language selected"], None);
@@ -216,6 +217,7 @@ impl TextBuffer {
             "o" => self.open_command(args, false),
             "oo" => self.open_command(args, true),
             "r" => self.replace_command(args),
+            #[cfg(feature = "syntax-highlighting")]
             "syntax" => self.syntax_command(args),
             _ => sc_buff!(
                 INFO_BUFF_IDX,
