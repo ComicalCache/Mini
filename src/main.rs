@@ -165,6 +165,9 @@ fn main() -> Result<(), std::io::Error> {
             }
         }
 
+        #[cfg(feature = "syntax-highlighting")]
+        buffs[curr_buff].highlight();
+
         // Render the "new" state if necessary.
         if !quit && (rerender_changed_buff || buffs[curr_buff].need_rerender()) {
             buffs[curr_buff].render(&mut display);

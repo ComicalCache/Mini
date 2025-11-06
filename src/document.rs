@@ -1,8 +1,13 @@
+#[cfg(feature = "syntax-highlighting")]
+mod highlighter;
+
 use crate::cursor::Cursor;
+#[cfg(feature = "syntax-highlighting")]
+use highlighter::Highlighter;
 use std::{
     borrow::Cow,
     fs::File,
-    io::{BufWriter, Error, Seek, SeekFrom, Write},
+    io::{Error, Seek, SeekFrom, Write},
 };
 
 // The document of a buffer containing its contents.
@@ -13,6 +18,13 @@ pub struct Document {
     pub cur: Cursor,
     // Flag if the buffer was modified.
     pub edited: bool,
+
+    // The highlighter component responsible for syntax highlighting.
+    #[cfg(feature = "syntax-highlighting")]
+    pub highlighter: Highlighter,
+    // A contiguous buffer of the contents required by the highlighter.
+    #[cfg(feature = "syntax-highlighting")]
+    pub contiguous_buff: String,
 }
 
 impl Document {
@@ -22,10 +34,17 @@ impl Document {
             .filter(|c| !c.is_empty())
             .map_or_else(|| vec![Cow::from("")], |c| c.into_iter().collect());
 
+        #[cfg(feature = "syntax-highlighting")]
+        let contiguous_buff = buff.join("\n");
+
         Self {
             buff,
             cur: Cursor::new(x, y),
             edited: false,
+            #[cfg(feature = "syntax-highlighting")]
+            highlighter: Highlighter::new(),
+            #[cfg(feature = "syntax-highlighting")]
+            contiguous_buff,
         }
     }
 
@@ -35,6 +54,12 @@ impl Document {
         self.buff[0].to_mut().clear();
         self.cur = Cursor::new(0, 0);
         self.edited = false;
+
+        #[cfg(feature = "syntax-highlighting")]
+        {
+            self.contiguous_buff.clear();
+            self.highlighter.highlights.clear();
+        }
     }
 
     /// Returns the count of chars in a line.
@@ -48,18 +73,31 @@ impl Document {
             return Ok(());
         }
 
-        // Plus one for the newline.
-        let size: u64 = self.buff.iter().map(|s| s.len() as u64 + 1).sum();
-        // Minus one because the last line doesn't have a newline.
-        file.set_len(size.saturating_sub(1))?;
-
-        // Write line by line.
-        file.seek(SeekFrom::Start(0))?;
-        let mut writer = BufWriter::new(file);
-        for line in &self.buff {
-            writeln!(writer, "{line}")?;
+        #[cfg(feature = "syntax-highlighting")]
+        {
+            file.set_len(self.contiguous_buff.len() as u64)?;
+            file.seek(SeekFrom::Start(0))?;
+            file.write_all(self.contiguous_buff.as_bytes())?;
+            file.flush()?;
         }
-        writer.flush()?;
+
+        #[cfg(not(feature = "syntax-highlighting"))]
+        {
+            use std::io::BufWriter;
+
+            // Plus one for the newline.
+            let size: u64 = self.buff.iter().map(|s| s.len() as u64 + 1).sum();
+            // Minus one because the last line doesn't have a newline.
+            file.set_len(size.saturating_sub(1))?;
+
+            // Write line by line.
+            file.seek(SeekFrom::Start(0))?;
+            let mut writer = BufWriter::new(file);
+            for line in &self.buff {
+                writeln!(writer, "{line}")?;
+            }
+            writer.flush()?;
+        }
 
         self.edited = false;
         Ok(())
@@ -79,6 +117,12 @@ impl Document {
         }
         self.cur = Cursor::new(0, 0);
         self.edited = false;
+
+        #[cfg(feature = "syntax-highlighting")]
+        {
+            self.contiguous_buff = self.buff.join("\n");
+            self.highlighter.highlights.clear();
+        }
     }
 
     /// Inserts a new line at a specified y position.

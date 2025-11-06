@@ -13,6 +13,10 @@ pub trait Buffer {
     /// Checks if the buffer needs to be rerendered.
     fn need_rerender(&self) -> bool;
 
+    #[cfg(feature = "syntax-highlighting")]
+    /// Applies syntax highlighting on the buffer contents.
+    fn highlight(&mut self);
+
     /// Renders the buffer to a `Display`.
     fn render(&mut self, display: &mut Display);
 

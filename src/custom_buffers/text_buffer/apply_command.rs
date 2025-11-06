@@ -183,6 +183,15 @@ impl TextBuffer {
         CommandResult::Ok
     }
 
+    #[cfg(feature = "syntax-highlighting")]
+    fn syntax_command(&mut self, args: &str) -> CommandResult {
+        if !self.base.doc.highlighter.configure(args) {
+            return sc_buff!(INFO_BUFF_IDX, ["Invalid language selected"], None);
+        }
+
+        CommandResult::Ok
+    }
+
     /// Applies the command entered during command mode.
     pub fn apply_command(&mut self, cmd: &str) -> CommandResult {
         if cmd.is_empty() {
@@ -208,6 +217,8 @@ impl TextBuffer {
             "o" => self.open_command(args, false),
             "oo" => self.open_command(args, true),
             "r" => self.replace_command(args),
+            #[cfg(feature = "syntax-highlighting")]
+            "syntax" => self.syntax_command(args),
             _ => sc_buff!(
                 INFO_BUFF_IDX,
                 [format!("Unrecognized command: '{cmd}'")],

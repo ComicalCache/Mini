@@ -1,6 +1,6 @@
 [package]
 name = "mini"
-version = "5.1.0"
+version = "5.2.0"
 edition = "2024"
 
 [dependencies]
@@ -8,6 +8,13 @@ termion = "4.0.5"
 polling = "3.11.0"
 arboard = "3.6.1"
 regex = "1.11.3"
+
+# Syntax Highlighting
+tree-sitter-highlight = { version = "0.25.10", optional = true }
+tree-sitter-rust = { version = "0.24.0", optional = true }
+
+[features]
+syntax-highlighting = ["dep:tree-sitter-highlight", "dep:tree-sitter-rust"]
 
 [profile.release]
 strip = "symbols"
