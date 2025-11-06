@@ -54,6 +54,12 @@ impl Document {
         self.buff[0].to_mut().clear();
         self.cur = Cursor::new(0, 0);
         self.edited = false;
+
+        #[cfg(feature = "syntax-highlighting")]
+        {
+            self.contiguous_buff.clear();
+            self.highlighter.highlights.clear();
+        }
     }
 
     /// Returns the count of chars in a line.
@@ -98,6 +104,12 @@ impl Document {
         }
         self.cur = Cursor::new(0, 0);
         self.edited = false;
+
+        #[cfg(feature = "syntax-highlighting")]
+        {
+            self.contiguous_buff = self.buff.join("\n");
+            self.highlighter.highlights.clear();
+        }
     }
 
     /// Inserts a new line at a specified y position.

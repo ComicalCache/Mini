@@ -177,6 +177,25 @@ impl Buffer for FilesBuffer {
         self.base.rerender
     }
 
+    #[cfg(feature = "syntax-highlighting")]
+    fn highlight(&mut self) {
+        if self.need_rerender() {
+            // Update the contiguous buffer only if the document has been edited.
+            if self.base.doc.edited {
+                self.base.doc.contiguous_buff.clear();
+                for line in &self.base.doc.buff {
+                    self.base.doc.contiguous_buff.push_str(line);
+                    self.base.doc.contiguous_buff.push('\n');
+                }
+                // Remove the last trailing newline.
+                self.base.doc.contiguous_buff.pop().unwrap();
+            }
+
+            let contents = &self.base.doc.contiguous_buff;
+            self.base.doc.highlighter.highlight(contents);
+        }
+    }
+
     fn render(&mut self, display: &mut Display) {
         self.base.rerender = false;
 

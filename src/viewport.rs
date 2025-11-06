@@ -5,6 +5,8 @@ use crate::{
     util::CursorStyle,
 };
 use termion::color::{self, Bg, Fg};
+#[cfg(feature = "syntax-highlighting")]
+use tree_sitter_highlight::HighlightEvent;
 
 /// Background color.
 const BG: Bg<color::Rgb> = Bg(color::Rgb(41, 44, 51));
@@ -15,7 +17,7 @@ const INFO: Bg<color::Rgb> = Bg(color::Rgb(59, 61, 66));
 /// Selection highlight background color
 const SEL: Bg<color::Rgb> = Bg(color::Rgb(75, 78, 87));
 /// Text color.
-const TXT: Fg<color::Rgb> = Fg(color::Rgb(172, 178, 190));
+pub const TXT: Fg<color::Rgb> = Fg(color::Rgb(172, 178, 190));
 /// Relative number text color.
 const REL_NUMS: Fg<color::Rgb> = Fg(color::Rgb(101, 103, 105));
 /// Whitespace symbol text color.
@@ -60,6 +62,7 @@ impl Viewport {
         self.buff_w = self.w - n;
     }
 
+    #[cfg(feature = "syntax-highlighting")]
     /// Renders a document to the `Display`.
     pub fn render_document(&self, display: &mut Display, doc: &Document, sel: Option<Cursor>) {
         // Prepre the selection to be in order if a selection state is active.
@@ -72,8 +75,125 @@ impl Viewport {
         });
 
         // Calculate which line of text is visible at what line on the screen.
-        #[allow(clippy::cast_possible_wrap)]
-        let offset = doc.cur.y as isize - self.cur.y as isize;
+        let y_offset = doc.cur.y - self.cur.y;
+        let y_max = y_offset + self.h;
+        // Calculate the offset of characters on the screen.
+        let x_offset = doc.cur.x - self.cur.x;
+        let x_max = x_offset + self.buff_w;
+
+        let mut color_stack: Vec<Fg<color::Rgb>> = Vec::new();
+        let mut y = 0;
+        let mut x = 0;
+
+        'event_loop: for event in &doc.highlighter.highlights {
+            match event {
+                HighlightEvent::HighlightStart(h) => match doc.highlighter.names.get(h.0) {
+                    Some(name) => {
+                        color_stack.push(*doc.highlighter.colors.get(name).unwrap_or(&TXT));
+                    }
+                    None => color_stack.push(TXT),
+                },
+                HighlightEvent::HighlightEnd => {
+                    color_stack.pop();
+                }
+                HighlightEvent::Source { start, end } => {
+                    for ch in doc.contiguous_buff[*start..*end].chars() {
+                        if ch == '\n' {
+                            y += 1;
+                            x = 0;
+                            continue;
+                        } else if y >= y_offset && y < y_max && x >= x_offset && x < x_max {
+                            let mut ch = ch;
+                            let mut fg = *color_stack.last().unwrap_or(&TXT);
+                            let mut bg = if y == doc.cur.y { HIGHLIGHT } else { BG };
+
+                            // Plus one to skip the info bar.
+                            // FIXME: this limits the bar to always be exactly one in height.
+                            let screen_y = y - y_offset + 1;
+                            let screen_x = self.gutter_w + x - x_offset;
+
+                            // Layer 1: Selection.
+                            if let Some((start, end)) = sel {
+                                let pos = Cursor::new(x, y);
+                                if pos >= start && pos < end {
+                                    bg = SEL;
+                                }
+                            }
+
+                            // Layer 2: Whitespace.
+                            if ch == ' ' {
+                                ch = '·';
+                                fg = WHITESPACE;
+                            }
+
+                            display.update(Cell::new(ch, fg, bg), screen_x, screen_y);
+                        }
+
+                        x += 1;
+
+                        if y >= y_max {
+                            break 'event_loop;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Render newline characters and trailing whitespace to override previous screen content. The previous loop
+        // only renders the current content without regard of removing existing content, which is why this second
+        // render pass is necessary.
+        for (y, doc_idx) in (1..=self.h).zip(y_offset..) {
+            // Set base background color depending on if its the cursors line.
+            let base_bg = if y == self.cur.y + 1 { HIGHLIGHT } else { BG };
+
+            // Skip screen lines outside the text line bounds.
+            if doc_idx >= doc.buff.len() {
+                for x in self.gutter_w..self.w {
+                    display.update(Cell::new(' ', TXT, base_bg), x, y);
+                }
+                continue;
+            }
+
+            let len = doc.line_count(doc_idx).unwrap();
+            // Calculate the end of the line contents.
+            let mut x = self.gutter_w + (len.saturating_sub(x_offset));
+            // Add a newline character for visual clarity of trailing whitespaces. Don't show the
+            // newline character on the last line of the file.
+            if doc_idx + 1 != doc.buff.len() && len >= x_offset && len < x_max {
+                let bg = if let Some((start, end)) = sel
+                    && start.y <= doc_idx
+                    && end.y > doc_idx
+                {
+                    SEL
+                } else {
+                    base_bg
+                };
+
+                display.update(Cell::new('⏎', WHITESPACE, bg), x, y);
+                x += 1;
+            }
+
+            // Stretch current line to end to show highlight properly.
+            for x in x..self.w {
+                display.update(Cell::new(' ', TXT, base_bg), x, y);
+            }
+        }
+    }
+
+    #[cfg(not(feature = "syntax-highlighting"))]
+    /// Renders a document to the `Display`.
+    pub fn render_document(&self, display: &mut Display, doc: &Document, sel: Option<Cursor>) {
+        // Prepre the selection to be in order if a selection state is active.
+        let sel = sel.map(|sel| {
+            if doc.cur < sel {
+                (doc.cur, sel)
+            } else {
+                (sel, doc.cur)
+            }
+        });
+
+        // Calculate which line of text is visible at what line on the screen.
+        let offset = doc.cur.y - self.cur.y;
 
         // Shifted by one because of info/command line.
         // FIXME: this limits the bar to always be exactly one in height.
@@ -85,19 +205,13 @@ impl Viewport {
             let base_fg = TXT;
 
             // Skip screen lines outside the text line bounds.
-            // The value is guaranteed positive at that point.
-            #[allow(clippy::cast_sign_loss)]
-            if doc_idx < 0 || (doc_idx as usize) >= doc.buff.len() {
-                for ch in " ".repeat(self.buff_w).chars() {
-                    display.update(Cell::new(ch, base_fg, base_bg), x, y);
+            if doc_idx >= doc.buff.len() {
+                for _ in 0..self.buff_w {
+                    display.update(Cell::new(' ', base_fg, base_bg), x, y);
                     x += 1;
                 }
                 continue;
             }
-
-            // The value is guaranteed positive at that point.
-            #[allow(clippy::cast_sign_loss)]
-            let doc_idx = doc_idx as usize;
 
             let content = &doc.buff[doc_idx];
             let x_offset = doc.cur.x.saturating_sub(self.cur.x);
@@ -109,15 +223,8 @@ impl Viewport {
                 // Layer 1: Selection.
                 let char_idx = x_offset + idx;
                 if let Some((start, end)) = sel {
-                    // Selection on one line and in range.
-                    if (start.y == end.y && doc_idx == start.y && char_idx >= start.x && char_idx < end.x)
-                    // Start line of selection.
-                    || (doc_idx == start.y && start.y < end.y && char_idx >= start.x)
-                    // Inbetween lines of selection.
-                    || (doc_idx > start.y && doc_idx < end.y)
-                    // End line of selection.
-                    || (doc_idx == end.y && start.y < end.y && char_idx < end.x)
-                    {
+                    let pos = Cursor::new(char_idx, doc_idx);
+                    if pos >= start && pos < end {
                         bg = SEL;
                     }
                 }
@@ -127,8 +234,6 @@ impl Viewport {
                     ch = '·';
                     fg = WHITESPACE;
                 }
-
-                // TODO: Layer 3: Syntax Highlighting.
 
                 display.update(Cell::new(ch, fg, bg), x, y);
                 x += 1;
@@ -155,8 +260,8 @@ impl Viewport {
 
             // Stretch current line to end to show highlight properly.
             if true_len < self.buff_w {
-                for ch in " ".repeat(self.buff_w - true_len).chars() {
-                    display.update(Cell::new(ch, TXT, base_bg), x, y);
+                for _ in 0..self.buff_w - true_len {
+                    display.update(Cell::new(' ', TXT, base_bg), x, y);
                     x += 1;
                 }
             }
