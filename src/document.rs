@@ -93,9 +93,10 @@ impl Document {
             // Write line by line.
             file.seek(SeekFrom::Start(0))?;
             let mut writer = BufWriter::new(file);
-            for line in &self.buff {
+            for line in &self.buff[..self.buff.len().saturating_sub(1)] {
                 writeln!(writer, "{line}")?;
             }
+            write!(writer, "{}", self.buff[self.buff.len().saturating_sub(1)])?;
             writer.flush()?;
         }
 

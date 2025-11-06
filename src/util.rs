@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     fs::{File, OpenOptions},
-    io::{BufRead, BufReader, Error},
+    io::{Error, Read},
     path::{Path, PathBuf},
 };
 
@@ -57,16 +57,28 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
 
 /// Reads a files contents into lines.
 pub fn read_file_to_lines(file: &mut File) -> Result<Vec<Cow<'static, str>>, Error> {
-    BufReader::new(file)
-        .lines()
-        .map(|l| l.map(Cow::from))
-        .collect::<Result<Vec<Cow<'static, str>>, _>>()
+    let mut buff = String::new();
+    file.read_to_string(&mut buff)?;
+
+    let mut ret: Vec<Cow<'static, str>> = buff.lines().map(str::to_string).map(Cow::from).collect();
+    // lines() will discard a trailing empty line, but we don't want that.
+    if buff.ends_with('\n') {
+        ret.push(Cow::from(""));
+    }
+
+    Ok(ret)
 }
 
 /// Splits a string into a vector of lines.
 pub fn split_to_lines<S: AsRef<str>>(data: S) -> Vec<Cow<'static, str>> {
     let mut buff = Vec::new();
     buff.extend(data.as_ref().lines().map(str::to_string).map(Cow::from));
+
+    // lines() will discard a trailing empty line, but we don't want that.
+    if data.as_ref().ends_with('\n') {
+        buff.push(Cow::from(""));
+    }
+
     buff
 }
 
