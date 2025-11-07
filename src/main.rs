@@ -19,7 +19,7 @@ use crate::{
 };
 use polling::{Events, Poller};
 use std::{
-    io::{BufWriter, Write},
+    io::{BufWriter, ErrorKind, Write},
     os::fd::AsFd,
     path::{Path, PathBuf},
     time::Duration,
@@ -85,9 +85,15 @@ fn main() -> Result<(), std::io::Error> {
 
     // Setting the current buffer and error in case of file opening error.
     let mut info_buffer = Box::new(InfoBuffer::new(w as usize, h as usize)?);
+    let files_buffer = Box::new(FilesBuffer::new(w as usize, h as usize, base)?);
     let mut curr_buff = if let Some(Err(err)) = &file {
-        info_buffer.set_contents(&split_to_lines(err.to_string()), None, None);
-        INFO_BUFF_IDX
+        // Open the `FilesBuffer` if a directory was specified as argument.
+        if err.kind() == ErrorKind::IsADirectory {
+            FILES_BUFF_IDX
+        } else {
+            info_buffer.set_contents(&split_to_lines(err.to_string()), None, None);
+            INFO_BUFF_IDX
+        }
     } else {
         TXT_BUFF_IDX
     };
@@ -102,7 +108,7 @@ fn main() -> Result<(), std::io::Error> {
             file_name,
         )?),
         // 2
-        Box::new(FilesBuffer::new(w as usize, h as usize, base)?),
+        files_buffer,
         // 3
         info_buffer,
     ];

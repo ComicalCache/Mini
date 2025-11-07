@@ -1,6 +1,7 @@
-Run Mini with a file(path) argument to open or create a file. Omit the file(path) to create a
-"scratchpad" buffer with no backing file. A few things that make Mini interesting: it has (relative) line-numbers,
-diffed-rendering, full unicode support, undo and redo, contains a file browser and syntax highlighting.
+Run Mini with a file(path) argument to open or create a file or a directory to open it in the file browser. Omit the
+file(path) to create a "scratchpad" buffer with no backing file. A few things that make Mini interesting: it has
+(relative) line-numbers, diffed-rendering, full unicode support, undo and redo, contains a file browser and syntax
+highlighting.
 
 Mini should feel familiar to those who have used VIm before. It features three kinds of buffers: a text buffer, an info
 buffer, and a file browser buffer. You can switch to the text buffer, info buffer and files buffer, from any of the

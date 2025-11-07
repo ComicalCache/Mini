@@ -14,14 +14,17 @@ use std::{
 impl FilesBuffer {
     /// Loads a directory as path buffers and Strings.
     pub(super) fn load_dir(
-        base: &PathBuf,
+        base: &Path,
         entries: &mut Vec<PathBuf>,
     ) -> Result<Vec<Cow<'static, str>>, Error> {
-        let base = if base.is_dir() {
-            base
+        let mut base = if base.is_dir() {
+            base.to_path_buf()
         } else {
-            &PathBuf::from(base.parent().unwrap_or_else(|| Path::new("/")))
+            PathBuf::from(base.parent().unwrap_or_else(|| Path::new("")))
         };
+        if !base.exists() {
+            base = std::env::current_dir()?;
+        }
 
         *entries = read_dir(base)?
             .map(|res| res.map(|e| e.path()))
