@@ -229,10 +229,6 @@ impl Buffer for FilesBuffer {
     }
 
     fn resize(&mut self, w: usize, h: usize) {
-        if self.base.doc_view.w == w && self.base.doc_view.h == h {
-            return;
-        }
-
         self.base.rerender = true;
         self.base.resize(w, h);
     }

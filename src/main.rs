@@ -125,10 +125,10 @@ fn main() -> Result<(), std::io::Error> {
     while !quit {
         // Handle terminal resizing.
         let (w, h) = termion::terminal_size()?;
-        display.resize(w as usize, h as usize);
         for buff in &mut buffs {
             buff.resize(w as usize, h as usize);
         }
+        display.resize(w as usize, h as usize);
 
         // Clear previous iterations events and fetch new ones.
         events.clear();
