@@ -146,7 +146,6 @@ impl Buffer for InfoBuffer {
         }
 
         self.base.doc_view.render_gutter(display, &self.base.doc);
-
         self.base
             .doc_view
             .render_document(display, &self.base.doc, self.base.sel);
@@ -186,12 +185,13 @@ impl Buffer for InfoBuffer {
         _: Option<PathBuf>,
         _: Option<String>,
     ) {
+        // Set contents moves the doc.cur to the beginning.
         self.base.doc.set_contents(contents);
         self.base.doc_view.cur = Cursor::new(0, 0);
 
         self.base.sel = None;
         self.base.motion_repeat.clear();
-        self.base.matches.clear();
+        self.base.clear_matches();
 
         self.base.rerender = true;
     }

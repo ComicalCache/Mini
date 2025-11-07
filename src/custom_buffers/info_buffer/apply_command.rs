@@ -1,6 +1,6 @@
 use crate::{
-    INFO_BUFF_IDX, buffer::Buffer, custom_buffers::info_buffer::InfoBuffer, sc_buff,
-    util::CommandResult,
+    INFO_BUFF_IDX, buffer::Buffer, cursor::Cursor, custom_buffers::info_buffer::InfoBuffer,
+    sc_buff, util::CommandResult,
 };
 use std::borrow::Cow;
 
@@ -18,7 +18,9 @@ impl InfoBuffer {
 
         match cmd {
             "clear" => {
+                // Set contents moves the doc.cur to the beginning.
                 self.set_contents(&[Cow::from("")], None, None);
+                self.base.doc_view.cur = Cursor::new(0, 0);
                 CommandResult::Ok
             }
             _ => sc_buff!(INFO_BUFF_IDX, [format!("Unrecognized command: '{cmd}'")]),

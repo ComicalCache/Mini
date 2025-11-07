@@ -208,12 +208,6 @@ impl Highlighter {
                 tree_sitter_typescript::HIGHLIGHTS_QUERY,
             ),
             (
-                "tsx",
-                tree_sitter_typescript::LANGUAGE_TSX.into(),
-                "TSX",
-                tree_sitter_typescript::HIGHLIGHTS_QUERY,
-            ),
-            (
                 "cpp",
                 tree_sitter_cpp::LANGUAGE.into(),
                 "C++",
@@ -304,7 +298,6 @@ impl Highlighter {
             ("toml", "toml"),
             ("py", "python"),
             ("ts", "ts"),
-            ("tsx", "tsx"),
             ("cpp", "cpp"),
             // FIXME: this might cause problems for C header files.
             ("h", "cpp"),

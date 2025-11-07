@@ -489,7 +489,6 @@ impl Buffer for TextBuffer {
         }
 
         self.base.doc_view.render_gutter(display, &self.base.doc);
-
         self.base
             .doc_view
             .render_document(display, &self.base.doc, self.base.sel);
@@ -529,6 +528,7 @@ impl Buffer for TextBuffer {
         path: Option<PathBuf>,
         file_name: Option<String>,
     ) {
+        // Set contents moves the doc.cur to the beginning.
         self.base.doc.set_contents(contents);
         self.base.doc_view.cur = Cursor::new(0, 0);
         if let Some(path) = path {
@@ -544,7 +544,7 @@ impl Buffer for TextBuffer {
         self.base.sel = None;
         self.base.change_mode(Mode::View);
         self.base.motion_repeat.clear();
-        self.base.matches.clear();
+        self.base.clear_matches();
 
         self.history.clear();
 

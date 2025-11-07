@@ -5,7 +5,7 @@ A "minimalistic" terminal based text-editor. It has VIm-like motions and should 
 ### Features
 Mini supports ergonomic motions, text selection, search and replace, a file browser and more.
 
-`./mini --help` prints an exhaustiv documentation of all features. See the `src/info.txt` for the command output or type space, `?` and hit enter to see it inside the editor.
+`./mini --help` prints an exhaustiv documentation of all features. See the `info.txt` for the command output or type space, `?` and hit enter to see it inside the editor.
 
 ### Installation
 Mini can simply be built with `cargo build --release` or installed via cargo with `cargo install --path .`.

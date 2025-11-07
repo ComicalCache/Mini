@@ -190,7 +190,7 @@ pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
     pub clipboard: Clipboard,
 
     /// The vector of matches of a search.
-    pub matches: Vec<(Cursor, Cursor)>,
+    matches: Vec<(Cursor, Cursor)>,
     /// The index of the current match for navigation.
     matches_idx: Option<usize>,
 
@@ -392,14 +392,18 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     pub fn change_mode(&mut self, mode: Mode<ModeEnum>) {
         match self.mode {
             Mode::Command => {
-                // Clear command line so its ready for next entry.
+                // Clear command line so its ready for next entry. Don't save contents here since they are only
+                // saved when hitting enter.
                 self.cmd.buff[0].to_mut().clear();
                 self.cmd.cur = Cursor::new(0, 0);
                 self.cmd_view.cur = Cursor::new(0, 0);
             }
             Mode::View => {
                 self.motion_repeat.clear();
-                self.clear_matches();
+
+                if self.doc.edited {
+                    self.clear_matches();
+                }
             }
             Mode::Other(_) => {}
         }

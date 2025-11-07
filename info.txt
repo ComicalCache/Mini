@@ -96,7 +96,6 @@ mode.
     - CSS (css)
     - JavaScript (js)
     - TypeScript (ts)
-    - TSX (tsx)
     - C (c)
     - C++ (cpp)
     - Zig (zig)

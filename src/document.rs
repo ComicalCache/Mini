@@ -104,7 +104,7 @@ impl Document {
         Ok(())
     }
 
-    /// Replaces the document buffer and sets the cursor to a specified position.
+    /// Replaces the document buffer and sets the cursor to the beginning of the buffer.
     pub fn set_contents(&mut self, buff: &[Cow<'static, str>]) {
         if buff.is_empty() {
             // Always have at least one line in the document.

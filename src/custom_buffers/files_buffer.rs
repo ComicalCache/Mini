@@ -66,8 +66,10 @@ impl FilesBuffer {
     fn refresh(&mut self) -> CommandResult {
         match Self::load_dir(&self.path, &mut self.entries) {
             Ok(contents) => {
+                // Set contents moves the doc.cur to the beginning.
                 self.base.doc.set_contents(&contents);
                 self.base.doc_view.cur = Cursor::new(0, 0);
+                self.base.sel = None;
 
                 CommandResult::Ok
             }
@@ -77,7 +79,7 @@ impl FilesBuffer {
 
     fn selected_remove_command<S: AsRef<str>>(&mut self, cmd: S) -> CommandResult {
         if self.base.doc.cur.y == 0 {
-            return sc_buff!(INFO_BUFF_IDX, ["Cannot delete the parent directory"]);
+            return CommandResult::Ok;
         }
 
         // Set the command and move the cursor to be at the end of the input.
@@ -215,7 +217,6 @@ impl Buffer for FilesBuffer {
         }
 
         self.base.doc_view.render_gutter(display, &self.base.doc);
-
         self.base
             .doc_view
             .render_document(display, &self.base.doc, self.base.sel);
@@ -250,6 +251,7 @@ impl Buffer for FilesBuffer {
     }
 
     fn set_contents(&mut self, _: &[Cow<'static, str>], path: Option<PathBuf>, _: Option<String>) {
+        // Set contents moves the doc.cur to the beginning.
         self.base.doc.set_contents(&[]);
         if let Some(path) = path {
             self.path = path;
@@ -258,7 +260,7 @@ impl Buffer for FilesBuffer {
 
         self.base.sel = None;
         self.base.motion_repeat.clear();
-        self.base.matches.clear();
+        self.base.clear_matches();
 
         self.base.rerender = true;
     }

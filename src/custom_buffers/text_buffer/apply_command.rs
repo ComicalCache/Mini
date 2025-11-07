@@ -17,7 +17,6 @@ impl TextBuffer {
         };
 
         self.base.doc.write_to_file(file)?;
-
         Ok(true)
     }
 
@@ -49,7 +48,15 @@ impl TextBuffer {
         self.file_name = file_name(args);
 
         match read_file_to_lines(self.file.as_mut().unwrap()) {
-            Ok(lines) => self.base.doc.set_contents(&lines),
+            Ok(lines) => {
+                self.base.doc.set_contents(&lines);
+
+                #[cfg(feature = "syntax-highlighting")]
+                self.base
+                    .doc
+                    .highlighter
+                    .set_lang_filename(self.file_name.as_ref().unwrap());
+            }
             Err(err) => return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string())),
         }
 

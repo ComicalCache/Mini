@@ -32,7 +32,7 @@ use termion::{
 
 // Random value chosen by dev-rng.
 const STDIN_EVENT_KEY: usize = 25663;
-const INFO_MSG: &str = include_str!("info.txt");
+const INFO_MSG: &str = include_str!("../info.txt");
 
 // Indices of buffers.
 const TXT_BUFF_IDX: usize = 0;

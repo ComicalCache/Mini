@@ -1,5 +1,5 @@
 use crate::{
-    TXT_BUFF_IDX, cursor,
+    TXT_BUFF_IDX,
     custom_buffers::files_buffer::FilesBuffer,
     sc_buff,
     util::{CommandResult, file_name, open_file, read_file_to_lines},
@@ -12,7 +12,7 @@ use std::{
 };
 
 impl FilesBuffer {
-    /// Loads a directory as path buffers and Strings.
+    /// Loads a directory as path buffers and Strings. Does NOT move the cursor to be valid!
     pub(super) fn load_dir(
         base: &Path,
         entries: &mut Vec<PathBuf>,
@@ -57,9 +57,7 @@ impl FilesBuffer {
         // Move directory up.
         if idx == 0 {
             if self.path.pop() {
-                self.base
-                    .doc
-                    .set_contents(&Self::load_dir(&self.path, &mut self.entries)?);
+                return Ok(self.refresh());
             }
 
             return Ok(CommandResult::Ok);
@@ -67,8 +65,6 @@ impl FilesBuffer {
 
         let entry = &self.entries[idx.saturating_sub(1)].clone();
         if entry.is_file() {
-            self.path = PathBuf::from(entry.parent().unwrap());
-
             return Ok(sc_buff!(
                 TXT_BUFF_IDX,
                 read_file_to_lines(&mut open_file(entry)?)?,
@@ -77,12 +73,7 @@ impl FilesBuffer {
             ));
         } else if entry.is_dir() {
             self.path.clone_from(entry);
-
-            cursor::jump_to_beginning_of_file(&mut self.base.doc, &mut self.base.doc_view);
-            self.base
-                .doc
-                .set_contents(&Self::load_dir(&self.path, &mut self.entries)?);
-            return Ok(CommandResult::Ok);
+            return Ok(self.refresh());
         }
 
         Ok(CommandResult::Ok)
