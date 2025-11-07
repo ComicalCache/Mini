@@ -71,13 +71,13 @@ impl FilesBuffer {
 
                 CommandResult::Ok
             }
-            Err(err) => sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None),
+            Err(err) => sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string())),
         }
     }
 
     fn selected_remove_command<S: AsRef<str>>(&mut self, cmd: S) -> CommandResult {
         if self.base.doc.cur.y == 0 {
-            return sc_buff!(INFO_BUFF_IDX, ["Cannot delete the parent directory"], None);
+            return sc_buff!(INFO_BUFF_IDX, ["Cannot delete the parent directory"]);
         }
 
         // Set the command and move the cursor to be at the end of the input.
@@ -146,7 +146,6 @@ impl FilesBuffer {
                     Ok::<CommandResult, Error>(sc_buff!(
                         INFO_BUFF_IDX,
                         split_to_lines(err.to_string()),
-                        None,
                     ))
                 })
                 .unwrap(),
@@ -253,7 +252,7 @@ impl Buffer for FilesBuffer {
         }
     }
 
-    fn set_contents(&mut self, _: &[Cow<'static, str>], path: Option<PathBuf>) {
+    fn set_contents(&mut self, _: &[Cow<'static, str>], path: Option<PathBuf>, _: Option<String>) {
         self.base.doc.set_contents(&[]);
         if let Some(path) = path {
             self.path = path;

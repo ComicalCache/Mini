@@ -11,11 +11,11 @@ impl FilesBuffer {
         // Create only directories.
         if args.ends_with('/') {
             if let Err(err) = std::fs::create_dir_all(args) {
-                return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
+                return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()));
             }
         // open_file creates the directory hierarchy and file.
         } else if let Err(err) = open_file(args) {
-            return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
+            return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()));
         }
 
         self.refresh()
@@ -25,10 +25,10 @@ impl FilesBuffer {
         // Remove only directories.
         if args.ends_with('/') {
             if let Err(err) = std::fs::remove_dir(args) {
-                return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
+                return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()));
             }
         } else if let Err(err) = std::fs::remove_file(args) {
-            return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
+            return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()));
         }
 
         self.refresh()
@@ -38,7 +38,7 @@ impl FilesBuffer {
         // Remove only directories.
         if args.ends_with('/') {
             if let Err(err) = std::fs::remove_dir_all(args) {
-                return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()), None);
+                return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()));
             }
 
             return self.refresh();
@@ -47,7 +47,6 @@ impl FilesBuffer {
         sc_buff!(
             INFO_BUFF_IDX,
             ["Recursive removal only works for directories"],
-            None,
         )
     }
 
@@ -66,11 +65,7 @@ impl FilesBuffer {
             "mk" => self.create_command(args),
             "rm" => self.remove_command(args),
             "rm!" => self.recursive_remove_command(args),
-            _ => sc_buff!(
-                INFO_BUFF_IDX,
-                [format!("Unrecognized command: '{cmd}'")],
-                None,
-            ),
+            _ => sc_buff!(INFO_BUFF_IDX, [format!("Unrecognized command: '{cmd}'")]),
         }
     }
 }

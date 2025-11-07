@@ -31,7 +31,12 @@ pub trait Buffer {
     fn tick(&mut self, key: Option<Key>) -> CommandResult;
 
     /// Sets the contents of a buffer.
-    fn set_contents(&mut self, contents: &[Cow<'static, str>], path: Option<PathBuf>);
+    fn set_contents(
+        &mut self,
+        contents: &[Cow<'static, str>],
+        path: Option<PathBuf>,
+        file_name: Option<String>,
+    );
 
     /// Asks if the buffer is ready to quit/has pending changes.
     fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>>;

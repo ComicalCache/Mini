@@ -46,11 +46,7 @@ pub fn selection(
     *sel = None;
     match res {
         Ok(()) => Ok(()),
-        Err(err) => Err(sc_buff!(
-            INFO_BUFF_IDX,
-            split_to_lines(err.to_string()),
-            None,
-        )),
+        Err(err) => Err(sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()))),
     }
 }
 
@@ -76,11 +72,7 @@ pub fn line(
 
     match res {
         Ok(()) => Ok(()),
-        Err(err) => Err(sc_buff!(
-            INFO_BUFF_IDX,
-            split_to_lines(err.to_string()),
-            None,
-        )),
+        Err(err) => Err(sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()))),
     }
 }
 

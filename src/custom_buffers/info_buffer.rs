@@ -183,7 +183,12 @@ impl Buffer for InfoBuffer {
         }
     }
 
-    fn set_contents(&mut self, contents: &[Cow<'static, str>], _: Option<PathBuf>) {
+    fn set_contents(
+        &mut self,
+        contents: &[Cow<'static, str>],
+        _: Option<PathBuf>,
+        _: Option<String>,
+    ) {
         self.base.doc.set_contents(contents);
         self.base.doc_view.cur = Cursor::new(0, 0);
 

@@ -142,12 +142,18 @@ enum OtherMode {
 pub struct TextBuffer {
     base: BaseBuffer<OtherMode, OtherViewAction, ()>,
     file: Option<File>,
+    file_name: Option<String>,
     history: History,
     write_state_machine: StateMachine<WriteAction>,
 }
 
 impl TextBuffer {
-    pub fn new(w: usize, h: usize, mut file: Option<File>) -> Result<Self, Error> {
+    pub fn new(
+        w: usize,
+        h: usize,
+        mut file: Option<File>,
+        file_name: Option<String>,
+    ) -> Result<Self, Error> {
         let contents = if let Some(file) = file.as_mut() {
             Some(read_file_to_lines(file)?)
         } else {
@@ -231,6 +237,7 @@ impl TextBuffer {
         Ok(Self {
             base,
             file,
+            file_name,
             history: History::new(),
             write_state_machine,
         })
@@ -254,11 +261,16 @@ impl TextBuffer {
         let percentage = 100 * line / total;
         let size: usize = self.base.doc.buff.iter().map(|l| l.len()).sum();
 
+        let indicator = match &self.file {
+            Some(_) => self.file_name.as_ref().unwrap(),
+            None => "Text",
+        };
         write!(
             self.base.info.buff[0].to_mut(),
-            "[Text] [{mode}] [{line}:{col}/{total} {percentage}%] [{size}B]",
+            "[{indicator}] [{mode}] [{line}:{col}/{total} {percentage}%] [{size}B]",
         )
         .unwrap();
+
         if let Some(pos) = self.base.sel {
             // Plus 1 since text coordinates are 0 indexed.
             let line = pos.y + 1;
@@ -511,11 +523,17 @@ impl Buffer for TextBuffer {
         }
     }
 
-    fn set_contents(&mut self, contents: &[Cow<'static, str>], path: Option<PathBuf>) {
+    fn set_contents(
+        &mut self,
+        contents: &[Cow<'static, str>],
+        path: Option<PathBuf>,
+        file_name: Option<String>,
+    ) {
         self.base.doc.set_contents(contents);
         self.base.doc_view.cur = Cursor::new(0, 0);
         if let Some(path) = path {
             self.file = open_file(path).ok();
+            self.file_name = file_name;
         }
 
         self.base.sel = None;

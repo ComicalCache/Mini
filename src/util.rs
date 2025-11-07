@@ -8,15 +8,27 @@ use std::{
 /// `SetAndChangeBuffer`
 #[macro_export]
 macro_rules! sc_buff {
-    ($buffer:ident, [$($content:expr),+], $path:expr $(,)?) => {
+    ($buffer:ident, [$($content:expr),+] $(,)?) => {
+        CommandResult::SetAndChangeBuffer(
+            $buffer,
+            vec![$(Cow::from($content),)+],
+            None,
+            None,
+        )
+    };
+    ($buffer:ident, [$($content:expr),+], $path:expr, $file_name:expr $(,)?) => {
         CommandResult::SetAndChangeBuffer(
             $buffer,
             vec![$(Cow::from($content),)+],
             $path,
+            $file_name,
         )
     };
-    ($buffer:ident, $contents:expr, $path:expr $(,)?) => {
-        CommandResult::SetAndChangeBuffer($buffer, $contents, $path)
+    ($buffer:ident, $contents:expr $(,)?) => {
+        CommandResult::SetAndChangeBuffer($buffer, $contents, None, None)
+    };
+    ($buffer:ident, $contents:expr, $path:expr, $file_name:expr $(,)?) => {
+        CommandResult::SetAndChangeBuffer($buffer, $contents, $path, $file_name)
     };
 }
 
@@ -25,7 +37,12 @@ macro_rules! sc_buff {
 pub enum CommandResult {
     Ok,
     ChangeBuffer(usize),
-    SetAndChangeBuffer(usize, Vec<Cow<'static, str>>, Option<PathBuf>),
+    SetAndChangeBuffer(
+        usize,
+        Vec<Cow<'static, str>>,
+        Option<PathBuf>,
+        Option<String>,
+    ),
     Quit,
     ForceQuit,
 }

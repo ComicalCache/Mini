@@ -21,7 +21,7 @@ use polling::{Events, Poller};
 use std::{
     io::{BufWriter, Write},
     os::fd::AsFd,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::Duration,
 };
 use termion::{
@@ -46,16 +46,22 @@ fn main() -> Result<(), std::io::Error> {
 
     // Print help or parse read file if argument was supplied.
     let path = args.next();
-    let file = if let Some(path) = &path {
+    let (file, file_name) = if let Some(path) = &path {
         if path == "--help" {
             let version = option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap();
             println!("Mini - A terminal text-editor (v{version})\n\n{INFO_MSG}");
             return Ok(());
         }
 
-        Some(open_file(path))
+        let file = open_file(path);
+        (
+            Some(file),
+            Path::new(path)
+                .file_name()
+                .map(|p| p.to_string_lossy().to_string()),
+        )
     } else {
-        None
+        (None, None)
     };
 
     // Setup stdin and stdout.
@@ -68,7 +74,7 @@ fn main() -> Result<(), std::io::Error> {
     unsafe { poller.add(&stdin.as_fd(), polling::Event::readable(STDIN_EVENT_KEY))? };
 
     let (w, h) = termion::terminal_size()?;
-    let base = if let Some(path) = path {
+    let base = if let Some(path) = &path {
         PathBuf::from(path)
     } else {
         std::env::current_dir()?
@@ -80,7 +86,7 @@ fn main() -> Result<(), std::io::Error> {
     // Setting the current buffer and error in case of file opening error.
     let mut info_buffer = Box::new(InfoBuffer::new(w as usize, h as usize)?);
     let mut curr_buff = if let Some(Err(err)) = &file {
-        info_buffer.set_contents(&split_to_lines(err.to_string()), None);
+        info_buffer.set_contents(&split_to_lines(err.to_string()), None, None);
         INFO_BUFF_IDX
     } else {
         TXT_BUFF_IDX
@@ -93,6 +99,7 @@ fn main() -> Result<(), std::io::Error> {
             w as usize,
             h as usize,
             file.and_then(std::result::Result::ok),
+            file_name,
         )?),
         // 2
         Box::new(FilesBuffer::new(w as usize, h as usize, base)?),
@@ -136,12 +143,12 @@ fn main() -> Result<(), std::io::Error> {
                 curr_buff = idx;
             }
             // Set a buffer and change to it if the buffer has no pending changes.
-            CommandResult::SetAndChangeBuffer(idx, contents, path) => {
+            CommandResult::SetAndChangeBuffer(idx, contents, path, file_name) => {
                 if let Err(err) = buffs[idx].can_quit() {
-                    buffs[INFO_BUFF_IDX].set_contents(&err, path);
+                    buffs[INFO_BUFF_IDX].set_contents(&err, path, file_name);
                     curr_buff = INFO_BUFF_IDX;
                 } else {
-                    buffs[idx].set_contents(&contents, path);
+                    buffs[idx].set_contents(&contents, path, file_name);
                     curr_buff = idx;
                 }
             }
@@ -151,7 +158,7 @@ fn main() -> Result<(), std::io::Error> {
 
                 for idx in 0..buffs.len() {
                     if let Err(err) = buffs[idx].can_quit() {
-                        buffs[INFO_BUFF_IDX].set_contents(&err, None);
+                        buffs[INFO_BUFF_IDX].set_contents(&err, None, None);
                         curr_buff = INFO_BUFF_IDX;
 
                         quit = false;

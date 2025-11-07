@@ -18,14 +18,10 @@ impl InfoBuffer {
 
         match cmd {
             "clear" => {
-                self.set_contents(&[Cow::from("")], None);
+                self.set_contents(&[Cow::from("")], None, None);
                 CommandResult::Ok
             }
-            _ => sc_buff!(
-                INFO_BUFF_IDX,
-                [format!("Unrecognized command: '{cmd}'")],
-                None,
-            ),
+            _ => sc_buff!(INFO_BUFF_IDX, [format!("Unrecognized command: '{cmd}'")]),
         }
     }
 }

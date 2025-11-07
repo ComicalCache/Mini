@@ -69,7 +69,10 @@ impl FilesBuffer {
             return Ok(sc_buff!(
                 TXT_BUFF_IDX,
                 read_file_to_lines(&mut open_file(entry)?)?,
-                Some(self.path.clone())
+                Some(self.path.clone()),
+                Path::new(entry)
+                    .file_name()
+                    .map(|p| p.to_string_lossy().to_string()),
             ));
         } else if entry.is_dir() {
             self.path.clone_from(entry);

@@ -16,7 +16,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             return sc_buff!(
                 INFO_BUFF_IDX,
                 ["Expected a valid regular expression like '/<regex>/'"],
-                None,
             );
         }
 
@@ -27,7 +26,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
                     "'{args}' is not a valid regular expression:",
                 ))];
                 buff.extend(split_to_lines(err.to_string()));
-                return sc_buff!(INFO_BUFF_IDX, buff, None);
+                return sc_buff!(INFO_BUFF_IDX, buff);
             }
         };
 
@@ -66,7 +65,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         self.matches_idx = None;
 
         if self.matches.is_empty() {
-            return sc_buff!(INFO_BUFF_IDX, ["No matches found"], None);
+            return sc_buff!(INFO_BUFF_IDX, ["No matches found"]);
         }
 
         self.matches_idx = self
@@ -122,7 +121,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
                     "Mini - A terminal text-editor (v{})\n\n{INFO_MSG}",
                     option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap()
                 )),
-                None,
             )),
             "goto" => Ok(self.goto(args)),
             "s" => Ok(self.search(args)),

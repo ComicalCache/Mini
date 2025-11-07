@@ -85,11 +85,7 @@ impl TextBuffer {
         let mut content = match self.base.clipboard.get_text() {
             Ok(content) => content,
             Err(err) => {
-                return Some(sc_buff!(
-                    INFO_BUFF_IDX,
-                    split_to_lines(err.to_string()),
-                    None,
-                ));
+                return Some(sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string())));
             }
         };
 
