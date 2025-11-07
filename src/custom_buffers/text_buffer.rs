@@ -214,6 +214,10 @@ impl TextBuffer {
                 .simple(Key::Char('u'), Other(Undo))
                 .simple(Key::Char('U'), Other(Redo));
         }
+        #[cfg(feature = "syntax-highlighting")]
+        if let Some(file_name) = &file_name {
+            base.doc.highlighter.set_lang_filename(file_name);
+        }
 
         let write_state_machine = {
             #[allow(clippy::enum_glob_use)]
@@ -533,6 +537,11 @@ impl Buffer for TextBuffer {
         self.base.doc_view.cur = Cursor::new(0, 0);
         if let Some(path) = path {
             self.file = open_file(path).ok();
+
+            #[cfg(feature = "syntax-highlighting")]
+            if let Some(file_name) = &file_name {
+                self.base.doc.highlighter.set_lang_filename(file_name);
+            }
             self.file_name = file_name;
         }
 

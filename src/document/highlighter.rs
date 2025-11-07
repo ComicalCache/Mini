@@ -1,10 +1,39 @@
 use crate::viewport::TXT;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 use termion::color::{Fg, Rgb};
 use tree_sitter_highlight::{
     HighlightConfiguration as TsHighlightConfiguration, HighlightEvent as TsHighlightEvent,
     Highlighter as TsHighlighter,
 };
+
+macro_rules! parser_configs {
+    ($input:expr, $names:expr, $(($lang_name:literal, $lang:expr, $name:literal, $highlights:expr,),)+) => {
+        match $input {
+            $(
+            $lang_name => {
+                let mut config =
+                    TsHighlightConfiguration::new($lang, $name, $highlights, "", "").unwrap();
+                config.configure($names);
+
+                Some(config)
+            }
+            )+
+            "off" => None,
+            _ => return false,
+        }
+    };
+}
+
+macro_rules! extension_configs {
+    ($self:ident, $extension:expr, $(($ext:literal, $lang:literal),)+) => {
+        match $extension {
+            $(
+                $ext => $self.set_lang($lang),
+            )+
+            _ => $self.set_lang("off"),
+        }
+    };
+}
 
 /// A highlighter that can highlight document contents.
 pub struct Highlighter {
@@ -144,25 +173,139 @@ impl Highlighter {
     }
 
     /// Configures the language to do the syntax highlighting for.
-    pub fn configure(&mut self, lang: &str) -> bool {
-        match lang {
-            "rust" => {
-                let mut config = TsHighlightConfiguration::new(
-                    tree_sitter_rust::LANGUAGE.into(),
-                    "Rust",
-                    tree_sitter_rust::HIGHLIGHTS_QUERY,
-                    "",
-                    "",
-                )
-                .unwrap();
-                config.configure(&self.names);
+    pub fn set_lang(&mut self, lang: &str) -> bool {
+        let config = parser_configs!(
+            lang,
+            &self.names,
+            (
+                "rust",
+                tree_sitter_rust::LANGUAGE.into(),
+                "Rust",
+                tree_sitter_rust::HIGHLIGHTS_QUERY,
+            ),
+            (
+                "toml",
+                tree_sitter_toml::LANGUAGE.into(),
+                "Toml",
+                tree_sitter_toml::HIGHLIGHT_QUERY,
+            ),
+            (
+                "python",
+                tree_sitter_python::LANGUAGE.into(),
+                "Python",
+                tree_sitter_python::HIGHLIGHTS_QUERY,
+            ),
+            (
+                "ts",
+                tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+                "TypeScript",
+                tree_sitter_typescript::HIGHLIGHTS_QUERY,
+            ),
+            (
+                "tsx",
+                tree_sitter_typescript::LANGUAGE_TSX.into(),
+                "TSX",
+                tree_sitter_typescript::HIGHLIGHTS_QUERY,
+            ),
+            (
+                "cpp",
+                tree_sitter_cpp::LANGUAGE.into(),
+                "C++",
+                tree_sitter_cpp::HIGHLIGHT_QUERY,
+            ),
+            (
+                "js",
+                tree_sitter_javascript::LANGUAGE.into(),
+                "JavaScript",
+                tree_sitter_javascript::HIGHLIGHT_QUERY,
+            ),
+            (
+                "go",
+                tree_sitter_go::LANGUAGE.into(),
+                "Go",
+                tree_sitter_go::HIGHLIGHTS_QUERY,
+            ),
+            (
+                "c",
+                tree_sitter_c::LANGUAGE.into(),
+                "C",
+                tree_sitter_c::HIGHLIGHT_QUERY,
+            ),
+            (
+                "java",
+                tree_sitter_java::LANGUAGE.into(),
+                "Java",
+                tree_sitter_java::HIGHLIGHTS_QUERY,
+            ),
+            (
+                "html",
+                tree_sitter_html::LANGUAGE.into(),
+                "HTML",
+                tree_sitter_html::HIGHLIGHTS_QUERY,
+            ),
+            (
+                "json",
+                tree_sitter_json::LANGUAGE.into(),
+                "JSON",
+                tree_sitter_json::HIGHLIGHTS_QUERY,
+            ),
+            (
+                "css",
+                tree_sitter_css::LANGUAGE.into(),
+                "CSS",
+                tree_sitter_css::HIGHLIGHTS_QUERY,
+            ),
+            (
+                "lua",
+                tree_sitter_lua::LANGUAGE.into(),
+                "Lua",
+                tree_sitter_lua::HIGHLIGHTS_QUERY,
+            ),
+            (
+                "yaml",
+                tree_sitter_yaml::LANGUAGE.into(),
+                "YAML",
+                tree_sitter_yaml::HIGHLIGHTS_QUERY,
+            ),
+            (
+                "zig",
+                tree_sitter_zig::LANGUAGE.into(),
+                "Zig",
+                tree_sitter_zig::HIGHLIGHTS_QUERY,
+            ),
+        );
 
-                self.config = Some(config);
-            }
-            "off" => self.config = None,
-            _ => return false,
-        }
-
+        self.config = config;
         true
+    }
+
+    /// Configures the language based on the file extension.
+    pub fn set_lang_filename<P: AsRef<Path>>(&mut self, path: P) {
+        let Some(extension) = path.as_ref().extension().map(|e| e.to_string_lossy()) else {
+            return;
+        };
+
+        extension_configs!(
+            self,
+            extension.as_ref(),
+            ("rs", "rust"),
+            ("toml", "toml"),
+            ("py", "python"),
+            ("ts", "ts"),
+            ("tsx", "tsx"),
+            ("cpp", "cpp"),
+            // FIXME: this might cause problems for C header files.
+            ("h", "cpp"),
+            ("js", "js"),
+            ("go", "go"),
+            ("c", "c"),
+            ("java", "java"),
+            ("html", "html"),
+            ("json", "json"),
+            ("css", "css"),
+            ("lua", "lua"),
+            ("yaml", "yaml"),
+            ("zig", "zig"),
+        );
     }
 }

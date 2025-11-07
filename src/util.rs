@@ -55,6 +55,13 @@ pub enum CursorStyle {
     SteadyBlock,
 }
 
+/// Retreives the filename of a given path.
+pub fn file_name<P: AsRef<Path>>(path: P) -> Option<String> {
+    path.as_ref()
+        .file_name()
+        .map(|p| p.to_string_lossy().to_string())
+}
+
 /// Opens a file as rw+truncate.
 pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
     // Create parent directories if they don't exist.

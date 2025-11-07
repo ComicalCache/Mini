@@ -82,7 +82,26 @@ mode.
      - 'r /<regex>/<replace>/' to replace text. If text was selected it will only replace in that selection. See
         https://docs.rs/regex/latest/regex/index.html for information about the regex and replace syntax.
     - 'syntax <lang>' to enable syntax highlighting for a specific language. Use 'syntax off' to disable syntax
-        highlighting. Currently supported languages are: Rust.
+        highlighting.
+
+    Syntax Highlighting:
+    Currently supported are following languages (followed by their name to enable it):
+    - Toml (toml)
+    - JSON (json)
+    - YAML (yaml)
+    - Rust (rust)
+    - Python (python)
+    - HTML (html)
+    - CSS (css)
+    - JavaScript (js)
+    - TypeScript (ts)
+    - TSX (tsx)
+    - C (c)
+    - C++ (cpp)
+    - Zig (zig)
+    - Go (go)
+    - Java (java)
+    - Lua (lua)
 
 Info Buffer:
 The info buffer is a read only buffer that displays errors, warnings or other types of information. It has two modes:

@@ -2,7 +2,7 @@ use crate::{
     TXT_BUFF_IDX, cursor,
     custom_buffers::files_buffer::FilesBuffer,
     sc_buff,
-    util::{CommandResult, open_file, read_file_to_lines},
+    util::{CommandResult, file_name, open_file, read_file_to_lines},
 };
 use std::{
     borrow::Cow,
@@ -73,9 +73,7 @@ impl FilesBuffer {
                 TXT_BUFF_IDX,
                 read_file_to_lines(&mut open_file(entry)?)?,
                 Some(self.path.clone()),
-                Path::new(entry)
-                    .file_name()
-                    .map(|p| p.to_string_lossy().to_string()),
+                file_name(entry)
             ));
         } else if entry.is_dir() {
             self.path.clone_from(entry);

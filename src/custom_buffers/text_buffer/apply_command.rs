@@ -4,11 +4,11 @@ use crate::{
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
     sc_buff,
-    util::{CommandResult, open_file, read_file_to_lines, split_to_lines},
+    util::{CommandResult, file_name, open_file, read_file_to_lines, split_to_lines},
     viewport::Viewport,
 };
 use regex::Regex;
-use std::{borrow::Cow, io::Error, path::Path};
+use std::{borrow::Cow, io::Error};
 
 impl TextBuffer {
     fn write_to_file(&mut self) -> Result<bool, Error> {
@@ -46,9 +46,7 @@ impl TextBuffer {
             Ok(file) => Some(file),
             Err(err) => return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string())),
         };
-        self.file_name = Path::new(args)
-            .file_name()
-            .map(|p| p.to_string_lossy().to_string());
+        self.file_name = file_name(args);
 
         match read_file_to_lines(self.file.as_mut().unwrap()) {
             Ok(lines) => self.base.doc.set_contents(&lines),
@@ -64,9 +62,7 @@ impl TextBuffer {
                 Ok(file) => Some(file),
                 Err(err) => return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string())),
             };
-            self.file_name = Path::new(args)
-                .file_name()
-                .map(|p| p.to_string_lossy().to_string());
+            self.file_name = file_name(args);
         }
 
         let res = match self.write_to_file() {
@@ -181,7 +177,7 @@ impl TextBuffer {
 
     #[cfg(feature = "syntax-highlighting")]
     fn syntax_command(&mut self, args: &str) -> CommandResult {
-        if !self.base.doc.highlighter.configure(args) {
+        if !self.base.doc.highlighter.set_lang(args) {
             return sc_buff!(INFO_BUFF_IDX, ["Invalid language selected"]);
         }
 

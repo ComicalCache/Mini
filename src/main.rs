@@ -15,13 +15,13 @@ use crate::{
     buffer::Buffer,
     custom_buffers::{files_buffer::FilesBuffer, info_buffer::InfoBuffer, text_buffer::TextBuffer},
     display::Display,
-    util::{CommandResult, open_file, split_to_lines},
+    util::{CommandResult, file_name, open_file, split_to_lines},
 };
 use polling::{Events, Poller};
 use std::{
     io::{BufWriter, ErrorKind, Write},
     os::fd::AsFd,
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::Duration,
 };
 use termion::{
@@ -44,7 +44,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut args = std::env::args();
     args.next();
 
-    // Print help or parse read file if argument was supplied.
+    // Print help or read file if argument was supplied.
     let path = args.next();
     let (file, file_name) = if let Some(path) = &path {
         if path == "--help" {
@@ -54,12 +54,7 @@ fn main() -> Result<(), std::io::Error> {
         }
 
         let file = open_file(path);
-        (
-            Some(file),
-            Path::new(path)
-                .file_name()
-                .map(|p| p.to_string_lossy().to_string()),
-        )
+        (Some(file), file_name(path))
     } else {
         (None, None)
     };
