@@ -70,7 +70,14 @@ fn main() -> Result<(), std::io::Error> {
 
     let (w, h) = termion::terminal_size()?;
     let base = if let Some(path) = &path {
-        PathBuf::from(path)
+        // Get the absolute path.
+        let mut base = std::fs::canonicalize(PathBuf::from(path))?;
+
+        if !base.is_dir() {
+            base.pop();
+        }
+
+        base
     } else {
         std::env::current_dir()?
     };

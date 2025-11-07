@@ -67,7 +67,7 @@ impl FilesBuffer {
 
         let entry = &self.entries[idx.saturating_sub(1)].clone();
         if entry.is_file() {
-            self.path.clone_from(entry);
+            self.path = PathBuf::from(entry.parent().unwrap());
 
             return Ok(sc_buff!(
                 TXT_BUFF_IDX,
@@ -83,10 +83,6 @@ impl FilesBuffer {
                 .doc
                 .set_contents(&Self::load_dir(&self.path, &mut self.entries)?);
             return Ok(CommandResult::Ok);
-        } else if entry.is_symlink() && entry.exists() {
-            // FIXME: this can cause an infinite loop on a circular symlink.
-            self.path = entry.read_link()?;
-            return self.select_item();
         }
 
         Ok(CommandResult::Ok)

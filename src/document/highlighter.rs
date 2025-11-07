@@ -47,7 +47,7 @@ pub struct Highlighter {
     pub highlights: Vec<TsHighlightEvent>,
 
     /// Names of captures to highlight.
-    pub names: [&'static str; 36],
+    pub names: [&'static str; 39],
     /// Mapping of capture names to color.
     pub colors: HashMap<&'static str, Fg<Rgb>>,
 }
@@ -64,6 +64,9 @@ impl Highlighter {
             "keyword.function",
             "keyword.operator",
             "keyword.return",
+            "conditional",
+            "repeat",
+            "include",
             "operator",
             "storage.type",
             "string",
@@ -104,6 +107,9 @@ impl Highlighter {
             ("module", Fg(Rgb(97, 175, 239))),
             // Atom Magenta: #c678dd -> Rgb(198, 120, 221)
             ("keyword", Fg(Rgb(198, 120, 221))),
+            ("conditional", Fg(Rgb(198, 120, 221))),
+            ("repeat", Fg(Rgb(198, 120, 221))),
+            ("include", Fg(Rgb(198, 120, 221))),
             ("keyword.function", Fg(Rgb(198, 120, 221))),
             ("keyword.return", Fg(Rgb(198, 120, 221))),
             ("storage.type", Fg(Rgb(198, 120, 221))),
@@ -273,6 +279,12 @@ impl Highlighter {
                 "Zig",
                 tree_sitter_zig::HIGHLIGHTS_QUERY,
             ),
+            (
+                "odin",
+                tree_sitter_odin::LANGUAGE.into(),
+                "Odin",
+                tree_sitter_odin::HIGHLIGHTS_QUERY,
+            ),
         );
 
         self.config = config;
@@ -306,6 +318,7 @@ impl Highlighter {
             ("lua", "lua"),
             ("yaml", "yaml"),
             ("zig", "zig"),
+            ("odin", "odin"),
         );
     }
 }

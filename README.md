@@ -11,7 +11,8 @@ Mini supports ergonomic motions, text selection, search and replace, a file brow
 Mini can simply be built with `cargo build --release` or installed via cargo with `cargo install --path .`.
 
 ### Cargo Features
-- `syntax-highlighting`: This enables the syntax highlighting capabilities of Mini
+- `syntax-highlighting`: This enables the syntax highlighting capabilities of Mini (this causes the binary to be much
+  much larger due to the grammar files)
 
 ### Interface
 The editor features an info line containing information about the current buffer, editing mode, cursor position, etc..
