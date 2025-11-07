@@ -9,6 +9,7 @@ buffers, by hitting 't', '?', or 'e' respectively. You can navigate and manipula
 string of numbers before a motion makes the motion execute the specified amount of times. All buffers support these
 basic motions:
 - 'h' | 'j' | 'k' | 'l' to move the cursor
+- 'H' | 'J' | 'K' | 'L' to shift the viewport
 - 'w' to skip to the next word
 - 'b' to go back one word
 - '}' to skip to the next empty line

@@ -454,6 +454,7 @@ impl Buffer for TextBuffer {
         if self.need_rerender() {
             // Update the contiguous buffer only if the document has been edited.
             if self.base.doc.edited {
+                // FIXME: use a diffing approach to only replace/move whats necessary.
                 self.base.doc.contiguous_buff.clear();
                 for line in &self.base.doc.buff {
                     self.base.doc.contiguous_buff.push_str(line);

@@ -72,7 +72,7 @@ impl FilesBuffer {
             return Ok(sc_buff!(
                 TXT_BUFF_IDX,
                 read_file_to_lines(&mut open_file(entry)?)?,
-                Some(self.path.clone()),
+                Some(entry.clone()),
                 file_name(entry)
             ));
         } else if entry.is_dir() {

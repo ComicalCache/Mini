@@ -101,6 +101,13 @@ pub fn left(doc: &mut Document, view: &mut Viewport, n: usize) {
     view.cur.left(n, 0);
 }
 
+/// Shifts the viewport to the left.
+// Allow unused mut to aid macro usage in src/buffer/base.rs.
+#[allow(clippy::needless_pass_by_ref_mut)]
+pub fn shift_left(_: &mut Document, view: &mut Viewport, n: usize) {
+    view.cur.left(n, 0);
+}
+
 /// Moves the cursors to the right
 pub fn right(doc: &mut Document, view: &mut Viewport, n: usize) {
     let line_bound = doc.line_count(doc.cur.y).unwrap();
@@ -108,16 +115,29 @@ pub fn right(doc: &mut Document, view: &mut Viewport, n: usize) {
     view.cur.right(n, (doc.cur.x).min(view.buff_w - 1));
 }
 
+/// Shifts the viewport to the right.
+// Allow unused mut to aid macro usage in src/buffer/base.rs.
+#[allow(clippy::needless_pass_by_ref_mut)]
+pub fn shift_right(doc: &mut Document, view: &mut Viewport, n: usize) {
+    view.cur.right(n, doc.cur.x.min(view.buff_w - 1));
+}
+
 /// Moves the cursors up.
 pub fn up(doc: &mut Document, view: &mut Viewport, n: usize) {
     doc.cur.up(n, 0);
-    // One for info line.
     view.cur.up(n, 0);
 
     // When moving up, handle case that new line contains less text than previous.
     let line_bound = doc.line_count(doc.cur.y).unwrap();
     doc.cur.x = doc.cur.target_x.min(line_bound);
     view.cur.x = doc.cur.x.min(view.buff_w - 1);
+}
+
+/// Shifts the viewport up.
+// Allow unused mut to aid macro usage in src/buffer/base.rs.
+#[allow(clippy::needless_pass_by_ref_mut)]
+pub fn shift_up(_: &mut Document, view: &mut Viewport, n: usize) {
+    view.cur.up(n, 0);
 }
 
 /// Moves the cursors down.
@@ -131,6 +151,13 @@ pub fn down(doc: &mut Document, view: &mut Viewport, n: usize) {
     let line_bound = doc.line_count(doc.cur.y).unwrap();
     doc.cur.x = doc.cur.target_x.min(line_bound);
     view.cur.x = doc.cur.x.min(view.buff_w - 1);
+}
+
+/// Shifts the viewport up.
+// Allow unused mut to aid macro usage in src/buffer/base.rs.
+#[allow(clippy::needless_pass_by_ref_mut)]
+pub fn shift_down(doc: &mut Document, view: &mut Viewport, n: usize) {
+    view.cur.down(n, doc.cur.y.min(view.h - 1));
 }
 
 /// Jumps the cursors to the next "word".

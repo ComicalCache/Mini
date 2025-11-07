@@ -70,9 +70,13 @@ pub const COMMAND_PROMPT: &str = " > ";
 pub enum ViewAction<T> {
     // Movement.
     Left,
+    ShiftLeft,
     Down,
+    ShiftDown,
     Up,
+    ShiftUp,
     Right,
+    ShiftRight,
     NextWord,
     PrevWord,
     NextEmptyLine,
@@ -218,9 +222,13 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
 
             let command_map = CommandMap::new()
                 .simple(Key::Char('h'), Left)
+                .simple(Key::Char('H'), ShiftLeft)
                 .simple(Key::Char('j'), Down)
+                .simple(Key::Char('J'), ShiftDown)
                 .simple(Key::Char('k'), Up)
+                .simple(Key::Char('K'), ShiftUp)
                 .simple(Key::Char('l'), Right)
+                .simple(Key::Char('L'), ShiftRight)
                 .simple(Key::Char('w'), NextWord)
                 .simple(Key::Char('b'), PrevWord)
                 .simple(Key::Char('}'), NextEmptyLine)
@@ -414,9 +422,13 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         self.rerender |= key.is_some();
         match self.view_state_machine.tick(key.into()) {
             A(Left) => movement!(self, left),
+            A(ShiftLeft) => movement!(self, shift_left),
             A(Down) => movement!(self, down),
+            A(ShiftDown) => movement!(self, shift_down),
             A(Up) => movement!(self, up),
+            A(ShiftUp) => movement!(self, shift_up),
             A(Right) => movement!(self, right),
+            A(ShiftRight) => movement!(self, shift_right),
             A(NextWord) => movement!(self, next_word),
             A(PrevWord) => movement!(self, prev_word),
             A(NextEmptyLine) => movement!(self, next_empty_line),
