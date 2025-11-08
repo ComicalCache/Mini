@@ -2,21 +2,17 @@ use crate::{
     TXT_BUFF_IDX,
     custom_buffers::files_buffer::FilesBuffer,
     sc_buff,
-    util::{CommandResult, file_name, open_file, read_file_to_lines},
+    util::{CommandResult, file_name, open_file},
 };
 use std::{
-    borrow::Cow,
     fs::read_dir,
-    io::Error,
+    io::{Error, Read},
     path::{Path, PathBuf},
 };
 
 impl FilesBuffer {
     /// Loads a directory as path buffers and Strings. Does NOT move the cursor to be valid!
-    pub(super) fn load_dir(
-        base: &Path,
-        entries: &mut Vec<PathBuf>,
-    ) -> Result<Vec<Cow<'static, str>>, Error> {
+    pub(super) fn load_dir(base: &Path, entries: &mut Vec<PathBuf>) -> Result<String, Error> {
         let mut base = if base.is_dir() {
             base.to_path_buf()
         } else {
@@ -31,23 +27,23 @@ impl FilesBuffer {
             .collect::<Result<Vec<_>, Error>>()?;
         entries.sort();
 
-        let mut contents = vec![Cow::from("..")];
+        let mut contents = vec!["..".to_string()];
         for entry in &mut entries.iter() {
             contents.push(if entry.is_symlink() {
                 let path = entry.read_link()?;
                 if path.is_dir() {
-                    Cow::from(format!("{} -> {}/", entry.display(), path.display()))
+                    format!("{} -> {}/", entry.display(), path.display())
                 } else {
-                    Cow::from(format!("{} -> {}", entry.display(), path.display()))
+                    format!("{} -> {}", entry.display(), path.display())
                 }
             } else if entry.is_dir() {
-                Cow::from(format!("{}/", entry.display()))
+                format!("{}/", entry.display())
             } else {
-                Cow::from(format!("{}", entry.display()))
+                format!("{}", entry.display())
             });
         }
 
-        Ok(contents)
+        Ok(contents.join("\n"))
     }
 
     /// Handles the user selection of an entry in the file buffer.
@@ -65,9 +61,12 @@ impl FilesBuffer {
 
         let entry = &self.entries[idx.saturating_sub(1)].clone();
         if entry.is_file() {
+            let mut buff = String::new();
+            open_file(entry)?.read_to_string(&mut buff)?;
+
             return Ok(sc_buff!(
                 TXT_BUFF_IDX,
-                read_file_to_lines(&mut open_file(entry)?)?,
+                buff,
                 Some(entry.clone()),
                 file_name(entry)
             ));

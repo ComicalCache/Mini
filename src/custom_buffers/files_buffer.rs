@@ -11,9 +11,9 @@ use crate::{
     cursor::{self, Cursor},
     display::Display,
     sc_buff,
-    util::{CommandResult, CursorStyle, split_to_lines},
+    util::{CommandResult, CursorStyle},
 };
-use std::{borrow::Cow, io::Error, path::PathBuf};
+use std::{io::Error, path::PathBuf};
 use termion::event::Key;
 
 #[derive(Clone, Copy)]
@@ -67,13 +67,13 @@ impl FilesBuffer {
         match Self::load_dir(&self.path, &mut self.entries) {
             Ok(contents) => {
                 // Set contents moves the doc.cur to the beginning.
-                self.base.doc.set_contents(&contents);
+                self.base.doc.set_contents(contents);
                 self.base.doc_view.cur = Cursor::new(0, 0);
                 self.base.sel = None;
 
                 CommandResult::Ok
             }
-            Err(err) => sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string())),
+            Err(err) => sc_buff!(INFO_BUFF_IDX, err.to_string()),
         }
     }
 
@@ -144,12 +144,7 @@ impl FilesBuffer {
             Refresh => self.refresh(),
             SelectItem => self
                 .select_item()
-                .or_else(|err| {
-                    Ok::<CommandResult, Error>(sc_buff!(
-                        INFO_BUFF_IDX,
-                        split_to_lines(err.to_string()),
-                    ))
-                })
+                .or_else(|err| Ok::<CommandResult, Error>(sc_buff!(INFO_BUFF_IDX, err.to_string())))
                 .unwrap(),
             Remove => self.selected_remove_command("rm"),
             RecursiveRemove => self.selected_remove_command("rm!"),
@@ -178,7 +173,6 @@ impl Buffer for FilesBuffer {
         self.base.rerender
     }
 
-    #[cfg(feature = "syntax-highlighting")]
     fn highlight(&mut self) {
         if self.need_rerender() {
             // Update the contiguous buffer only if the document has been edited.
@@ -250,9 +244,9 @@ impl Buffer for FilesBuffer {
         }
     }
 
-    fn set_contents(&mut self, _: &[Cow<'static, str>], path: Option<PathBuf>, _: Option<String>) {
+    fn set_contents(&mut self, _: String, path: Option<PathBuf>, _: Option<String>) {
         // Set contents moves the doc.cur to the beginning.
-        self.base.doc.set_contents(&[]);
+        self.base.doc.set_contents(String::new());
         if let Some(path) = path {
             self.path = path;
         }
@@ -265,7 +259,7 @@ impl Buffer for FilesBuffer {
         self.base.rerender = true;
     }
 
-    fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>> {
+    fn can_quit(&self) -> Result<(), String> {
         Ok(())
     }
 }

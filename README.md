@@ -3,16 +3,15 @@
 A "minimalistic" terminal based text-editor. It has VIm-like motions and should fully support unicode characters.
 
 ### Features
-Mini supports ergonomic motions, text selection, search and replace, a file browser and more.
+Mini supports ergonomic motions, text selection, search and replace, undo and redo, syntax-highlighting, a file browser
+and more.
 
 `./mini --help` prints an exhaustiv documentation of all features. See the `info.txt` for the command output or type space, `?` and hit enter to see it inside the editor.
 
+> The feature `syntax-highlighting` was removed since version `6.0.0` and is now the default.
+
 ### Installation
 Mini can simply be built with `cargo build --release` or installed via cargo with `cargo install --path .`.
-
-### Cargo Features
-- `syntax-highlighting`: This enables the syntax highlighting capabilities of Mini (this causes the binary to be much
-  much larger due to the grammar files)
 
 ### Interface
 The editor features an info line containing information about the current buffer, editing mode, cursor position, etc..

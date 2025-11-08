@@ -11,7 +11,7 @@ use crate::{
     display::Display,
     util::{CommandResult, CursorStyle},
 };
-use std::{borrow::Cow, io::Error, path::PathBuf};
+use std::{io::Error, path::PathBuf};
 use termion::event::Key;
 
 #[derive(Clone, Copy)]
@@ -107,7 +107,6 @@ impl Buffer for InfoBuffer {
         self.base.rerender
     }
 
-    #[cfg(feature = "syntax-highlighting")]
     fn highlight(&mut self) {
         if self.need_rerender() {
             // Update the contiguous buffer only if the document has been edited.
@@ -179,12 +178,7 @@ impl Buffer for InfoBuffer {
         }
     }
 
-    fn set_contents(
-        &mut self,
-        contents: &[Cow<'static, str>],
-        _: Option<PathBuf>,
-        _: Option<String>,
-    ) {
+    fn set_contents(&mut self, contents: String, _: Option<PathBuf>, _: Option<String>) {
         // Set contents moves the doc.cur to the beginning.
         self.base.doc.set_contents(contents);
         self.base.doc_view.cur = Cursor::new(0, 0);
@@ -196,7 +190,7 @@ impl Buffer for InfoBuffer {
         self.base.rerender = true;
     }
 
-    fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>> {
+    fn can_quit(&self) -> Result<(), String> {
         Ok(())
     }
 }

@@ -5,7 +5,7 @@ pub mod history;
 pub mod yank;
 
 use crate::{display::Display, util::CommandResult};
-use std::{borrow::Cow, path::PathBuf};
+use std::path::PathBuf;
 use termion::event::Key;
 
 /// The buffer trait defines the basic primitives a buffer needs.
@@ -13,7 +13,6 @@ pub trait Buffer {
     /// Checks if the buffer needs to be rerendered.
     fn need_rerender(&self) -> bool;
 
-    #[cfg(feature = "syntax-highlighting")]
     /// Applies syntax highlighting on the buffer contents.
     fn highlight(&mut self);
 
@@ -31,13 +30,8 @@ pub trait Buffer {
     fn tick(&mut self, key: Option<Key>) -> CommandResult;
 
     /// Sets the contents of a buffer.
-    fn set_contents(
-        &mut self,
-        contents: &[Cow<'static, str>],
-        path: Option<PathBuf>,
-        file_name: Option<String>,
-    );
+    fn set_contents(&mut self, contents: String, path: Option<PathBuf>, file_name: Option<String>);
 
     /// Asks if the buffer is ready to quit/has pending changes.
-    fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>>;
+    fn can_quit(&self) -> Result<(), String>;
 }

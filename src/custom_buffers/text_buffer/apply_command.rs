@@ -4,11 +4,14 @@ use crate::{
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
     sc_buff,
-    util::{CommandResult, file_name, open_file, read_file_to_lines, split_to_lines},
+    util::{CommandResult, file_name, open_file},
     viewport::Viewport,
 };
 use regex::Regex;
-use std::{borrow::Cow, io::Error};
+use std::{
+    borrow::Cow,
+    io::{Error, Read},
+};
 
 impl TextBuffer {
     fn write_to_file(&mut self) -> Result<bool, Error> {
@@ -24,7 +27,7 @@ impl TextBuffer {
         if !force && self.base.doc.edited {
             return sc_buff!(
                 INFO_BUFF_IDX,
-                ["There are unsaved changes, save or oo to force open a new document"],
+                "There are unsaved changes, save or oo to force open a new document".to_string(),
             );
         }
 
@@ -43,21 +46,20 @@ impl TextBuffer {
 
         self.file = match open_file(args) {
             Ok(file) => Some(file),
-            Err(err) => return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string())),
+            Err(err) => return sc_buff!(INFO_BUFF_IDX, err.to_string()),
         };
         self.file_name = file_name(args);
 
-        match read_file_to_lines(self.file.as_mut().unwrap()) {
-            Ok(lines) => {
-                self.base.doc.set_contents(&lines);
-
-                #[cfg(feature = "syntax-highlighting")]
+        let mut buff = String::new();
+        match self.file.as_mut().unwrap().read_to_string(&mut buff) {
+            Ok(_) => {
+                self.base.doc.set_contents(buff);
                 self.base
                     .doc
                     .highlighter
                     .set_lang_filename(self.file_name.as_ref().unwrap());
             }
-            Err(err) => return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string())),
+            Err(err) => return sc_buff!(INFO_BUFF_IDX, err.to_string()),
         }
 
         CommandResult::Ok
@@ -67,20 +69,20 @@ impl TextBuffer {
         if !args.is_empty() {
             self.file = match open_file(args) {
                 Ok(file) => Some(file),
-                Err(err) => return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string())),
+                Err(err) => return sc_buff!(INFO_BUFF_IDX, err.to_string()),
             };
             self.file_name = file_name(args);
         }
 
         let res = match self.write_to_file() {
             Ok(res) => res,
-            Err(err) => return sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string())),
+            Err(err) => return sc_buff!(INFO_BUFF_IDX, err.to_string()),
         };
         // Failed to write file because no path exists.
         if !res {
             return sc_buff!(
                 INFO_BUFF_IDX,
-                ["Please specify a file location using 'w <path>' to write the file to"],
+                "Please specify a file location using 'w <path>' to write the file to".to_string(),
             );
         }
 
@@ -90,7 +92,7 @@ impl TextBuffer {
     fn replace_command(&mut self, args: &str) -> CommandResult {
         let err = sc_buff!(
             INFO_BUFF_IDX,
-            ["Invalid format. Expected: r /<regex>/<replace>/"],
+            "Invalid format. Expected: r /<regex>/<replace>/".to_string(),
         );
         let Some(args) = args.strip_prefix('/') else {
             return err;
@@ -108,11 +110,10 @@ impl TextBuffer {
         let regex = match Regex::new(regex_str) {
             Ok(regex) => regex,
             Err(err) => {
-                let mut buff = vec![Cow::from(format!(
-                    "'{regex_str}' is not a valid regular expression:",
-                ))];
-                buff.extend(split_to_lines(err.to_string()));
-                return sc_buff!(INFO_BUFF_IDX, buff);
+                return sc_buff!(
+                    INFO_BUFF_IDX,
+                    format!("'{regex_str}' is not a valid regular expression:\n{err}")
+                );
             }
         };
 
@@ -182,10 +183,9 @@ impl TextBuffer {
         CommandResult::Ok
     }
 
-    #[cfg(feature = "syntax-highlighting")]
     fn syntax_command(&mut self, args: &str) -> CommandResult {
         if !self.base.doc.highlighter.set_lang(args) {
-            return sc_buff!(INFO_BUFF_IDX, ["Invalid language selected"]);
+            return sc_buff!(INFO_BUFF_IDX, "Invalid language selected".to_string());
         }
 
         CommandResult::Ok
@@ -206,18 +206,18 @@ impl TextBuffer {
             "wq" => match self.write_to_file() {
                 Ok(res) if !res => sc_buff!(
                     INFO_BUFF_IDX,
-                    ["Please specify a file location using 'w <path>' to write the file to"],
+                    "Please specify a file location using 'w <path>' to write the file to"
+                        .to_string(),
                 ),
-                Err(err) => sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string())),
+                Err(err) => sc_buff!(INFO_BUFF_IDX, err.to_string()),
                 _ => CommandResult::Quit,
             },
             "w" => self.write_command(args),
             "o" => self.open_command(args, false),
             "oo" => self.open_command(args, true),
             "r" => self.replace_command(args),
-            #[cfg(feature = "syntax-highlighting")]
             "syntax" => self.syntax_command(args),
-            _ => sc_buff!(INFO_BUFF_IDX, [format!("Unrecognized command: '{cmd}'")]),
+            _ => sc_buff!(INFO_BUFF_IDX, format!("Unrecognized command: '{cmd}'")),
         }
     }
 }

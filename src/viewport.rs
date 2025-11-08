@@ -5,7 +5,6 @@ use crate::{
     util::CursorStyle,
 };
 use termion::color::{self, Bg, Fg};
-#[cfg(feature = "syntax-highlighting")]
 use tree_sitter_highlight::HighlightEvent;
 
 /// Background color.
@@ -22,6 +21,8 @@ pub const TXT: Fg<color::Rgb> = Fg(color::Rgb(172, 178, 190));
 const REL_NUMS: Fg<color::Rgb> = Fg(color::Rgb(101, 103, 105));
 /// Whitespace symbol text color.
 const WHITESPACE: Fg<color::Rgb> = Fg(color::Rgb(68, 71, 79));
+/// Background to warn of tab characters.
+const TAB_WARN: Bg<color::Rgb> = Bg(color::Rgb(181, 59, 59));
 
 /// The viewport of a (section of a) terminal.
 pub struct Viewport {
@@ -62,7 +63,6 @@ impl Viewport {
         self.buff_w = self.w - n;
     }
 
-    #[cfg(feature = "syntax-highlighting")]
     /// Renders a document to the `Display`.
     pub fn render_document(&self, display: &mut Display, doc: &Document, sel: Option<Cursor>) {
         // Prepre the selection to be in order if a selection state is active.
@@ -126,6 +126,13 @@ impl Viewport {
                                 fg = WHITESPACE;
                             }
 
+                            // Layer 3: Highlight tab characters.
+                            if ch == '\t' {
+                                ch = '↦';
+                                fg = TXT;
+                                bg = TAB_WARN;
+                            }
+
                             display.update(Cell::new(ch, fg, bg), screen_x, screen_y);
                         }
 
@@ -176,94 +183,6 @@ impl Viewport {
             // Stretch current line to end to show highlight properly.
             for x in x..self.w {
                 display.update(Cell::new(' ', TXT, base_bg), x, y);
-            }
-        }
-    }
-
-    #[cfg(not(feature = "syntax-highlighting"))]
-    /// Renders a document to the `Display`.
-    pub fn render_document(&self, display: &mut Display, doc: &Document, sel: Option<Cursor>) {
-        // Prepre the selection to be in order if a selection state is active.
-        let sel = sel.map(|sel| {
-            if doc.cur < sel {
-                (doc.cur, sel)
-            } else {
-                (sel, doc.cur)
-            }
-        });
-
-        // Calculate which line of text is visible at what line on the screen.
-        let offset = doc.cur.y - self.cur.y;
-
-        // Shifted by one because of info/command line.
-        // FIXME: this limits the bar to always be exactly one in height.
-        for (y, doc_idx) in (1..=self.h).zip(offset..) {
-            let mut x = self.gutter_w;
-
-            // Set base background color depending on if its the cursors line.
-            let base_bg = if y == self.cur.y + 1 { HIGHLIGHT } else { BG };
-            let base_fg = TXT;
-
-            // Skip screen lines outside the text line bounds.
-            if doc_idx >= doc.buff.len() {
-                for _ in 0..self.buff_w {
-                    display.update(Cell::new(' ', base_fg, base_bg), x, y);
-                    x += 1;
-                }
-                continue;
-            }
-
-            let content = &doc.buff[doc_idx];
-            let x_offset = doc.cur.x.saturating_sub(self.cur.x);
-            let chars = content.chars().skip(x_offset).take(self.buff_w);
-            for (idx, mut ch) in chars.enumerate() {
-                let mut fg = base_fg;
-                let mut bg = base_bg;
-
-                // Layer 1: Selection.
-                let char_idx = x_offset + idx;
-                if let Some((start, end)) = sel {
-                    let pos = Cursor::new(char_idx, doc_idx);
-                    if pos >= start && pos < end {
-                        bg = SEL;
-                    }
-                }
-
-                // Layer 2: Replace spaces with interdot.
-                if ch == ' ' {
-                    ch = '·';
-                    fg = WHITESPACE;
-                }
-
-                display.update(Cell::new(ch, fg, bg), x, y);
-                x += 1;
-            }
-
-            // Add a newline character for visual clarity of trailing whitespaces. Don't show the
-            // newline character on the last line of the file.
-            let len = content.chars().count();
-            let mut true_len = len.saturating_sub(x_offset);
-            if doc_idx + 1 != doc.buff.len() && len >= x_offset && true_len < self.buff_w {
-                // If part of selection, highlight the newline character for visual clarity.
-                if let Some((start, end)) = sel
-                    && start.y <= doc_idx
-                    && end.y > doc_idx
-                {
-                    display.update(Cell::new('⏎', WHITESPACE, SEL), x, y);
-                } else {
-                    display.update(Cell::new('⏎', WHITESPACE, base_bg), x, y);
-                }
-
-                x += 1;
-                true_len += 1;
-            }
-
-            // Stretch current line to end to show highlight properly.
-            if true_len < self.buff_w {
-                for _ in 0..self.buff_w - true_len {
-                    display.update(Cell::new(' ', TXT, base_bg), x, y);
-                    x += 1;
-                }
             }
         }
     }

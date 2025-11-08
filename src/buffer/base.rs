@@ -78,7 +78,9 @@ pub enum ViewAction<T> {
     Right,
     ShiftRight,
     NextWord,
+    NextWordEnd,
     PrevWord,
+    PrevWordEnd,
     NextEmptyLine,
     PrevEmptyLine,
     JumpToBeginningOfLine,
@@ -211,11 +213,7 @@ pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
 impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     BaseBuffer<ModeEnum, ViewEnum, CommandEnum>
 {
-    pub fn new(
-        w: usize,
-        h: usize,
-        contents: Option<Vec<Cow<'static, str>>>,
-    ) -> Result<Self, Error> {
+    pub fn new(w: usize, h: usize, contents: Option<String>) -> Result<Self, Error> {
         let view_state_machine = {
             #[allow(clippy::enum_glob_use)]
             use ViewAction::*;
@@ -230,7 +228,9 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
                 .simple(Key::Char('l'), Right)
                 .simple(Key::Char('L'), ShiftRight)
                 .simple(Key::Char('w'), NextWord)
+                .simple(Key::Char('W'), NextWordEnd)
                 .simple(Key::Char('b'), PrevWord)
+                .simple(Key::Char('B'), PrevWordEnd)
                 .simple(Key::Char('}'), NextEmptyLine)
                 .simple(Key::Char('{'), PrevEmptyLine)
                 .simple(Key::Char('<'), JumpToBeginningOfLine)
@@ -434,7 +434,9 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             A(Right) => movement!(self, right),
             A(ShiftRight) => movement!(self, shift_right),
             A(NextWord) => movement!(self, next_word),
+            A(NextWordEnd) => movement!(self, next_word_end),
             A(PrevWord) => movement!(self, prev_word),
+            A(PrevWordEnd) => movement!(self, prev_word_end),
             A(NextEmptyLine) => movement!(self, next_empty_line),
             A(PrevEmptyLine) => movement!(self, prev_empty_line),
             A(JumpToBeginningOfLine) => jump!(self, jump_to_beginning_of_line),
@@ -504,7 +506,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
 
                 return self.apply_command(cmd);
             }
-            A(Tab) => edit::write_tab(&mut self.cmd, &mut self.cmd_view, None),
+            A(Tab) => edit::write_tab(&mut self.cmd, &mut self.cmd_view, None, false),
             A(DeleteChar) => edit::delete_char(&mut self.cmd, &mut self.cmd_view, None),
             A(Other(tick)) => return Err(CommandTick::Other(tick)),
             Invalid => {

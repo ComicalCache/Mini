@@ -169,8 +169,8 @@ pub fn next_word(doc: &mut Document, view: &mut Viewport, n: usize) {
 
 fn __next_word(doc: &mut Document, view: &mut Viewport) {
     // Move line down if at end of line and not at end of document.
-    let len = doc.line_count(doc.cur.y).unwrap();
-    if len <= doc.cur.x && doc.cur.y < doc.buff.len() - 1 {
+    let mut len = doc.line_count(doc.cur.y).unwrap();
+    if len <= doc.cur.x && doc.cur.y < doc.buff.len() {
         jump_to_beginning_of_line(doc, view);
         down(doc, view, 1);
 
@@ -182,42 +182,146 @@ fn __next_word(doc: &mut Document, view: &mut Viewport) {
         {
             return;
         }
+
+        len = doc.line_count(doc.cur.y).unwrap();
     }
 
-    let cur = doc.cur;
-    let line = &doc.buff[cur.y];
+    let line = &doc.buff[doc.cur.y];
+    let curr = line
+        .chars()
+        .nth(doc.cur.x.min(len.saturating_sub(1)))
+        .unwrap();
+    let mut idx = 0;
 
-    let curr = line.chars().nth(cur.x.min(len.saturating_sub(1))).unwrap();
+    if curr.is_alphanumeric() {
+        // Find next non alphanumeric:
+        // - if non whitespace, jump there,
+        // - if whitespace, find next alphanumeric, jump there,
+        // - else jump to end of line.
+        let Some((jdx, ch)) = line
+            .chars()
+            .skip(doc.cur.x + 1)
+            .enumerate()
+            .find(|(_, ch)| !ch.is_alphanumeric())
+        else {
+            jump_to_end_of_line(doc, view);
+            return;
+        };
 
-    // Find next not alphanumeric character or alphanumeric character if the current character is not.
-    let Some((idx, ch)) =
-        line.chars().skip(cur.x + 1).enumerate().find(|(_, ch)| {
-            !ch.is_alphanumeric() || (!curr.is_alphanumeric() && ch.is_alphanumeric())
-        })
+        if !ch.is_whitespace() {
+            right(doc, view, jdx + 1);
+            return;
+        }
+
+        idx = jdx;
+    } else if !curr.is_alphanumeric() {
+        // If next is not whitespace, move there.
+        // Else find next alphanumeric and jump there, else end of line.
+        let Some((jdx, ch)) = line.chars().skip(doc.cur.x + 1).enumerate().next() else {
+            jump_to_end_of_line(doc, view);
+            return;
+        };
+
+        if !ch.is_whitespace() {
+            right(doc, view, jdx + 1);
+            return;
+        }
+
+        idx = jdx;
+    }
+
+    // Find next alphanumeric and jump there, else end of line.
+    let Some((jdx, _)) = line
+        .chars()
+        .skip(doc.cur.x + 1 + idx)
+        .enumerate()
+        .find(|(_, ch)| !ch.is_whitespace())
     else {
-        // Jump to end of line if no next word candidate exists.
         jump_to_end_of_line(doc, view);
         return;
     };
 
-    if ch.is_whitespace() {
-        // Find next non-whitespace after whitespace.
-        let Some((jdx, _)) = line
+    right(doc, view, idx + jdx + 1);
+}
+
+/// Jumps the cursors to the end of the next "word".
+pub fn next_word_end(doc: &mut Document, view: &mut Viewport, n: usize) {
+    for _ in 0..n {
+        __next_word_end(doc, view);
+    }
+}
+
+fn __next_word_end(doc: &mut Document, view: &mut Viewport) {
+    // Move line down if at end of line and not at end of document.
+    let mut len = doc.line_count(doc.cur.y).unwrap();
+    if len <= doc.cur.x && doc.cur.y < doc.buff.len() {
+        jump_to_beginning_of_line(doc, view);
+        down(doc, view, 1);
+
+        // If empty line, abort.
+        if doc.buff[doc.cur.y].chars().next().is_none() {
+            return;
+        }
+
+        len = doc.line_count(doc.cur.y).unwrap();
+    }
+
+    let line = &doc.buff[doc.cur.y];
+    let curr = line
+        .chars()
+        .nth(doc.cur.x.min(len.saturating_sub(1)))
+        .unwrap();
+    let mut idx = 0;
+
+    if curr.is_whitespace() {
+        // Find next non whitespace:
+        // - if alphanumeric, find next non alphanumeric and jump there, else end of line,
+        // - if not alphanumeric, jump there,
+        // - else end of line.
+        let Some((jdx, ch)) = line
             .chars()
-            .skip(doc.cur.x + 1 + idx)
+            .skip(doc.cur.x + 1)
             .enumerate()
             .find(|(_, ch)| !ch.is_whitespace())
         else {
-            // Return early if after the whitespace there are no alphanumeric characters.
+            jump_to_end_of_line(doc, view);
             return;
         };
 
-        // Move the cursor to the next "word",
-        right(doc, view, idx + jdx + 1);
-    } else {
-        // If it is not whitespace set cursor to the position of the character.
-        right(doc, view, idx + 1);
+        if !ch.is_alphanumeric() {
+            right(doc, view, jdx + 1);
+            return;
+        }
+
+        idx = jdx;
+    } else if !curr.is_alphanumeric() {
+        // If next is not whitespace, move there.
+        // Else find next non alphanumeric and jump there, else end of line.
+        let Some((jdx, ch)) = line.chars().skip(doc.cur.x + 1).enumerate().next() else {
+            jump_to_end_of_line(doc, view);
+            return;
+        };
+
+        if !ch.is_whitespace() {
+            right(doc, view, jdx + 1);
+            return;
+        }
+
+        idx = jdx;
     }
+
+    // Find next non alphanumeric and jump there, else to end of line.
+    let Some((jdx, _)) = line
+        .chars()
+        .skip(doc.cur.x + 1 + idx)
+        .enumerate()
+        .find(|(_, ch)| !ch.is_alphanumeric())
+    else {
+        jump_to_end_of_line(doc, view);
+        return;
+    };
+
+    right(doc, view, idx + jdx + 1);
 }
 
 /// Jumps the cursors to the previous "word".
@@ -239,31 +343,81 @@ fn __prev_word(doc: &mut Document, view: &mut Viewport) {
         }
     }
 
-    let cur = doc.cur;
-    let line = &doc.buff[cur.y];
+    let len = doc.line_count(doc.cur.y).unwrap();
+    let line = &doc.buff[doc.cur.y];
 
     // Find next non-whitespace character.
     if let Some((idx, ch)) = line
         .chars()
         .rev()
-        .skip(line.chars().count() - cur.x)
+        .skip(len - doc.cur.x)
         .enumerate()
-        .find(|&(_, ch)| !ch.is_whitespace())
+        .find(|(_, ch)| !ch.is_whitespace())
     {
         let mut offset = idx + 1;
 
+        // If it's alphanumeric, find first character of that sequence of alphanumeric characters.
         if ch.is_alphanumeric() {
-            // If it's alphanumeric, find first character of that sequence of alphanumeric characters.
             offset += line
                 .chars()
                 .rev()
-                .skip(line.chars().count() - cur.x)
-                .skip(idx + 1)
-                .take_while(|&ch| ch.is_alphanumeric())
+                .skip(len - doc.cur.x + offset)
+                .take_while(|ch| ch.is_alphanumeric())
                 .count();
         }
 
         left(doc, view, offset);
+    } else {
+        // Move to the beginning of line.
+        jump_to_beginning_of_line(doc, view);
+    }
+}
+
+/// Jumps the cursors to the end of the previous "word".
+pub fn prev_word_end(doc: &mut Document, view: &mut Viewport, n: usize) {
+    for _ in 0..n {
+        __prev_word_end(doc, view);
+    }
+}
+
+fn __prev_word_end(doc: &mut Document, view: &mut Viewport) {
+    // Move line up if at beginning of line and not at beginning of document.
+    if doc.cur.x == 0 && doc.cur.y > 0 {
+        up(doc, view, 1);
+        jump_to_end_of_line(doc, view);
+
+        // If empty line or not whitespace, abort.
+        if doc.buff[doc.cur.y].is_empty()
+            || !doc.buff[doc.cur.y].chars().last().unwrap().is_whitespace()
+        {
+            return;
+        }
+    }
+
+    let len = doc.line_count(doc.cur.y).unwrap();
+    let line = &doc.buff[doc.cur.y];
+
+    // Find next non alphanumeric character.
+    if let Some((idx, ch)) = line
+        .chars()
+        .rev()
+        .skip(len - doc.cur.x)
+        .enumerate()
+        .find(|(_, ch)| !ch.is_alphanumeric())
+    {
+        let mut offset = idx;
+
+        // If it's whitespace, find first character of that sequence of alphanumeric characters.
+        if ch.is_whitespace() {
+            offset += line
+                .chars()
+                .rev()
+                .skip(len - doc.cur.x + offset)
+                .take_while(|ch| ch.is_whitespace())
+                .count();
+        }
+
+        left(doc, view, offset.max(1));
     } else {
         // Move to the beginning of line.
         jump_to_beginning_of_line(doc, view);

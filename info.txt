@@ -11,7 +11,9 @@ basic motions:
 - 'h' | 'j' | 'k' | 'l' to move the cursor
 - 'H' | 'J' | 'K' | 'L' to shift the viewport
 - 'w' to skip to the next word
+- 'W' to skip to the end of the next word
 - 'b' to go back one word
+- 'B' to go back to the end of the previous word
 - '}' to skip to the next empty line
 - '{' to go to the previous empty line
 - '<' | '>' to jump to the beginning/end of a line

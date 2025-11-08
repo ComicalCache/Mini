@@ -3,7 +3,7 @@ use crate::{
     cursor::{self, Cursor},
     document::Document,
     sc_buff,
-    util::{CommandResult, split_to_lines},
+    util::CommandResult,
     viewport::Viewport,
 };
 use arboard::Clipboard;
@@ -46,7 +46,7 @@ pub fn selection(
     *sel = None;
     match res {
         Ok(()) => Ok(()),
-        Err(err) => Err(sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()))),
+        Err(err) => Err(sc_buff!(INFO_BUFF_IDX, err.to_string())),
     }
 }
 
@@ -72,7 +72,7 @@ pub fn line(
 
     match res {
         Ok(()) => Ok(()),
-        Err(err) => Err(sc_buff!(INFO_BUFF_IDX, split_to_lines(err.to_string()))),
+        Err(err) => Err(sc_buff!(INFO_BUFF_IDX, err.to_string())),
     }
 }
 

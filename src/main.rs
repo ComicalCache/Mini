@@ -15,7 +15,7 @@ use crate::{
     buffer::Buffer,
     custom_buffers::{files_buffer::FilesBuffer, info_buffer::InfoBuffer, text_buffer::TextBuffer},
     display::Display,
-    util::{CommandResult, file_name, open_file, split_to_lines},
+    util::{CommandResult, file_name, open_file},
 };
 use polling::{Events, Poller};
 use std::{
@@ -93,7 +93,7 @@ fn main() -> Result<(), std::io::Error> {
         if err.kind() == ErrorKind::IsADirectory {
             FILES_BUFF_IDX
         } else {
-            info_buffer.set_contents(&split_to_lines(err.to_string()), None, None);
+            info_buffer.set_contents(err.to_string(), None, None);
             INFO_BUFF_IDX
         }
     } else {
@@ -153,10 +153,10 @@ fn main() -> Result<(), std::io::Error> {
             // Set a buffer and change to it if the buffer has no pending changes.
             CommandResult::SetAndChangeBuffer(idx, contents, path, file_name) => {
                 if let Err(err) = buffs[idx].can_quit() {
-                    buffs[INFO_BUFF_IDX].set_contents(&err, path, file_name);
+                    buffs[INFO_BUFF_IDX].set_contents(err, path, file_name);
                     curr_buff = INFO_BUFF_IDX;
                 } else {
-                    buffs[idx].set_contents(&contents, path, file_name);
+                    buffs[idx].set_contents(contents, path, file_name);
                     curr_buff = idx;
                 }
             }
@@ -166,7 +166,7 @@ fn main() -> Result<(), std::io::Error> {
 
                 for idx in 0..buffs.len() {
                     if let Err(err) = buffs[idx].can_quit() {
-                        buffs[INFO_BUFF_IDX].set_contents(&err, None, None);
+                        buffs[INFO_BUFF_IDX].set_contents(err, None, None);
                         curr_buff = INFO_BUFF_IDX;
 
                         quit = false;
@@ -180,7 +180,6 @@ fn main() -> Result<(), std::io::Error> {
             }
         }
 
-        #[cfg(feature = "syntax-highlighting")]
         buffs[curr_buff].highlight();
 
         // Render the "new" state if necessary.

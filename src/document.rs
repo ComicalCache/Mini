@@ -1,8 +1,6 @@
-#[cfg(feature = "syntax-highlighting")]
 mod highlighter;
 
-use crate::cursor::Cursor;
-#[cfg(feature = "syntax-highlighting")]
+use crate::{cursor::Cursor, util::split_to_lines};
 use highlighter::Highlighter;
 use std::{
     borrow::Cow,
@@ -20,30 +18,29 @@ pub struct Document {
     pub edited: bool,
 
     // The highlighter component responsible for syntax highlighting.
-    #[cfg(feature = "syntax-highlighting")]
     pub highlighter: Highlighter,
     // A contiguous buffer of the contents required by the highlighter.
-    #[cfg(feature = "syntax-highlighting")]
     pub contiguous_buff: String,
 }
 
 impl Document {
-    pub fn new(x: usize, y: usize, contents: Option<Vec<Cow<'static, str>>>) -> Self {
-        // Always have at least one line in the document.
-        let buff = contents
+    pub fn new(x: usize, y: usize, contents: Option<String>) -> Self {
+        let contiguous_buff = contents
+            .clone()
             .filter(|c| !c.is_empty())
-            .map_or_else(|| vec![Cow::from("")], |c| c.into_iter().collect());
+            .map_or(String::new(), |c| c);
 
-        #[cfg(feature = "syntax-highlighting")]
-        let contiguous_buff = buff.join("\n");
+        // Always have at least one line in the document.
+        let buff = contents.filter(|c| !c.is_empty()).map_or_else(
+            || vec![Cow::from("")],
+            |c| split_to_lines(c).into_iter().collect(),
+        );
 
         Self {
             buff,
             cur: Cursor::new(x, y),
             edited: false,
-            #[cfg(feature = "syntax-highlighting")]
             highlighter: Highlighter::new(),
-            #[cfg(feature = "syntax-highlighting")]
             contiguous_buff,
         }
     }
@@ -55,11 +52,8 @@ impl Document {
         self.cur = Cursor::new(0, 0);
         self.edited = false;
 
-        #[cfg(feature = "syntax-highlighting")]
-        {
-            self.contiguous_buff.clear();
-            self.highlighter.highlights.clear();
-        }
+        self.contiguous_buff.clear();
+        self.highlighter.highlights.clear();
     }
 
     /// Returns the count of chars in a line.
@@ -73,57 +67,32 @@ impl Document {
             return Ok(());
         }
 
-        #[cfg(feature = "syntax-highlighting")]
-        {
-            file.set_len(self.contiguous_buff.len() as u64)?;
-            file.seek(SeekFrom::Start(0))?;
-            file.write_all(self.contiguous_buff.as_bytes())?;
-            file.flush()?;
-        }
-
-        #[cfg(not(feature = "syntax-highlighting"))]
-        {
-            use std::io::BufWriter;
-
-            // Plus one for the newline.
-            let size: u64 = self.buff.iter().map(|s| s.len() as u64 + 1).sum();
-            // Minus one because the last line doesn't have a newline.
-            file.set_len(size.saturating_sub(1))?;
-
-            // Write line by line.
-            file.seek(SeekFrom::Start(0))?;
-            let mut writer = BufWriter::new(file);
-            for line in &self.buff[..self.buff.len().saturating_sub(1)] {
-                writeln!(writer, "{line}")?;
-            }
-            write!(writer, "{}", self.buff[self.buff.len().saturating_sub(1)])?;
-            writer.flush()?;
-        }
+        file.set_len(self.contiguous_buff.len() as u64)?;
+        file.seek(SeekFrom::Start(0))?;
+        file.write_all(self.contiguous_buff.as_bytes())?;
+        file.flush()?;
 
         self.edited = false;
         Ok(())
     }
 
     /// Replaces the document buffer and sets the cursor to the beginning of the buffer.
-    pub fn set_contents(&mut self, buff: &[Cow<'static, str>]) {
+    pub fn set_contents(&mut self, buff: String) {
         if buff.is_empty() {
             // Always have at least one line in the document.
             self.buff.truncate(1);
             self.buff[0].to_mut().clear();
         } else {
-            self.buff.resize(buff.len(), Cow::from(""));
-            for (idx, line) in buff.iter().enumerate() {
-                self.buff[idx].clone_from(line);
+            self.buff.clear();
+            for line in split_to_lines(&buff) {
+                self.buff.push(line.clone());
             }
         }
         self.cur = Cursor::new(0, 0);
         self.edited = false;
 
-        #[cfg(feature = "syntax-highlighting")]
-        {
-            self.contiguous_buff = self.buff.join("\n");
-            self.highlighter.highlights.clear();
-        }
+        self.contiguous_buff = buff;
+        self.highlighter.highlights.clear();
     }
 
     /// Inserts a new line at a specified y position.

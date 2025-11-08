@@ -6,7 +6,7 @@ use crate::{
 };
 use std::borrow::Cow;
 
-pub const TAB: &str = "    ";
+pub const TAB_WIDTH: usize = 4;
 
 /// Writes a char at the current cursor position.
 /// The cursor will be after the new char.
@@ -52,16 +52,28 @@ pub fn write_new_line_char(doc: &mut Document, view: &mut Viewport, history: Opt
 
 /// Writes a tab at the current cursor position.
 /// The cursor will be after the tab.
-pub fn write_tab(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>) {
+pub fn write_tab(
+    doc: &mut Document,
+    view: &mut Viewport,
+    history: Option<&mut History>,
+    relative: bool,
+) {
+    let n = if relative {
+        TAB_WIDTH - (doc.cur.x % TAB_WIDTH)
+    } else {
+        TAB_WIDTH
+    };
+    let spaces = " ".repeat(n);
+
     if let Some(history) = history {
         history.add_change(Change::Insert {
             pos: doc.cur,
-            data: Cow::from(TAB),
+            data: Cow::from(spaces.clone()), // Use the calculated spaces
         });
     }
 
-    doc.write_str(TAB);
-    cursor::right(doc, view, TAB.chars().count());
+    doc.write_str(&spaces);
+    cursor::right(doc, view, n);
 }
 
 /// Deletes a character at the current cursor position, joining two lines if necessary.

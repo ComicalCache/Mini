@@ -3,7 +3,7 @@ use crate::{
     buffer::base::{BaseBuffer, CommandTick},
     cursor::{self, Cursor},
     sc_buff,
-    util::{CommandResult, line_column, split_to_lines},
+    util::{CommandResult, line_column},
 };
 use regex::Regex;
 use std::borrow::Cow;
@@ -15,18 +15,17 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         if args.len() == 2 || !args.starts_with('/') || !args.ends_with('/') {
             return sc_buff!(
                 INFO_BUFF_IDX,
-                ["Expected a valid regular expression like '/<regex>/'"],
+                "Expected a valid regular expression like '/<regex>/'".to_string(),
             );
         }
 
         let regex = match Regex::new(&args[1..args.len() - 1]) {
             Ok(regex) => regex,
             Err(err) => {
-                let mut buff = vec![Cow::from(format!(
-                    "'{args}' is not a valid regular expression:",
-                ))];
-                buff.extend(split_to_lines(err.to_string()));
-                return sc_buff!(INFO_BUFF_IDX, buff);
+                return sc_buff!(
+                    INFO_BUFF_IDX,
+                    format!("'{args}' is not a valid regular expression:\n{err}")
+                );
             }
         };
 
@@ -65,7 +64,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         self.matches_idx = None;
 
         if self.matches.is_empty() {
-            return sc_buff!(INFO_BUFF_IDX, ["No matches found"]);
+            return sc_buff!(INFO_BUFF_IDX, "No matches found".to_string());
         }
 
         self.matches_idx = self
@@ -117,10 +116,10 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             "qq" => Ok(CommandResult::ForceQuit),
             "?" => Ok(sc_buff!(
                 INFO_BUFF_IDX,
-                split_to_lines(format!(
+                format!(
                     "Mini - A terminal text-editor (v{})\n\n{INFO_MSG}",
                     option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap()
-                )),
+                ),
             )),
             "goto" => Ok(self.goto(args)),
             "s" => Ok(self.search(args)),

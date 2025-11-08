@@ -14,9 +14,14 @@ use crate::{
     cursor::{self, Cursor},
     display::Display,
     state_machine::{ChainResult, CommandMap, StateMachine},
-    util::{CommandResult, CursorStyle, open_file, read_file_to_lines},
+    util::{CommandResult, CursorStyle, open_file},
 };
-use std::{borrow::Cow, fs::File, io::Error, path::PathBuf, time::Duration};
+use std::{
+    fs::File,
+    io::{Error, Read},
+    path::PathBuf,
+    time::Duration,
+};
 use termion::event::Key;
 
 macro_rules! delete {
@@ -155,7 +160,10 @@ impl TextBuffer {
         file_name: Option<String>,
     ) -> Result<Self, Error> {
         let contents = if let Some(file) = file.as_mut() {
-            Some(read_file_to_lines(file)?)
+            let mut buff = String::new();
+            file.read_to_string(&mut buff)?;
+
+            Some(buff)
         } else {
             None
         };
@@ -214,7 +222,6 @@ impl TextBuffer {
                 .simple(Key::Char('u'), Other(Undo))
                 .simple(Key::Char('U'), Other(Redo));
         }
-        #[cfg(feature = "syntax-highlighting")]
         if let Some(file_name) = &file_name {
             base.doc.highlighter.set_lang_filename(file_name);
         }
@@ -407,6 +414,7 @@ impl TextBuffer {
                 &mut self.base.doc,
                 &mut self.base.doc_view,
                 Some(&mut self.history),
+                true,
             ),
             A(DeleteChar) => edit::delete_char(
                 &mut self.base.doc,
@@ -449,7 +457,6 @@ impl Buffer for TextBuffer {
         self.base.rerender
     }
 
-    #[cfg(feature = "syntax-highlighting")]
     fn highlight(&mut self) {
         if self.need_rerender() {
             // Update the contiguous buffer only if the document has been edited.
@@ -522,19 +529,12 @@ impl Buffer for TextBuffer {
         }
     }
 
-    fn set_contents(
-        &mut self,
-        contents: &[Cow<'static, str>],
-        path: Option<PathBuf>,
-        file_name: Option<String>,
-    ) {
+    fn set_contents(&mut self, contents: String, path: Option<PathBuf>, file_name: Option<String>) {
         // Set contents moves the doc.cur to the beginning.
         self.base.doc.set_contents(contents);
         self.base.doc_view.cur = Cursor::new(0, 0);
         if let Some(path) = path {
             self.file = open_file(path).ok();
-
-            #[cfg(feature = "syntax-highlighting")]
             if let Some(file_name) = &file_name {
                 self.base.doc.highlighter.set_lang_filename(file_name);
             }
@@ -551,13 +551,11 @@ impl Buffer for TextBuffer {
         self.base.rerender = true;
     }
 
-    fn can_quit(&self) -> Result<(), Vec<Cow<'static, str>>> {
+    fn can_quit(&self) -> Result<(), String> {
         if !self.base.doc.edited {
             return Ok(());
         }
 
-        Err(vec![Cow::from(
-            "There are unsaved changes in the text buffer",
-        )])
+        Err("There are unsaved changes in the text buffer".to_string())
     }
 }

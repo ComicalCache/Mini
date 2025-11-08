@@ -1,29 +1,13 @@
 use std::{
     borrow::Cow,
     fs::{File, OpenOptions},
-    io::{Error, Read},
+    io::Error,
     path::{Path, PathBuf},
 };
 
 /// `SetAndChangeBuffer`
 #[macro_export]
 macro_rules! sc_buff {
-    ($buffer:ident, [$($content:expr),+] $(,)?) => {
-        CommandResult::SetAndChangeBuffer(
-            $buffer,
-            vec![$(Cow::from($content),)+],
-            None,
-            None,
-        )
-    };
-    ($buffer:ident, [$($content:expr),+], $path:expr, $file_name:expr $(,)?) => {
-        CommandResult::SetAndChangeBuffer(
-            $buffer,
-            vec![$(Cow::from($content),)+],
-            $path,
-            $file_name,
-        )
-    };
     ($buffer:ident, $contents:expr $(,)?) => {
         CommandResult::SetAndChangeBuffer($buffer, $contents, None, None)
     };
@@ -37,12 +21,7 @@ macro_rules! sc_buff {
 pub enum CommandResult {
     Ok,
     ChangeBuffer(usize),
-    SetAndChangeBuffer(
-        usize,
-        Vec<Cow<'static, str>>,
-        Option<PathBuf>,
-        Option<String>,
-    ),
+    SetAndChangeBuffer(usize, String, Option<PathBuf>, Option<String>),
     Quit,
     ForceQuit,
 }
@@ -77,20 +56,6 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
         .create(true)
         .truncate(false)
         .open(path)
-}
-
-/// Reads a files contents into lines.
-pub fn read_file_to_lines(file: &mut File) -> Result<Vec<Cow<'static, str>>, Error> {
-    let mut buff = String::new();
-    file.read_to_string(&mut buff)?;
-
-    let mut ret: Vec<Cow<'static, str>> = buff.lines().map(str::to_string).map(Cow::from).collect();
-    // lines() will discard a trailing empty line, but we don't want that.
-    if buff.ends_with('\n') {
-        ret.push(Cow::from(""));
-    }
-
-    Ok(ret)
 }
 
 /// Splits a string into a vector of lines.
