@@ -211,7 +211,13 @@ impl Highlighter {
                 "cpp",
                 tree_sitter_cpp::LANGUAGE.into(),
                 "C++",
-                tree_sitter_cpp::HIGHLIGHT_QUERY,
+                // The cpp highlights only extend the C highlights.
+                format!(
+                    "{}\n{}",
+                    tree_sitter_c::HIGHLIGHT_QUERY,
+                    tree_sitter_cpp::HIGHLIGHT_QUERY
+                )
+                .as_str(),
             ),
             (
                 "js",
