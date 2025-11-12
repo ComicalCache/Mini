@@ -156,6 +156,8 @@ impl TextBuffer {
     pub fn new(
         w: usize,
         h: usize,
+        x_off: usize,
+        y_off: usize,
         mut file: Option<File>,
         file_name: Option<String>,
     ) -> Result<Self, Error> {
@@ -168,7 +170,7 @@ impl TextBuffer {
             None
         };
 
-        let mut base = BaseBuffer::new(w, h, contents)?;
+        let mut base = BaseBuffer::new(w, h, x_off, y_off, contents)?;
         {
             use OtherViewAction::*;
             use ViewAction::Other;
@@ -488,11 +490,21 @@ impl Buffer for TextBuffer {
         };
 
         if cmd {
-            self.base
-                .cmd_view
-                .render_bar(display, &self.base.cmd, COMMAND_PROMPT);
+            self.base.cmd_view.render_bar(
+                &self.base.cmd.buff[0],
+                0,
+                display,
+                &self.base.cmd,
+                COMMAND_PROMPT,
+            );
         } else {
-            self.base.info_view.render_bar(display, &self.base.info, "");
+            self.base.info_view.render_bar(
+                &self.base.info.buff[0],
+                0,
+                display,
+                &self.base.info,
+                "",
+            );
         }
 
         self.base.doc_view.render_gutter(display, &self.base.doc);
@@ -500,17 +512,17 @@ impl Buffer for TextBuffer {
             .doc_view
             .render_document(display, &self.base.doc, self.base.sel);
 
-        let (view, prompt) = if cmd {
-            (&self.base.cmd_view, Some(COMMAND_PROMPT))
+        let (view, off) = if cmd {
+            (&self.base.cmd_view, Some(COMMAND_PROMPT.chars().count()))
         } else {
             (&self.base.doc_view, None)
         };
-        view.render_cursor(display, cursor_style, prompt);
+        view.render_cursor(display, cursor_style, off);
     }
 
-    fn resize(&mut self, w: usize, h: usize) {
+    fn resize(&mut self, w: usize, h: usize, x_off: usize, y_off: usize) {
         self.base.rerender = true;
-        self.base.resize(w, h);
+        self.base.resize(w, h, x_off, y_off);
     }
 
     fn tick(&mut self, key: Option<Key>) -> CommandResult {

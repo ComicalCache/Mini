@@ -20,7 +20,7 @@ pub trait Buffer {
     fn render(&mut self, display: &mut Display);
 
     /// Handles the event, that the terminal was resized.
-    fn resize(&mut self, w: usize, h: usize);
+    fn resize(&mut self, w: usize, h: usize, x_off: usize, y_off: usize);
 
     /// Processes one tick. A tick is either:
     /// - an immediate tick on input with the corresponding key

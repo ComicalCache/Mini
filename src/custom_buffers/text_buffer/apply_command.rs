@@ -5,7 +5,6 @@ use crate::{
     custom_buffers::text_buffer::TextBuffer,
     sc_buff,
     util::{CommandResult, file_name, open_file},
-    viewport::Viewport,
 };
 use regex::Regex;
 use std::{
@@ -35,8 +34,8 @@ impl TextBuffer {
         // Reset state.
         self.base.doc.clear();
         self.base.cmd.clear();
-        self.base.doc_view =
-            Viewport::new(self.base.doc_view.w, self.base.doc_view.h, 0, 0, Some(1));
+        self.base.doc_view.cur = Cursor::new(0, 0);
+        self.base.doc_view.set_gutter_width(1);
         self.file = None;
         self.file_name = None;
 

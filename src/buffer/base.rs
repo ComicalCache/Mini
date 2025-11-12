@@ -213,7 +213,13 @@ pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
 impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     BaseBuffer<ModeEnum, ViewEnum, CommandEnum>
 {
-    pub fn new(w: usize, h: usize, contents: Option<String>) -> Result<Self, Error> {
+    pub fn new(
+        w: usize,
+        h: usize,
+        x_off: usize,
+        y_off: usize,
+        contents: Option<String>,
+    ) -> Result<Self, Error> {
         let view_state_machine = {
             #[allow(clippy::enum_glob_use)]
             use ViewAction::*;
@@ -294,16 +300,20 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         };
 
         // Set the command view number width manually.
-        let mut cmd_view = Viewport::new(w, 1, 0, 0, None);
-        cmd_view.set_number_width(COMMAND_PROMPT.len());
+        // FIXME: this limits the bar to always be exactly one in height.
+        let mut cmd_view = Viewport::new(w, 1, 0, 0, x_off, y_off, None);
+        cmd_view.set_absolute_gutter_width(COMMAND_PROMPT.len());
 
         let count = contents.as_ref().map_or(1, |buff| buff.len().max(1));
         Ok(Self {
             doc: Document::new(0, 0, contents),
             info: Document::new(0, 0, None),
             cmd: Document::new(0, 0, None),
-            doc_view: Viewport::new(w, h - 1, 0, 0, Some(count)),
-            info_view: Viewport::new(w, 1, 0, 0, None),
+            // Shifted by one because of info/command line.
+            // FIXME: this limits the bar to always be exactly one in height.
+            doc_view: Viewport::new(w, h - 1, 0, 0, x_off, y_off + 1, Some(count)),
+            // FIXME: this limits the bar to always be exactly one in height.
+            info_view: Viewport::new(w, 1, 0, 0, x_off, y_off, None),
             cmd_view,
             sel: None,
             mode: Mode::View,
@@ -320,12 +330,19 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     }
 
     /// Resizes the viewports of the buffer.
-    pub fn resize(&mut self, w: usize, h: usize) {
+    pub fn resize(&mut self, w: usize, h: usize, x_off: usize, y_off: usize) {
         let doc_count = self.doc.buff.len();
-        self.doc_view.resize(w, h - 1, Some(doc_count));
-        self.info_view.resize(w, 1, None);
-        self.cmd_view.resize(w, 1, None);
-        self.cmd_view.set_number_width(COMMAND_PROMPT.len());
+
+        // Shifted by one because of info/command line.
+        // FIXME: this limits the bar to always be exactly one in height.
+        self.doc_view
+            .resize(w, h - 1, x_off, y_off + 1, Some(doc_count));
+        // FIXME: this limits the bar to always be exactly one in height.
+        self.info_view.resize(w, 1, x_off, y_off, None);
+        // FIXME: this limits the bar to always be exactly one in height.
+        self.cmd_view.resize(w, 1, x_off, y_off, None);
+        self.cmd_view
+            .set_absolute_gutter_width(COMMAND_PROMPT.len());
     }
 
     /// Jumps to the next search match if any.

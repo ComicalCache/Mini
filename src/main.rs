@@ -86,8 +86,8 @@ fn main() -> Result<(), std::io::Error> {
     let mut display = Display::new(w as usize, h as usize);
 
     // Setting the current buffer and error in case of file opening error.
-    let mut info_buffer = Box::new(InfoBuffer::new(w as usize, h as usize)?);
-    let files_buffer = Box::new(FilesBuffer::new(w as usize, h as usize, base)?);
+    let mut info_buffer = Box::new(InfoBuffer::new(w as usize, h as usize, 0, 0)?);
+    let files_buffer = Box::new(FilesBuffer::new(w as usize, h as usize, 0, 0, base)?);
     let mut curr_buff = if let Some(Err(err)) = &file {
         // Open the `FilesBuffer` if a directory was specified as argument.
         if err.kind() == ErrorKind::IsADirectory {
@@ -106,6 +106,8 @@ fn main() -> Result<(), std::io::Error> {
         Box::new(TextBuffer::new(
             w as usize,
             h as usize,
+            0,
+            0,
             file.and_then(std::result::Result::ok),
             file_name,
         )?),
@@ -126,7 +128,7 @@ fn main() -> Result<(), std::io::Error> {
         // Handle terminal resizing.
         let (w, h) = termion::terminal_size()?;
         for buff in &mut buffs {
-            buff.resize(w as usize, h as usize);
+            buff.resize(w as usize, h as usize, 0, 0);
         }
         display.resize(w as usize, h as usize);
 
