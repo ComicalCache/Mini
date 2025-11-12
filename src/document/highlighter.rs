@@ -47,7 +47,7 @@ pub struct Highlighter {
     pub highlights: Vec<TsHighlightEvent>,
 
     /// Names of captures to highlight.
-    pub names: [&'static str; 39],
+    pub names: [&'static str; 48],
     /// Mapping of capture names to color.
     pub colors: HashMap<&'static str, Fg<Rgb>>,
 }
@@ -60,6 +60,10 @@ impl Highlighter {
             "function.builtin",
             "function.call",
             "function.macro",
+            "function.method",
+            "function.special",
+            "method",
+            "method.call",
             "keyword",
             "keyword.function",
             "keyword.operator",
@@ -72,7 +76,11 @@ impl Highlighter {
             "string",
             "string.escape",
             "string.special",
+            "string.special.key",
+            "escape",
             "comment",
+            "comment.documentation",
+            "preproc",
             "type",
             "type.builtin",
             "type.definition",
@@ -84,15 +92,16 @@ impl Highlighter {
             "constant.builtin",
             "number",
             "boolean",
+            "parameter",
             "punctuation.bracket",
             "punctuation.delimiter",
             "punctuation.special",
+            "delimiter",
             "attribute",
             "property",
             "namespace",
             "module",
             "label",
-            "include",
             "tag",
             "field",
         ];
@@ -100,6 +109,10 @@ impl Highlighter {
         let colors = HashMap::from([
             // Atom Blue: #61afef -> Rgb(97, 175, 239)
             ("function", Fg(Rgb(97, 175, 239))),
+            ("function.method", Fg(Rgb(97, 175, 239))),
+            ("function.special", Fg(Rgb(97, 175, 239))),
+            ("method", Fg(Rgb(97, 175, 239))),
+            ("method.call", Fg(Rgb(97, 175, 239))),
             ("function.builtin", Fg(Rgb(97, 175, 239))),
             ("function.call", Fg(Rgb(97, 175, 239))),
             ("function.macro", Fg(Rgb(97, 175, 239))),
@@ -107,6 +120,7 @@ impl Highlighter {
             ("module", Fg(Rgb(97, 175, 239))),
             // Atom Magenta: #c678dd -> Rgb(198, 120, 221)
             ("keyword", Fg(Rgb(198, 120, 221))),
+            ("preproc", Fg(Rgb(198, 120, 221))),
             ("conditional", Fg(Rgb(198, 120, 221))),
             ("repeat", Fg(Rgb(198, 120, 221))),
             ("include", Fg(Rgb(198, 120, 221))),
@@ -119,12 +133,14 @@ impl Highlighter {
             ("keyword.operator", Fg(Rgb(86, 182, 194))),
             ("operator", Fg(Rgb(86, 182, 194))),
             ("string.escape", Fg(Rgb(86, 182, 194))),
+            ("escape", Fg(Rgb(86, 182, 194))),
             ("punctuation.special", Fg(Rgb(86, 182, 194))),
             // Atom Green: #98c379 -> Rgb(152, 195, 121)
             ("string", Fg(Rgb(152, 195, 121))),
             ("string.special", Fg(Rgb(152, 195, 121))),
             // Atom Grey: #5c6370 -> Rgb(92, 99, 112)
             ("comment", Fg(Rgb(92, 99, 112))),
+            ("comment.documentation", Fg(Rgb(92, 99, 112))),
             // Atom Yellow: #e5c07b -> Rgb(229, 192, 123)
             ("type", Fg(Rgb(229, 192, 123))),
             ("type.definition", Fg(Rgb(229, 192, 123))),
@@ -138,7 +154,9 @@ impl Highlighter {
             ("attribute", Fg(Rgb(209, 154, 102))),
             // Atom Red: #e06c75 -> Rgb(224, 108, 117)
             ("variable.builtin", Fg(Rgb(224, 108, 117))),
+            ("string.special.key", Fg(Rgb(224, 108, 117))),
             ("tag", Fg(Rgb(224, 108, 117))),
+            ("parameter", Fg(Rgb(224, 108, 117))),
             ("variable", Fg(Rgb(224, 108, 117))),
             ("variable.parameter", Fg(Rgb(224, 108, 117))),
             ("property", Fg(Rgb(224, 108, 117))),
@@ -146,6 +164,7 @@ impl Highlighter {
             // Atom Light Grey (Default Text): #abb2bf -> Rgb(171, 178, 191)
             ("punctuation.bracket", TXT),
             ("punctuation.delimiter", TXT),
+            ("delimiter", TXT),
         ]);
 
         Self {
@@ -205,7 +224,13 @@ impl Highlighter {
                 "ts",
                 tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
                 "TypeScript",
-                tree_sitter_typescript::HIGHLIGHTS_QUERY,
+                // The ts highlights only extend the js highlights.
+                format!(
+                    "{}\n{}",
+                    tree_sitter_javascript::HIGHLIGHT_QUERY,
+                    tree_sitter_typescript::HIGHLIGHTS_QUERY
+                )
+                .as_str(),
             ),
             (
                 "cpp",
@@ -226,22 +251,10 @@ impl Highlighter {
                 tree_sitter_javascript::HIGHLIGHT_QUERY,
             ),
             (
-                "go",
-                tree_sitter_go::LANGUAGE.into(),
-                "Go",
-                tree_sitter_go::HIGHLIGHTS_QUERY,
-            ),
-            (
                 "c",
                 tree_sitter_c::LANGUAGE.into(),
                 "C",
                 tree_sitter_c::HIGHLIGHT_QUERY,
-            ),
-            (
-                "java",
-                tree_sitter_java::LANGUAGE.into(),
-                "Java",
-                tree_sitter_java::HIGHLIGHTS_QUERY,
             ),
             (
                 "html",
@@ -273,18 +286,6 @@ impl Highlighter {
                 "YAML",
                 tree_sitter_yaml::HIGHLIGHTS_QUERY,
             ),
-            (
-                "zig",
-                tree_sitter_zig::LANGUAGE.into(),
-                "Zig",
-                tree_sitter_zig::HIGHLIGHTS_QUERY,
-            ),
-            (
-                "odin",
-                tree_sitter_odin::LANGUAGE.into(),
-                "Odin",
-                tree_sitter_odin::HIGHLIGHTS_QUERY,
-            ),
         );
 
         self.config = config;
@@ -308,16 +309,12 @@ impl Highlighter {
             // FIXME: this might cause problems for C header files.
             ("h", "cpp"),
             ("js", "js"),
-            ("go", "go"),
             ("c", "c"),
-            ("java", "java"),
             ("html", "html"),
             ("json", "json"),
             ("css", "css"),
             ("lua", "lua"),
             ("yaml", "yaml"),
-            ("zig", "zig"),
-            ("odin", "odin"),
         );
     }
 }

@@ -100,10 +100,6 @@ mode.
     - TypeScript (ts)
     - C (c)
     - C++ (cpp)
-    - Zig (zig)
-    - Go (go)
-    - Odin (odin)
-    - Java (java)
     - Lua (lua)
 
 Info Buffer:
