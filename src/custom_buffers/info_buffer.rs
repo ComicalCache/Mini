@@ -59,19 +59,25 @@ impl InfoBuffer {
 
         write!(
             self.base.info.buff[0].to_mut(),
-            "[Info] [{mode}] [{line}:{col}/{total} {percentage}%]",
+            " [Info] [{mode}] [{line}:{col}] [{line}/{total} {percentage}%]",
         )
         .unwrap();
 
         if let Some(pos) = self.base.sel {
+            let (start, end) = if pos < self.base.doc.cur {
+                (pos, self.base.doc.cur)
+            } else {
+                (self.base.doc.cur, pos)
+            };
+
             // Plus 1 since text coordinates are 0 indexed.
-            let line = pos.y + 1;
-            let col = pos.x + 1;
             write!(
                 self.base.info.buff[0].to_mut(),
-                " [Selected {line}:{col} - {}:{}]",
-                self.base.doc.cur.y + 1,
-                self.base.doc.cur.x + 1
+                " [Selected {}:{} - {}:{}]",
+                start.y + 1,
+                start.x + 1,
+                end.y + 1,
+                end.x + 1
             )
             .unwrap();
         }
