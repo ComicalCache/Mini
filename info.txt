@@ -30,8 +30,6 @@ basic motions:
 
 Furthermore, you can enter command mode by pressing space. Using the up and down arrow you can cycle through the issued
 command history. All buffers support following commands:
-- 'q' to quit
-- 'qq' to force quit, discarding unsaved changes
 - '?' to see this message
 - 'goto <line>:<column>' to jump to an absolute line number and column. If the column is omitted it jumps to the
     beginning of the line. If the line is missing it jumps to the column in the current line. Particularly ':' does
@@ -76,6 +74,8 @@ mode.
     Command Mode:
     In command mode you can issue editor commands. You enter command mode by pressing space, typing in your command and
     hitting enter to execute it, or escape to abort. The following are valid commands:
+    - 'q' to quit
+    - 'qq' to force quit, discarding unsaved changes
     - 'w' to write the buffer to file
     - 'w <path>' to write this/all future writes to the specified path
     - 'o ?<path>' to open a file and replace the buffer (if the path is omitted a new "scratchpad" buffer with no
@@ -115,6 +115,7 @@ view mode and command mode.
     Command Mode:
     In command mode you can issue editor commands. You enter command mode by pressing space, typing in your command and
     hitting enter to execute it, or escape to abort. The following are valid commands:
+    - 'q' | 'qq' to quit to the Text Buffer
     - 'clear' to clear the info buffer
 
 Files Buffer:
@@ -130,6 +131,7 @@ command mode.
     Command Mode:
     In command mode you can issue editor commands. You enter command mode by pressing space, typing in your command and
     hitting enter to execute it, or escape to abort. The following are valid commands:
+    - 'q' | 'qq' to quit to the Text Buffer
     - 'mk <path>' to create a file or directory. Use a trailing '/' to create a directory. Creates the needed directory
         hierarchy if needed.
     - 'rm <path>' to remove a file or empty directory. Use a trailing '/' to remove a directory.

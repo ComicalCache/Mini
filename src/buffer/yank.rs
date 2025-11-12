@@ -2,7 +2,6 @@ use crate::{
     INFO_BUFF_IDX,
     cursor::{self, Cursor},
     document::Document,
-    sc_buff,
     util::CommandResult,
     viewport::Viewport,
 };
@@ -46,7 +45,12 @@ pub fn selection(
     *sel = None;
     match res {
         Ok(()) => Ok(()),
-        Err(err) => Err(sc_buff!(INFO_BUFF_IDX, err.to_string())),
+        Err(err) => Err(CommandResult::SetAndChangeBuffer(
+            INFO_BUFF_IDX,
+            err.to_string(),
+            None,
+            None,
+        )),
     }
 }
 
@@ -72,7 +76,12 @@ pub fn line(
 
     match res {
         Ok(()) => Ok(()),
-        Err(err) => Err(sc_buff!(INFO_BUFF_IDX, err.to_string())),
+        Err(err) => Err(CommandResult::SetAndChangeBuffer(
+            INFO_BUFF_IDX,
+            err.to_string(),
+            None,
+            None,
+        )),
     }
 }
 

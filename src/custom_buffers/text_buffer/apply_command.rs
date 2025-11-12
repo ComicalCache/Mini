@@ -26,6 +26,7 @@ impl TextBuffer {
     fn open_command(&mut self, args: &str, force: bool) -> CommandResult {
         if !force && self.base.doc.edited {
             return sc_buff!(
+                self,
                 INFO_BUFF_IDX,
                 "There are unsaved changes, save or oo to force open a new document".to_string(),
             );
@@ -46,7 +47,7 @@ impl TextBuffer {
 
         self.file = match open_file(args) {
             Ok(file) => Some(file),
-            Err(err) => return sc_buff!(INFO_BUFF_IDX, err.to_string()),
+            Err(err) => return sc_buff!(self, INFO_BUFF_IDX, err.to_string()),
         };
         self.file_name = file_name(args);
 
@@ -59,7 +60,7 @@ impl TextBuffer {
                     .highlighter
                     .set_lang_filename(self.file_name.as_ref().unwrap());
             }
-            Err(err) => return sc_buff!(INFO_BUFF_IDX, err.to_string()),
+            Err(err) => return sc_buff!(self, INFO_BUFF_IDX, err.to_string()),
         }
 
         CommandResult::Ok
@@ -69,18 +70,19 @@ impl TextBuffer {
         if !args.is_empty() {
             self.file = match open_file(args) {
                 Ok(file) => Some(file),
-                Err(err) => return sc_buff!(INFO_BUFF_IDX, err.to_string()),
+                Err(err) => return sc_buff!(self, INFO_BUFF_IDX, err.to_string()),
             };
             self.file_name = file_name(args);
         }
 
         let res = match self.write_to_file() {
             Ok(res) => res,
-            Err(err) => return sc_buff!(INFO_BUFF_IDX, err.to_string()),
+            Err(err) => return sc_buff!(self, INFO_BUFF_IDX, err.to_string()),
         };
         // Failed to write file because no path exists.
         if !res {
             return sc_buff!(
+                self,
                 INFO_BUFF_IDX,
                 "Please specify a file location using 'w <path>' to write the file to".to_string(),
             );
@@ -91,6 +93,7 @@ impl TextBuffer {
 
     fn replace_command(&mut self, args: &str) -> CommandResult {
         let err = sc_buff!(
+            self,
             INFO_BUFF_IDX,
             "Invalid format. Expected: r /<regex>/<replace>/".to_string(),
         );
@@ -111,8 +114,9 @@ impl TextBuffer {
             Ok(regex) => regex,
             Err(err) => {
                 return sc_buff!(
+                    self,
                     INFO_BUFF_IDX,
-                    format!("'{regex_str}' is not a valid regular expression:\n{err}")
+                    format!("'{regex_str}' is not a valid regular expression:\n{err}"),
                 );
             }
         };
@@ -185,7 +189,7 @@ impl TextBuffer {
 
     fn syntax_command(&mut self, args: &str) -> CommandResult {
         if !self.base.doc.highlighter.set_lang(args) {
-            return sc_buff!(INFO_BUFF_IDX, "Invalid language selected".to_string());
+            return sc_buff!(self, INFO_BUFF_IDX, "Invalid language selected".to_string());
         }
 
         CommandResult::Ok
@@ -203,13 +207,16 @@ impl TextBuffer {
         };
 
         match cmd {
+            "q" => CommandResult::Quit,
+            "qq" => CommandResult::ForceQuit,
             "wq" => match self.write_to_file() {
                 Ok(res) if !res => sc_buff!(
+                    self,
                     INFO_BUFF_IDX,
                     "Please specify a file location using 'w <path>' to write the file to"
                         .to_string(),
                 ),
-                Err(err) => sc_buff!(INFO_BUFF_IDX, err.to_string()),
+                Err(err) => sc_buff!(self, INFO_BUFF_IDX, err.to_string()),
                 _ => CommandResult::Quit,
             },
             "w" => self.write_command(args),
@@ -217,7 +224,11 @@ impl TextBuffer {
             "oo" => self.open_command(args, true),
             "r" => self.replace_command(args),
             "syntax" => self.syntax_command(args),
-            _ => sc_buff!(INFO_BUFF_IDX, format!("Unrecognized command: '{cmd}'")),
+            _ => sc_buff!(
+                self,
+                INFO_BUFF_IDX,
+                format!("Unrecognized command: '{cmd}'"),
+            ),
         }
     }
 }

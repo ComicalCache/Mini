@@ -2,7 +2,6 @@ use crate::{
     INFO_BUFF_IDX, INFO_MSG,
     buffer::base::{BaseBuffer, CommandTick},
     cursor::{self, Cursor},
-    sc_buff,
     util::{CommandResult, line_column},
 };
 use regex::Regex;
@@ -13,18 +12,22 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
 {
     fn search(&mut self, args: &str) -> CommandResult {
         if args.len() == 2 || !args.starts_with('/') || !args.ends_with('/') {
-            return sc_buff!(
+            return CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
                 "Expected a valid regular expression like '/<regex>/'".to_string(),
+                None,
+                None,
             );
         }
 
         let regex = match Regex::new(&args[1..args.len() - 1]) {
             Ok(regex) => regex,
             Err(err) => {
-                return sc_buff!(
+                return CommandResult::SetAndChangeBuffer(
                     INFO_BUFF_IDX,
-                    format!("'{args}' is not a valid regular expression:\n{err}")
+                    format!("'{args}' is not a valid regular expression:\n{err}"),
+                    None,
+                    None,
                 );
             }
         };
@@ -64,7 +67,12 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         self.matches_idx = None;
 
         if self.matches.is_empty() {
-            return sc_buff!(INFO_BUFF_IDX, "No matches found".to_string());
+            return CommandResult::SetAndChangeBuffer(
+                INFO_BUFF_IDX,
+                "No matches found".to_string(),
+                None,
+                None,
+            );
         }
 
         self.matches_idx = self
@@ -112,14 +120,14 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         };
 
         match cmd {
-            "q" => Ok(CommandResult::Quit),
-            "qq" => Ok(CommandResult::ForceQuit),
-            "?" => Ok(sc_buff!(
+            "?" => Ok(CommandResult::SetAndChangeBuffer(
                 INFO_BUFF_IDX,
                 format!(
                     "Mini - A terminal text-editor (v{})\n\n{INFO_MSG}",
                     option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap()
                 ),
+                None,
+                None,
             )),
             "goto" => Ok(self.goto(args)),
             "s" => Ok(self.search(args)),

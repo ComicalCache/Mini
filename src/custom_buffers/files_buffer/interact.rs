@@ -65,10 +65,11 @@ impl FilesBuffer {
             open_file(entry)?.read_to_string(&mut buff)?;
 
             return Ok(sc_buff!(
+                self,
                 TXT_BUFF_IDX,
                 buff,
                 Some(entry.clone()),
-                file_name(entry)
+                file_name(entry),
             ));
         } else if entry.is_dir() {
             self.path.clone_from(entry);

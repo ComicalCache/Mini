@@ -73,7 +73,7 @@ impl FilesBuffer {
 
                 CommandResult::Ok
             }
-            Err(err) => sc_buff!(INFO_BUFF_IDX, err.to_string()),
+            Err(err) => sc_buff!(self, INFO_BUFF_IDX, err.to_string()),
         }
     }
 
@@ -144,7 +144,9 @@ impl FilesBuffer {
             Refresh => self.refresh(),
             SelectItem => self
                 .select_item()
-                .or_else(|err| Ok::<CommandResult, Error>(sc_buff!(INFO_BUFF_IDX, err.to_string())))
+                .or_else(|err| {
+                    Ok::<CommandResult, Error>(sc_buff!(self, INFO_BUFF_IDX, err.to_string()))
+                })
                 .unwrap(),
             Remove => self.selected_remove_command("rm"),
             RecursiveRemove => self.selected_remove_command("rm!"),
