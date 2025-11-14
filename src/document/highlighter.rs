@@ -221,18 +221,6 @@ impl Highlighter {
                 tree_sitter_python::HIGHLIGHTS_QUERY,
             ),
             (
-                "ts",
-                tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
-                "TypeScript",
-                // The ts highlights only extend the js highlights.
-                format!(
-                    "{}\n{}",
-                    tree_sitter_javascript::HIGHLIGHT_QUERY,
-                    tree_sitter_typescript::HIGHLIGHTS_QUERY
-                )
-                .as_str(),
-            ),
-            (
                 "cpp",
                 tree_sitter_cpp::LANGUAGE.into(),
                 "C++",
@@ -245,34 +233,16 @@ impl Highlighter {
                 .as_str(),
             ),
             (
-                "js",
-                tree_sitter_javascript::LANGUAGE.into(),
-                "JavaScript",
-                tree_sitter_javascript::HIGHLIGHT_QUERY,
-            ),
-            (
                 "c",
                 tree_sitter_c::LANGUAGE.into(),
                 "C",
                 tree_sitter_c::HIGHLIGHT_QUERY,
             ),
             (
-                "html",
-                tree_sitter_html::LANGUAGE.into(),
-                "HTML",
-                tree_sitter_html::HIGHLIGHTS_QUERY,
-            ),
-            (
                 "json",
                 tree_sitter_json::LANGUAGE.into(),
                 "JSON",
                 tree_sitter_json::HIGHLIGHTS_QUERY,
-            ),
-            (
-                "css",
-                tree_sitter_css::LANGUAGE.into(),
-                "CSS",
-                tree_sitter_css::HIGHLIGHTS_QUERY,
             ),
             (
                 "lua",
@@ -304,15 +274,11 @@ impl Highlighter {
             ("rs", "rust"),
             ("toml", "toml"),
             ("py", "python"),
-            ("ts", "ts"),
             ("cpp", "cpp"),
             // FIXME: this might cause problems for C header files.
             ("h", "cpp"),
-            ("js", "js"),
             ("c", "c"),
-            ("html", "html"),
             ("json", "json"),
-            ("css", "css"),
             ("lua", "lua"),
             ("yaml", "yaml"),
         );

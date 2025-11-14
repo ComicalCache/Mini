@@ -424,6 +424,84 @@ fn __prev_word_end(doc: &mut Document, view: &mut Viewport) {
     }
 }
 
+/// Jumps to the next whitespace.
+pub fn next_whitespace(doc: &mut Document, view: &mut Viewport, n: usize) {
+    for _ in 0..n {
+        __next_whitespace(doc, view);
+    }
+}
+
+fn __next_whitespace(doc: &mut Document, view: &mut Viewport) {
+    // Move line down if at end of line and not at end of document.
+    let mut len = doc.line_count(doc.cur.y).unwrap();
+    if len <= doc.cur.x && doc.cur.y < doc.buff.len() {
+        jump_to_beginning_of_line(doc, view);
+        down(doc, view, 1);
+
+        // If empty line or whitespace, abort.
+        if doc.buff[doc.cur.y]
+            .chars()
+            .next()
+            .is_none_or(char::is_whitespace)
+        {
+            return;
+        }
+
+        len = doc.line_count(doc.cur.y).unwrap();
+    }
+
+    let line = &doc.buff[doc.cur.y];
+
+    let (n, _) = line
+        .chars()
+        .skip(doc.cur.x + 1)
+        .enumerate()
+        .find(|(_, ch)| ch.is_whitespace())
+        .unwrap_or((len - doc.cur.x, '\0'));
+
+    right(doc, view, n + 1);
+}
+
+/// Jumps to the previous whitespace.
+pub fn prev_whitespace(doc: &mut Document, view: &mut Viewport, n: usize) {
+    for _ in 0..n {
+        __prev_whitespace(doc, view);
+    }
+}
+
+fn __prev_whitespace(doc: &mut Document, view: &mut Viewport) {
+    // Move line up if at beginning of line and not at beginning of document.
+    if doc.cur.x == 0 && doc.cur.y > 0 {
+        up(doc, view, 1);
+        jump_to_end_of_line(doc, view);
+
+        return;
+    }
+
+    let len = doc.line_count(doc.cur.y).unwrap();
+    let line = &doc.buff[doc.cur.y];
+
+    let Some((n, _)) = line
+        .chars()
+        .rev()
+        .skip(len - doc.cur.x)
+        .enumerate()
+        .find(|(_, ch)| ch.is_whitespace())
+    else {
+        // If no whitespace was found on line, move line up, else move to be start of the line.
+        if doc.cur.y > 0 {
+            up(doc, view, 1);
+            jump_to_end_of_line(doc, view);
+        } else {
+            left(doc, view, doc.cur.x);
+        }
+
+        return;
+    };
+
+    left(doc, view, n + 1);
+}
+
 /// Jumps to the next empty line.
 pub fn next_empty_line(doc: &mut Document, view: &mut Viewport, n: usize) {
     for _ in 0..n {

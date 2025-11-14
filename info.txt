@@ -14,6 +14,8 @@ basic motions:
 - 'W' to skip to the end of the next word
 - 'b' to go back one word
 - 'B' to go back to the end of the previous word
+- 's' to skip to the next whitespace
+- 'S' to go back to the previous whitespace
 - '}' to skip to the next empty line
 - '{' to go to the previous empty line
 - '<' | '>' to jump to the beginning/end of a line
@@ -94,10 +96,6 @@ mode.
     - YAML (yaml)
     - Rust (rust)
     - Python (python)
-    - HTML (html)
-    - CSS (css)
-    - JavaScript (js)
-    - TypeScript (ts)
     - C (c)
     - C++ (cpp)
     - Lua (lua)

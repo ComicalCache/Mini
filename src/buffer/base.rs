@@ -81,6 +81,8 @@ pub enum ViewAction<T> {
     NextWordEnd,
     PrevWord,
     PrevWordEnd,
+    NextWhitespace,
+    PrevWhitespace,
     NextEmptyLine,
     PrevEmptyLine,
     JumpToBeginningOfLine,
@@ -241,6 +243,8 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
                 .simple(Key::Char('W'), NextWordEnd)
                 .simple(Key::Char('b'), PrevWord)
                 .simple(Key::Char('B'), PrevWordEnd)
+                .simple(Key::Char('s'), NextWhitespace)
+                .simple(Key::Char('S'), PrevWhitespace)
                 .simple(Key::Char('}'), NextEmptyLine)
                 .simple(Key::Char('{'), PrevEmptyLine)
                 .simple(Key::Char('<'), JumpToBeginningOfLine)
@@ -458,6 +462,8 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             A(NextWordEnd) => movement!(self, next_word_end),
             A(PrevWord) => movement!(self, prev_word),
             A(PrevWordEnd) => movement!(self, prev_word_end),
+            A(NextWhitespace) => movement!(self, next_whitespace),
+            A(PrevWhitespace) => movement!(self, prev_whitespace),
             A(NextEmptyLine) => movement!(self, next_empty_line),
             A(PrevEmptyLine) => movement!(self, prev_empty_line),
             A(JumpToBeginningOfLine) => jump!(self, jump_to_beginning_of_line),
