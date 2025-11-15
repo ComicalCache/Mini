@@ -1,6 +1,6 @@
 # Mini
 
-A "minimalistic" terminal based text-editor. It has VIm-like motions and should fully support unicode characters.
+A "minimalistic" terminal based text-editor.
 
 ### Features
 Mini supports ergonomic motions, text selection, search and replace, undo and redo, syntax-highlighting, a file browser
