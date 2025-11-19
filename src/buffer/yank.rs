@@ -67,9 +67,7 @@ pub fn line(
     cursor::jump_to_end_of_line(doc, view);
     cursor::right(doc, view, 1);
 
-    let mut line = doc.get_range(start, doc.cur).unwrap();
-    line.to_mut().push('\n');
-    let res = clipboard.set_text(line);
+    let res = clipboard.set_text(doc.get_range(start, doc.cur).unwrap());
 
     view.cur = tmp_view_cur;
     doc.cur = tmp_doc_cur;

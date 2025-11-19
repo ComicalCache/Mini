@@ -110,7 +110,11 @@ pub fn shift_left(_: &mut Document, view: &mut Viewport, n: usize) {
 
 /// Moves the cursors to the right
 pub fn right(doc: &mut Document, view: &mut Viewport, n: usize) {
-    let line_bound = doc.line_count(doc.cur.y).unwrap();
+    let mut line_bound = doc.line_count(doc.cur.y).unwrap();
+    if doc.buff[doc.cur.y].ends_with('\n') {
+        line_bound = line_bound.saturating_sub(1);
+    }
+
     doc.cur.right(n, line_bound);
     view.cur.right(n, (doc.cur.x).min(view.buff_w - 1));
 }
@@ -128,7 +132,11 @@ pub fn up(doc: &mut Document, view: &mut Viewport, n: usize) {
     view.cur.up(n, 0);
 
     // When moving up, handle case that new line contains less text than previous.
-    let line_bound = doc.line_count(doc.cur.y).unwrap();
+    let mut line_bound = doc.line_count(doc.cur.y).unwrap();
+    if doc.buff[doc.cur.y].ends_with('\n') {
+        line_bound = line_bound.saturating_sub(1);
+    }
+
     doc.cur.x = doc.cur.target_x.min(line_bound);
     view.cur.x = doc.cur.x.min(view.buff_w - 1);
 }
@@ -148,7 +156,11 @@ pub fn down(doc: &mut Document, view: &mut Viewport, n: usize) {
     view.cur.down(n, (view.h - 1).min(bound));
 
     // When moving down, handle case that new line contains less text than previous.
-    let line_bound = doc.line_count(doc.cur.y).unwrap();
+    let mut line_bound = doc.line_count(doc.cur.y).unwrap();
+    if doc.buff[doc.cur.y].ends_with('\n') {
+        line_bound = line_bound.saturating_sub(1);
+    }
+
     doc.cur.x = doc.cur.target_x.min(line_bound);
     view.cur.x = doc.cur.x.min(view.buff_w - 1);
 }
@@ -170,6 +182,10 @@ pub fn next_word(doc: &mut Document, view: &mut Viewport, n: usize) {
 fn __next_word(doc: &mut Document, view: &mut Viewport) {
     // Move line down if at end of line and not at end of document.
     let mut len = doc.line_count(doc.cur.y).unwrap();
+    if doc.buff[doc.cur.y].ends_with('\n') {
+        len = len.saturating_sub(1);
+    }
+
     if len <= doc.cur.x && doc.cur.y < doc.buff.len() {
         jump_to_beginning_of_line(doc, view);
         down(doc, view, 1);
@@ -184,6 +200,9 @@ fn __next_word(doc: &mut Document, view: &mut Viewport) {
         }
 
         len = doc.line_count(doc.cur.y).unwrap();
+        if doc.buff[doc.cur.y].ends_with('\n') {
+            len = len.saturating_sub(1);
+        }
     }
 
     let line = &doc.buff[doc.cur.y];
@@ -254,6 +273,10 @@ pub fn next_word_end(doc: &mut Document, view: &mut Viewport, n: usize) {
 fn __next_word_end(doc: &mut Document, view: &mut Viewport) {
     // Move line down if at end of line and not at end of document.
     let mut len = doc.line_count(doc.cur.y).unwrap();
+    if doc.buff[doc.cur.y].ends_with('\n') {
+        len = len.saturating_sub(1);
+    }
+
     if len <= doc.cur.x && doc.cur.y < doc.buff.len() {
         jump_to_beginning_of_line(doc, view);
         down(doc, view, 1);
@@ -264,6 +287,9 @@ fn __next_word_end(doc: &mut Document, view: &mut Viewport) {
         }
 
         len = doc.line_count(doc.cur.y).unwrap();
+        if doc.buff[doc.cur.y].ends_with('\n') {
+            len = len.saturating_sub(1);
+        }
     }
 
     let line = &doc.buff[doc.cur.y];
@@ -434,6 +460,10 @@ pub fn next_whitespace(doc: &mut Document, view: &mut Viewport, n: usize) {
 fn __next_whitespace(doc: &mut Document, view: &mut Viewport) {
     // Move line down if at end of line and not at end of document.
     let mut len = doc.line_count(doc.cur.y).unwrap();
+    if doc.buff[doc.cur.y].ends_with('\n') {
+        len = len.saturating_sub(1);
+    }
+
     if len <= doc.cur.x && doc.cur.y < doc.buff.len() {
         jump_to_beginning_of_line(doc, view);
         down(doc, view, 1);
@@ -448,6 +478,9 @@ fn __next_whitespace(doc: &mut Document, view: &mut Viewport) {
         }
 
         len = doc.line_count(doc.cur.y).unwrap();
+        if doc.buff[doc.cur.y].ends_with('\n') {
+            len = len.saturating_sub(1);
+        }
     }
 
     let line = &doc.buff[doc.cur.y];
@@ -515,7 +548,7 @@ fn __next_empty_line(doc: &mut Document, view: &mut Viewport) {
         .iter()
         .enumerate()
         .skip(doc.cur.y + 1)
-        .find(|(_, l)| l.is_empty())
+        .find(|(_, l)| *l == "\n" || l.is_empty())
     {
         down(doc, view, y - doc.cur.y);
     } else {
@@ -537,7 +570,7 @@ pub fn __prev_empty_line(doc: &mut Document, view: &mut Viewport) {
         .enumerate()
         .rev()
         .skip(doc.buff.len() - doc.cur.y)
-        .find(|(_, l)| l.is_empty())
+        .find(|(_, l)| *l == "\n" || l.is_empty())
     {
         up(doc, view, doc.cur.y - y);
     } else {
@@ -552,11 +585,12 @@ pub fn jump_to_beginning_of_line(doc: &mut Document, view: &mut Viewport) {
 
 /// Jumps the cursors to the end of a line.
 pub fn jump_to_end_of_line(doc: &mut Document, view: &mut Viewport) {
-    right(
-        doc,
-        view,
-        doc.line_count(doc.cur.y).unwrap().saturating_sub(doc.cur.x),
-    );
+    let mut line_bound = doc.line_count(doc.cur.y).unwrap();
+    if doc.buff[doc.cur.y].ends_with('\n') {
+        line_bound = line_bound.saturating_sub(1);
+    }
+
+    right(doc, view, line_bound.saturating_sub(doc.cur.x));
 }
 
 /// Jumps the cursors to the matching opposite bracket (if exists).

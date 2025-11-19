@@ -98,6 +98,10 @@ impl Document {
     /// Inserts a new line at a specified y position.
     pub fn insert_line(&mut self, line: Cow<'static, str>, y: usize) {
         assert!(y <= self.buff.len());
+        if y < self.buff.len().saturating_sub(1) {
+            // Don't insert lines in the middle that don't have a newline character.
+            assert!(line.ends_with('\n'));
+        }
 
         self.buff.insert(y, line);
         self.edited = true;
@@ -125,8 +129,18 @@ impl Document {
             .char_indices()
             .nth(x)
             .map_or(self.buff[y].len(), |(idx, _)| idx);
+        if ch == '\n' {
+            let tail = self.buff[y].to_mut().split_off(idx);
 
-        self.buff[y].to_mut().insert(idx, ch);
+            if !self.buff[y].ends_with('\n') {
+                self.buff[y].to_mut().push('\n');
+            }
+
+            self.insert_line(std::borrow::Cow::from(tail), y + 1);
+        } else {
+            self.buff[y].to_mut().insert(idx, ch);
+        }
+
         self.edited = true;
     }
 
@@ -136,13 +150,17 @@ impl Document {
             return None;
         }
 
-        let line = &mut self.buff[y];
-        let (idx, _) = line.char_indices().nth(x)?;
+        let (idx, ch) = self.buff[y].char_indices().nth(x)?;
 
-        let ret = line.to_mut().remove(idx);
+        self.buff[y].to_mut().remove(idx);
+        if ch == '\n'
+            && let Some(line) = self.remove_line(y + 1)
+        {
+            self.buff[y].to_mut().push_str(&line);
+        }
+
         self.edited = true;
-
-        Some(ret)
+        Some(ch)
     }
 
     /// Writes a str at the current cursor position.
@@ -157,7 +175,7 @@ impl Document {
         let count = self.line_count(y).unwrap();
         assert!(x <= count);
 
-        let mut lines = r#str.split('\n');
+        let mut lines = r#str.split_inclusive('\n');
 
         // Insertion point of current line.
         let line = &mut self.buff[y];
@@ -170,16 +188,24 @@ impl Document {
         let tail = line.to_mut().split_off(idx);
         line.to_mut().push_str(lines.next().unwrap_or(""));
 
-        // Insert lines.
+        self.edited = true;
+
+        // Insert in-between lines.
         for new_line in lines {
             y += 1;
-            self.insert_line(Cow::from(new_line.to_string()), y);
+
+            if new_line.ends_with('\n') {
+                self.insert_line(Cow::from(new_line.to_string()), y);
+            } else {
+                // Only the last line part can have no new-line. Append tail.
+                self.insert_line(Cow::from(format!("{new_line}{tail}")), y);
+                return;
+            }
         }
 
-        // Append tail.
-        self.buff[y].to_mut().push_str(&tail);
-
-        self.edited = true;
+        // This is only reached if all inserted lines have a newline, thus the tail has its own line.
+        y += 1;
+        self.insert_line(Cow::from(tail), y);
     }
 
     /// Removes a range of text from the document.
@@ -203,6 +229,12 @@ impl Document {
                 .map_or(line.len(), |(idx, _)| idx);
 
             line.to_mut().drain(start_idx..end_idx);
+
+            if !self.buff[start.y].ends_with('\n')
+                && let Some(next_line) = self.remove_line(start.y + 1)
+            {
+                self.buff[start.y].to_mut().push_str(&next_line);
+            }
         } else {
             // Multi-line deletion.
             let end_line = &self.buff[end.y];
@@ -262,12 +294,10 @@ impl Document {
             .nth(start.x)
             .map_or(first_line.len(), |(idx, _)| idx);
         let mut result = Cow::from(first_line[start_idx..].to_string());
-        result.to_mut().push('\n');
 
         // Lines between first and last line
         for line in self.buff.iter().skip(start.y + 1).take(end.y - start.y - 1) {
             result.to_mut().push_str(line);
-            result.to_mut().push('\n');
         }
 
         // Last line

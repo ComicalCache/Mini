@@ -24,30 +24,13 @@ pub fn write_char(
     }
 
     doc.write_char(ch, doc.cur.x, doc.cur.y);
-    cursor::right(doc, view, 1);
-}
 
-/// Writes a new line character at the current cursor position.
-/// The cursor will be at the beginning of the new line.
-pub fn write_new_line_char(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>) {
-    if let Some(history) = history {
-        history.add_change(Change::Insert {
-            pos: doc.cur,
-            data: Cow::from("\n"),
-        });
+    if ch != '\n' {
+        cursor::right(doc, view, 1);
+    } else {
+        cursor::down(doc, view, 1);
+        cursor::jump_to_beginning_of_line(doc, view);
     }
-
-    let line = &mut doc.buff[doc.cur.y];
-    let idx = line
-        .char_indices()
-        .nth(doc.cur.x)
-        .map_or(line.len(), |(idx, _)| idx);
-
-    let new_line = line.to_mut().split_off(idx);
-    doc.insert_line(Cow::from(new_line), doc.cur.y + 1);
-
-    cursor::down(doc, view, 1);
-    cursor::jump_to_beginning_of_line(doc, view);
 }
 
 /// Writes a tab at the current cursor position.
@@ -97,7 +80,14 @@ pub fn delete_char(doc: &mut Document, view: &mut Viewport, history: Option<&mut
         cursor::up(doc, view, 1);
         cursor::jump_to_end_of_line(doc, view);
 
+        // Remove line from document.
         let line = doc.remove_line(doc.cur.y + 1).unwrap();
+
+        // Remove newline from previous line.
+        let len = doc.buff[cur.y - 1].len();
+        doc.buff[cur.y - 1].to_mut().remove(len - 1);
+
+        // Append removed line to previous line.
         doc.buff[cur.y - 1].to_mut().push_str(&line);
 
         if let Some(history) = history {

@@ -132,7 +132,6 @@ enum WriteAction {
     Right,
     NextWord,
     PrevWord,
-    Newline,
     Tab,
     DeleteChar,
 }
@@ -238,7 +237,6 @@ impl TextBuffer {
                 .simple(Key::Right, Right)
                 .simple(Key::AltRight, NextWord)
                 .simple(Key::AltLeft, PrevWord)
-                .simple(Key::Char('\n'), Newline)
                 .simple(Key::Char('\t'), Tab)
                 .simple(Key::Backspace, DeleteChar);
             StateMachine::new(command_map, Duration::from_secs(1))
@@ -329,7 +327,7 @@ impl TextBuffer {
             }
             ChangeToInfoBuffer => c_buff!(self, INFO_BUFF_IDX),
             ChangeToFilesBuffer => c_buff!(self, FILES_BUFF_IDX),
-            DeleteChar => delete!(self, char, REPEAT),
+            DeleteChar => delete!(self, right, REPEAT),
             DeleteSelection => delete!(self, selection, SELECTION),
             DeleteLine => delete!(self, line, REPEAT),
             DeleteLeft => delete!(self, left, REPEAT),
@@ -410,11 +408,6 @@ impl TextBuffer {
             A(Right) => cursor::right(&mut self.base.doc, &mut self.base.doc_view, 1),
             A(NextWord) => cursor::next_word(&mut self.base.doc, &mut self.base.doc_view, 1),
             A(PrevWord) => cursor::prev_word(&mut self.base.doc, &mut self.base.doc_view, 1),
-            A(Newline) => edit::write_new_line_char(
-                &mut self.base.doc,
-                &mut self.base.doc_view,
-                Some(&mut self.history),
-            ),
             A(Tab) => edit::write_tab(
                 &mut self.base.doc,
                 &mut self.base.doc_view,
@@ -466,10 +459,7 @@ impl Buffer for TextBuffer {
                 self.base.doc.contiguous_buff.clear();
                 for line in &self.base.doc.buff {
                     self.base.doc.contiguous_buff.push_str(line);
-                    self.base.doc.contiguous_buff.push('\n');
                 }
-                // Remove the last trailing newline.
-                self.base.doc.contiguous_buff.pop().unwrap();
             }
 
             let contents = &self.base.doc.contiguous_buff;

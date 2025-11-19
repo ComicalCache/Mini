@@ -121,10 +121,7 @@ impl Buffer for InfoBuffer {
                 self.base.doc.contiguous_buff.clear();
                 for line in &self.base.doc.buff {
                     self.base.doc.contiguous_buff.push_str(line);
-                    self.base.doc.contiguous_buff.push('\n');
                 }
-                // Remove the last trailing newline.
-                self.base.doc.contiguous_buff.pop().unwrap();
             }
 
             let contents = &self.base.doc.contiguous_buff;

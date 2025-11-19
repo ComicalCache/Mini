@@ -118,11 +118,7 @@ impl Viewport {
                 }
                 HighlightEvent::Source { start, end } => {
                     for ch in doc.contiguous_buff[*start..*end].chars() {
-                        if ch == '\n' {
-                            y += 1;
-                            x = 0;
-                            continue;
-                        } else if y >= y_off && y < y_max && x >= x_off && x < x_max {
+                        if y >= y_off && y < y_max && x >= x_off && x < x_max {
                             let mut ch = ch;
                             let mut fg = *color_stack.last().unwrap_or(&TXT);
                             let mut bg = if y == doc.cur.y { HIGHLIGHT } else { BG };
@@ -144,7 +140,13 @@ impl Viewport {
                                 fg = WHITESPACE;
                             }
 
-                            // Layer 3: Highlight tab characters.
+                            // Layer 3: Newline.
+                            if ch == '\n' {
+                                ch = '⏎';
+                                fg = WHITESPACE;
+                            }
+
+                            // Layer 4: Highlight tab characters.
                             if ch == '\t' {
                                 ch = '↦';
                                 fg = TXT;
@@ -154,7 +156,12 @@ impl Viewport {
                             display.update(Cell::new(ch, fg, bg), screen_x, screen_y);
                         }
 
-                        x += 1;
+                        if ch == '\n' {
+                            y += 1;
+                            x = 0;
+                        } else {
+                            x += 1;
+                        }
 
                         if y >= y_max {
                             break 'event_loop;
@@ -164,9 +171,8 @@ impl Viewport {
             }
         }
 
-        // Render newline characters and trailing whitespace to override previous screen content. The previous loop
-        // only renders the current content without regard of removing existing content, which is why this second
-        // render pass is necessary.
+        // Render trailing whitespace to override previous screen content. The previous loop only renders the current
+        // content without regard of removing existing content, which is why this second render pass is necessary.
         for (y, doc_idx) in (0..self.h).zip(y_off..) {
             // Set base background color depending on if its the cursors line.
             let base_bg = if y == self.cur.y { HIGHLIGHT } else { BG };
@@ -181,23 +187,7 @@ impl Viewport {
 
             let len = doc.line_count(doc_idx).unwrap();
             // Calculate the end of the line contents.
-            let mut x = self.gutter_w + (len.saturating_sub(x_off)) + self.x_off;
-            // Add a newline character for visual clarity of trailing whitespaces. Don't show the
-            // newline character on the last line of the file.
-            if doc_idx + 1 != doc.buff.len() && len >= x_off && len < x_max {
-                let bg = if let Some((start, end)) = sel
-                    && start.y <= doc_idx
-                    && end.y > doc_idx
-                {
-                    SEL
-                } else {
-                    base_bg
-                };
-
-                display.update(Cell::new('⏎', WHITESPACE, bg), x, y + self.y_off);
-                x += 1;
-            }
-
+            let x = self.gutter_w + (len.saturating_sub(x_off)) + self.x_off;
             // Stretch current line to end to show highlight properly.
             for x in x..self.w {
                 display.update(Cell::new(' ', TXT, base_bg), x, y + self.y_off);

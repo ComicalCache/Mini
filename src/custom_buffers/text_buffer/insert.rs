@@ -23,7 +23,7 @@ impl TextBuffer {
 
         self.base
             .doc
-            .insert_line(Cow::from(""), self.base.doc.cur.y);
+            .insert_line(Cow::from("\n"), self.base.doc.cur.y);
     }
 
     /// Inserts a new line bellow the current cursor position.
@@ -35,9 +35,18 @@ impl TextBuffer {
             data: Cow::from("\n"),
         });
 
-        self.base
-            .doc
-            .insert_line(Cow::from(""), self.base.doc.cur.y + 1);
+        if self.base.doc.cur.y + 1 == self.base.doc.buff.len() {
+            self.base.doc.buff[self.base.doc.cur.y]
+                .to_mut()
+                .push_str("\n");
+        }
+
+        let content = if self.base.doc.cur.y + 1 != self.base.doc.buff.len() {
+            Cow::from("\n")
+        } else {
+            Cow::from("")
+        };
+        self.base.doc.insert_line(content, self.base.doc.cur.y + 1);
         cursor::down(&mut self.base.doc, &mut self.base.doc_view, 1);
 
         // Set target x coordinate, otherwise it would snap back when moving without inserting.
@@ -73,7 +82,6 @@ impl TextBuffer {
 
         // Pass a None as History to not save the edit again.
         match ch {
-            '\n' => edit::write_new_line_char(&mut self.base.doc, &mut self.base.doc_view, None),
             '\t' => edit::write_tab(&mut self.base.doc, &mut self.base.doc_view, None, true),
             _ => self
                 .base

@@ -50,9 +50,14 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
 /// Splits a string into a vector of lines.
 pub fn split_to_lines<S: AsRef<str>>(data: S) -> Vec<Cow<'static, str>> {
     let mut buff = Vec::new();
-    buff.extend(data.as_ref().lines().map(str::to_string).map(Cow::from));
+    buff.extend(
+        data.as_ref()
+            .split_inclusive('\n')
+            .map(str::to_string)
+            .map(Cow::from),
+    );
 
-    // lines() will discard a trailing empty line, but we don't want that.
+    // Add trailing line without newline character.
     if data.as_ref().ends_with('\n') {
         buff.push(Cow::from(""));
     }
