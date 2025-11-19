@@ -9,6 +9,7 @@ use crate::{
     c_buff,
     cursor::Cursor,
     display::Display,
+    document::Document,
     util::{CommandResult, CursorStyle},
 };
 use std::{io::Error, path::PathBuf};
@@ -24,6 +25,9 @@ enum OtherViewAction {
 /// A buffer to show read only information.
 pub struct InfoBuffer {
     base: BaseBuffer<(), OtherViewAction, ()>,
+
+    /// The info bar content.
+    info: Document,
 }
 
 impl InfoBuffer {
@@ -37,14 +41,17 @@ impl InfoBuffer {
             .simple(Key::Char('t'), ViewAction::Other(ChangeToTextBuffer))
             .simple(Key::Char('e'), ViewAction::Other(ChangeToFilesBuffer));
 
-        Ok(Self { base })
+        Ok(Self {
+            base,
+            info: Document::new(0, 0, None),
+        })
     }
 
     /// Creates an info line
     fn info_line(&mut self) {
         use std::fmt::Write;
 
-        self.base.info.buff[0].to_mut().clear();
+        self.info.buff[0].to_mut().clear();
 
         let mode = match self.base.mode {
             Mode::View => "V",
@@ -58,7 +65,7 @@ impl InfoBuffer {
         let percentage = 100 * line / total;
 
         write!(
-            self.base.info.buff[0].to_mut(),
+            self.info.buff[0].to_mut(),
             " [Info] [{mode}] [{line}:{col}] [{line}/{total} {percentage}%]",
         )
         .unwrap();
@@ -72,7 +79,7 @@ impl InfoBuffer {
 
             // Plus 1 since text coordinates are 0 indexed.
             write!(
-                self.base.info.buff[0].to_mut(),
+                self.info.buff[0].to_mut(),
                 " [Selected {}:{} - {}:{}]",
                 start.y + 1,
                 start.x + 1,
@@ -148,13 +155,9 @@ impl Buffer for InfoBuffer {
                 COMMAND_PROMPT,
             );
         } else {
-            self.base.info_view.render_bar(
-                &self.base.info.buff[0],
-                0,
-                display,
-                &self.base.info,
-                "",
-            );
+            self.base
+                .info_view
+                .render_bar(&self.info.buff[0], 0, display, &self.info, "");
         }
 
         self.base.doc_view.render_gutter(display, &self.base.doc);

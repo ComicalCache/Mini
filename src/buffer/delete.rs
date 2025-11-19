@@ -1,7 +1,7 @@
 use crate::{
-    buffer::history::{Change, History},
     cursor::{self, Cursor},
     document::Document,
+    history::{Change, History},
     viewport::Viewport,
 };
 

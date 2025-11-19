@@ -22,7 +22,7 @@ const REL_NUMS: Fg<color::Rgb> = Fg(color::Rgb(101, 103, 105));
 /// Whitespace symbol text color.
 const WHITESPACE: Fg<color::Rgb> = Fg(color::Rgb(68, 71, 79));
 /// Background to warn of tab characters.
-const TAB_WARN: Bg<color::Rgb> = Bg(color::Rgb(181, 59, 59));
+const CHAR_WARN: Bg<color::Rgb> = Bg(color::Rgb(181, 59, 59));
 
 /// The viewport of a (section of a) `Display`.
 pub struct Viewport {
@@ -69,6 +69,25 @@ impl Viewport {
             cur: Cursor::new(x, y),
             gutter: count.is_some(),
         }
+    }
+
+    /// Resizes the viewport.
+    pub fn resize(&mut self, w: usize, h: usize, x_off: usize, y_off: usize, count: Option<usize>) {
+        let (gutter_w, buff_w) = count.map_or((0, w), |count| {
+            let digits = count.ilog10() as usize + 1;
+            (digits + 4, w - digits - 4)
+        });
+
+        self.w = w;
+        self.h = h;
+        self.x_off = x_off;
+        self.y_off = y_off;
+        self.gutter_w = gutter_w;
+        self.buff_w = buff_w;
+        self.gutter = count.is_some();
+
+        self.cur.x = self.cur.x.min(self.buff_w - 1);
+        self.cur.y = self.cur.y.min(self.h - 1);
     }
 
     /// Sets the gutter width.
@@ -134,23 +153,24 @@ impl Viewport {
                                 }
                             }
 
-                            // Layer 2: Whitespace.
+                            // Layer 2: Character replacement.
                             if ch == ' ' {
                                 ch = '·';
                                 fg = WHITESPACE;
                             }
-
-                            // Layer 3: Newline.
                             if ch == '\n' {
                                 ch = '⏎';
                                 fg = WHITESPACE;
                             }
-
-                            // Layer 4: Highlight tab characters.
+                            if ch == '\r' {
+                                ch = '↤';
+                                fg = TXT;
+                                bg = CHAR_WARN;
+                            }
                             if ch == '\t' {
                                 ch = '↦';
                                 fg = TXT;
-                                bg = TAB_WARN;
+                                bg = CHAR_WARN;
                             }
 
                             display.update(Cell::new(ch, fg, bg), screen_x, screen_y);
@@ -304,24 +324,5 @@ impl Viewport {
         );
 
         display.set_cursor(cur, cursor_style);
-    }
-
-    /// Resizes the viewport.
-    pub fn resize(&mut self, w: usize, h: usize, x_off: usize, y_off: usize, count: Option<usize>) {
-        let (gutter_w, buff_w) = count.map_or((0, w), |count| {
-            let digits = count.ilog10() as usize + 1;
-            (digits + 4, w - digits - 4)
-        });
-
-        self.w = w;
-        self.h = h;
-        self.x_off = x_off;
-        self.y_off = y_off;
-        self.gutter_w = gutter_w;
-        self.buff_w = buff_w;
-        self.gutter = count.is_some();
-
-        self.cur.x = self.cur.x.min(self.buff_w - 1);
-        self.cur.y = self.cur.y.min(self.h - 1);
     }
 }

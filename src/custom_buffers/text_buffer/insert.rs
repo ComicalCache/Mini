@@ -1,11 +1,9 @@
 use crate::{
     INFO_BUFF_IDX,
-    buffer::{
-        edit::{self, TAB_WIDTH},
-        history::{Change, Replace},
-    },
+    buffer::edit::{self, TAB_WIDTH},
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
+    history::{Change, Replace},
     sc_buff,
     util::CommandResult,
 };
@@ -36,15 +34,13 @@ impl TextBuffer {
         });
 
         if self.base.doc.cur.y + 1 == self.base.doc.buff.len() {
-            self.base.doc.buff[self.base.doc.cur.y]
-                .to_mut()
-                .push_str("\n");
+            self.base.doc.buff[self.base.doc.cur.y].to_mut().push('\n');
         }
 
-        let content = if self.base.doc.cur.y + 1 != self.base.doc.buff.len() {
-            Cow::from("\n")
-        } else {
+        let content = if self.base.doc.cur.y + 1 == self.base.doc.buff.len() {
             Cow::from("")
+        } else {
+            Cow::from("\n")
         };
         self.base.doc.insert_line(content, self.base.doc.cur.y + 1);
         cursor::down(&mut self.base.doc, &mut self.base.doc_view, 1);

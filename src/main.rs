@@ -7,6 +7,7 @@ mod cursor;
 mod custom_buffers;
 mod display;
 mod document;
+mod history;
 mod state_machine;
 mod util;
 mod viewport;

@@ -1,7 +1,7 @@
 use crate::{
-    buffer::history::{Change, History},
     cursor,
     document::Document,
+    history::{Change, History},
     viewport::Viewport,
 };
 use std::borrow::Cow;
@@ -25,11 +25,11 @@ pub fn write_char(
 
     doc.write_char(ch, doc.cur.x, doc.cur.y);
 
-    if ch != '\n' {
-        cursor::right(doc, view, 1);
-    } else {
+    if ch == '\n' {
         cursor::down(doc, view, 1);
         cursor::jump_to_beginning_of_line(doc, view);
+    } else {
+        cursor::right(doc, view, 1);
     }
 }
 

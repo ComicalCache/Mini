@@ -1,8 +1,8 @@
 use crate::{
     INFO_BUFF_IDX,
-    buffer::history::{Change, Replace},
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
+    history::{Change, Replace},
     sc_buff,
     util::{CommandResult, file_name, open_file},
 };

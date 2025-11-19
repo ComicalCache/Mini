@@ -1,4 +1,4 @@
-use crate::{buffer::history::Change, cursor, custom_buffers::text_buffer::TextBuffer};
+use crate::{cursor, custom_buffers::text_buffer::TextBuffer, history::Change};
 
 impl TextBuffer {
     /// Undos the last change if one exists.

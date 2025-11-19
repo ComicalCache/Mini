@@ -8,11 +8,12 @@ use crate::{
         Buffer,
         base::{BaseBuffer, COMMAND_PROMPT, CommandTick, Mode, ViewAction},
         delete, edit,
-        history::History,
     },
     c_buff,
     cursor::{self, Cursor},
     display::Display,
+    document::Document,
+    history::History,
     state_machine::{ChainResult, CommandMap, StateMachine},
     util::{CommandResult, CursorStyle, open_file},
 };
@@ -144,9 +145,19 @@ enum OtherMode {
 /// A text buffer.
 pub struct TextBuffer {
     base: BaseBuffer<OtherMode, OtherViewAction, ()>,
+
+    /// The info bar content.
+    info: Document,
+
+    /// The opened file.
     file: Option<File>,
+    /// The name of the opened file.
     file_name: Option<String>,
+
+    /// A history of edits to undo and redo.
     history: History,
+
+    /// The state machine handling input in write mode.
     write_state_machine: StateMachine<WriteAction>,
 }
 
@@ -244,6 +255,7 @@ impl TextBuffer {
 
         Ok(Self {
             base,
+            info: Document::new(0, 0, None),
             file,
             file_name,
             history: History::new(),
@@ -255,7 +267,7 @@ impl TextBuffer {
     fn info_line(&mut self) {
         use std::fmt::Write;
 
-        self.base.info.buff[0].to_mut().clear();
+        self.info.buff[0].to_mut().clear();
 
         let mode = match self.base.mode {
             Mode::View => "V",
@@ -274,7 +286,7 @@ impl TextBuffer {
             None => "Text",
         };
         write!(
-            self.base.info.buff[0].to_mut(),
+            self.info.buff[0].to_mut(),
             " [{indicator}] [{mode}] [{line}:{col}] [{line}/{total} {percentage}%] [{size}B]",
         )
         .unwrap();
@@ -288,7 +300,7 @@ impl TextBuffer {
 
             // Plus 1 since text coordinates are 0 indexed.
             write!(
-                self.base.info.buff[0].to_mut(),
+                self.info.buff[0].to_mut(),
                 " [Selected {}:{} - {}:{}]",
                 start.y + 1,
                 start.x + 1,
@@ -299,7 +311,7 @@ impl TextBuffer {
         }
 
         let edited = if self.base.doc.edited { '*' } else { ' ' };
-        write!(self.base.info.buff[0].to_mut(), " {edited}").unwrap();
+        write!(self.info.buff[0].to_mut(), " {edited}").unwrap();
     }
 
     /// Handles self defined view actions.
@@ -327,11 +339,10 @@ impl TextBuffer {
             }
             ChangeToInfoBuffer => c_buff!(self, INFO_BUFF_IDX),
             ChangeToFilesBuffer => c_buff!(self, FILES_BUFF_IDX),
-            DeleteChar => delete!(self, right, REPEAT),
+            DeleteChar | DeleteRight => delete!(self, right, REPEAT),
             DeleteSelection => delete!(self, selection, SELECTION),
             DeleteLine => delete!(self, line, REPEAT),
             DeleteLeft => delete!(self, left, REPEAT),
-            DeleteRight => delete!(self, right, REPEAT),
             DeleteNextWord => delete!(self, next_word, REPEAT),
             DeletePrevWord => delete!(self, prev_word, REPEAT),
             DeleteToBeginningOfLine => delete!(self, beginning_of_line),
@@ -487,13 +498,9 @@ impl Buffer for TextBuffer {
                 COMMAND_PROMPT,
             );
         } else {
-            self.base.info_view.render_bar(
-                &self.base.info.buff[0],
-                0,
-                display,
-                &self.base.info,
-                "",
-            );
+            self.base
+                .info_view
+                .render_bar(&self.info.buff[0], 0, display, &self.info, "");
         }
 
         self.base.doc_view.render_gutter(display, &self.base.doc);

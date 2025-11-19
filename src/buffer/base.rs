@@ -172,8 +172,6 @@ pub enum Mode<T> {
 pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
     /// The main content of the buffer.
     pub doc: Document,
-    /// The info bar content.
-    pub info: Document,
     /// The command content.
     pub cmd: Document,
 
@@ -310,7 +308,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         let count = contents.as_ref().map_or(1, |buff| buff.len().max(1));
         Ok(Self {
             doc: Document::new(0, 0, contents),
-            info: Document::new(0, 0, None),
             cmd: Document::new(0, 0, None),
             // Shifted by one because of info/command line.
             // FIXME: this limits the bar to always be exactly one in height.

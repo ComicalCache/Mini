@@ -10,6 +10,7 @@ use crate::{
     c_buff,
     cursor::{self, Cursor},
     display::Display,
+    document::Document,
     sc_buff,
     util::{CommandResult, CursorStyle},
 };
@@ -32,6 +33,10 @@ enum OtherViewAction {
 /// A file browser buffer.
 pub struct FilesBuffer {
     base: BaseBuffer<(), OtherViewAction, ()>,
+
+    /// The info bar content.
+    info: Document,
+
     /// The path of the current item.
     path: PathBuf,
     /// All entries of the dir containing the current item.
@@ -64,6 +69,7 @@ impl FilesBuffer {
 
         Ok(Self {
             base,
+            info: Document::new(0, 0, None),
             path,
             entries,
         })
@@ -104,7 +110,7 @@ impl FilesBuffer {
     fn info_line(&mut self) {
         use std::fmt::Write;
 
-        self.base.info.buff[0].to_mut().clear();
+        self.info.buff[0].to_mut().clear();
 
         let mode = match self.base.mode {
             Mode::View => "V",
@@ -123,7 +129,7 @@ impl FilesBuffer {
         let entries_label = if entries == 1 { "Entry" } else { "Entries" };
 
         write!(
-            self.base.info.buff[0].to_mut(),
+            self.info.buff[0].to_mut(),
             " [Files] [{mode}] [{curr}/{entries} {entries_label}] [{curr_type}]",
         )
         .unwrap();
@@ -137,7 +143,7 @@ impl FilesBuffer {
 
             // Plus 1 since text coordinates are 0 indexed.
             write!(
-                self.base.info.buff[0].to_mut(),
+                self.info.buff[0].to_mut(),
                 " [Selected {}:{} - {}:{}]",
                 start.y + 1,
                 start.x + 1,
@@ -222,13 +228,9 @@ impl Buffer for FilesBuffer {
                 COMMAND_PROMPT,
             );
         } else {
-            self.base.info_view.render_bar(
-                &self.base.info.buff[0],
-                0,
-                display,
-                &self.base.info,
-                "",
-            );
+            self.base
+                .info_view
+                .render_bar(&self.info.buff[0], 0, display, &self.info, "");
         }
 
         self.base.doc_view.render_gutter(display, &self.base.doc);
