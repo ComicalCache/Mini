@@ -118,6 +118,7 @@ impl Document {
             self.buff.push(Cow::from(""));
         }
 
+        self.edited = true;
         Some(line)
     }
 
@@ -203,9 +204,13 @@ impl Document {
             }
         }
 
-        // This is only reached if all inserted lines have a newline, thus the tail has its own line.
-        y += 1;
-        self.insert_line(Cow::from(tail), y);
+        // If case no in-between lines existed, we need to check this again
+        if self.buff[y].ends_with('\n') {
+            y += 1;
+            self.insert_line(Cow::from(tail), y);
+        } else {
+            self.buff[y].to_mut().push_str(&tail);
+        }
     }
 
     /// Removes a range of text from the document.

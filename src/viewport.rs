@@ -138,7 +138,7 @@ impl Viewport {
                 HighlightEvent::Source { start, end } => {
                     for ch in doc.contiguous_buff[*start..*end].chars() {
                         if y >= y_off && y < y_max && x >= x_off && x < x_max {
-                            let mut ch = ch;
+                            let mut display_ch = ch;
                             let mut fg = *color_stack.last().unwrap_or(&TXT);
                             let mut bg = if y == doc.cur.y { HIGHLIGHT } else { BG };
 
@@ -154,26 +154,26 @@ impl Viewport {
                             }
 
                             // Layer 2: Character replacement.
-                            if ch == ' ' {
-                                ch = '·';
+                            if display_ch == ' ' {
+                                display_ch = '·';
                                 fg = WHITESPACE;
                             }
-                            if ch == '\n' {
-                                ch = '⏎';
+                            if display_ch == '\n' {
+                                display_ch = '⏎';
                                 fg = WHITESPACE;
                             }
-                            if ch == '\r' {
-                                ch = '↤';
+                            if display_ch == '\r' {
+                                display_ch = '↤';
                                 fg = TXT;
                                 bg = CHAR_WARN;
                             }
-                            if ch == '\t' {
-                                ch = '↦';
+                            if display_ch == '\t' {
+                                display_ch = '↦';
                                 fg = TXT;
                                 bg = CHAR_WARN;
                             }
 
-                            display.update(Cell::new(ch, fg, bg), screen_x, screen_y);
+                            display.update(Cell::new(display_ch, fg, bg), screen_x, screen_y);
                         }
 
                         if ch == '\n' {
