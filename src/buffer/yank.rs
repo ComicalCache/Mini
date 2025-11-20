@@ -88,6 +88,42 @@ yank_fn!(right, right, doc = "Yanks right of the cursor.", n);
 yank_fn!(next_word, next_word, doc = "Yanks the next word.", n);
 yank_fn!(prev_word, prev_word, doc = "Yanks the previous word.", n);
 yank_fn!(
+    next_word_end,
+    next_word_end,
+    doc = "Yanks to the end of the next word.",
+    n
+);
+yank_fn!(
+    prev_word_end,
+    prev_word_end,
+    doc = "Yanks to the end of the previous word.",
+    n
+);
+yank_fn!(
+    next_whitespace,
+    next_whitespace,
+    doc = "Yanks to the next whitespace.",
+    n
+);
+yank_fn!(
+    prev_whitespace,
+    prev_whitespace,
+    doc = "Yanks to the previous whitespace.",
+    n
+);
+yank_fn!(
+    next_empty_line,
+    next_empty_line,
+    doc = "Yanks to the next empty line.",
+    n
+);
+yank_fn!(
+    prev_empty_line,
+    prev_empty_line,
+    doc = "Yanks to the previous empty line.",
+    n
+);
+yank_fn!(
     beginning_of_line,
     jump_to_beginning_of_line,
     doc = "Yanks until the beginning of the line."

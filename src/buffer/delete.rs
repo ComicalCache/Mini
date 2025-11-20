@@ -92,6 +92,42 @@ delete_fn!(right, right, doc = "Deletes right of the cursor.", n);
 delete_fn!(next_word, next_word, doc = "Deletes the next word.", n);
 delete_fn!(prev_word, prev_word, doc = "Deletes the previous word.", n);
 delete_fn!(
+    next_word_end,
+    next_word_end,
+    doc = "Deletes to the end of the next word.",
+    n
+);
+delete_fn!(
+    prev_word_end,
+    prev_word_end,
+    doc = "Deletes to the end of the previous word.",
+    n
+);
+delete_fn!(
+    next_whitespace,
+    next_whitespace,
+    doc = "Deletes to the next whitespace.",
+    n
+);
+delete_fn!(
+    prev_whitespace,
+    prev_whitespace,
+    doc = "Deletes to the previous whitespace.",
+    n
+);
+delete_fn!(
+    next_empty_line,
+    next_empty_line,
+    doc = "Deletes to the next empty line.",
+    n
+);
+delete_fn!(
+    prev_empty_line,
+    prev_empty_line,
+    doc = "Deletes to the previous empty line.",
+    n
+);
+delete_fn!(
     beginning_of_line,
     jump_to_beginning_of_line,
     doc = "Deletes until the beginning of the line."
