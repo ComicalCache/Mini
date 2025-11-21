@@ -9,16 +9,12 @@ use crate::{
     viewport::Viewport,
 };
 use arboard::Clipboard;
-use std::{borrow::Cow, io::Error, time::Duration};
+use std::{io::Error, time::Duration};
 use termion::event::Key;
 
 macro_rules! movement {
     ($self:ident, $func:ident) => {
-        cursor::$func(
-            &mut $self.doc,
-            &mut $self.doc_view,
-            $self.motion_repeat.parse::<usize>().unwrap_or(1),
-        )
+        cursor::$func(&mut $self.doc, &mut $self.doc_view, 1)
     };
 }
 
@@ -32,38 +28,21 @@ macro_rules! yank {
     ($self:ident, $func:ident) => {
         match yank::$func(&mut $self.doc, &mut $self.doc_view, &mut $self.clipboard) {
             Ok(()) => {}
-            Err(err) => {
-                $self.motion_repeat.clear();
-                return Ok(err);
-            }
+            Err(err) => return Ok(err),
         }
     };
     ($self:ident, $func:ident, REPEAT) => {{
-        let res = yank::$func(
-            &mut $self.doc,
-            &mut $self.doc_view,
-            &mut $self.clipboard,
-            $self.motion_repeat.parse::<usize>().unwrap_or(1),
-        );
-        $self.motion_repeat.clear();
-
-        match res {
-            Ok(()) => {}
-            Err(err) => return Ok(err),
+        if let Err(err) = yank::$func(&mut $self.doc, &mut $self.doc_view, &mut $self.clipboard, 1)
+        {
+            return Ok(err);
         }
     }};
     ($self:ident, $func:ident, SELECTION) => {
-        match yank::$func(&mut $self.doc, &mut $self.sel, &mut $self.clipboard) {
-            Ok(()) => {}
-            Err(err) => {
-                $self.motion_repeat.clear();
-                return Ok(err);
-            }
+        if let Err(err) = yank::$func(&mut $self.doc, &mut $self.sel, &mut $self.clipboard) {
+            return Ok(err);
         }
     };
 }
-
-pub const COMMAND_PROMPT: &str = " > ";
 
 #[derive(Clone, Copy)]
 /// A base set of actions in the view mode.
@@ -119,9 +98,6 @@ pub enum ViewAction<T> {
     NextMatch,
     PrevMatch,
 
-    // Repeat.
-    Repeat(char),
-
     /// Other actions defined by specialized buffers.
     Other(T),
 }
@@ -155,7 +131,7 @@ pub enum CommandAction<T> {
 /// Command mode encountered a non-standard event or can be applied.
 pub enum CommandTick<T> {
     /// The command can be applied to the buffer.
-    Apply(Cow<'static, str>),
+    Apply(String),
 
     /// Other actions defined by specialized buffers.
     Other(T),
@@ -192,8 +168,6 @@ pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
     pub sel: Option<Cursor>,
     /// The current buffer mode.
     pub mode: Mode<ModeEnum>,
-    /// A buffer to repeat motions.
-    pub motion_repeat: String,
     /// An instance of the system clipboard to yank to.
     pub clipboard: Clipboard,
 
@@ -203,7 +177,7 @@ pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
     matches_idx: Option<usize>,
 
     /// The history of entered commands.
-    cmd_history: Vec<Cow<'static, str>>,
+    cmd_history: Vec<String>,
     /// The current index in the command history.
     cmd_history_idx: usize,
 
@@ -280,17 +254,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
                     _ => None,
                 })
                 .simple(Key::Char('n'), NextMatch)
-                .simple(Key::Char('N'), PrevMatch)
-                .simple(Key::Char('0'), Repeat('0'))
-                .simple(Key::Char('1'), Repeat('1'))
-                .simple(Key::Char('2'), Repeat('2'))
-                .simple(Key::Char('3'), Repeat('3'))
-                .simple(Key::Char('4'), Repeat('4'))
-                .simple(Key::Char('5'), Repeat('5'))
-                .simple(Key::Char('6'), Repeat('6'))
-                .simple(Key::Char('7'), Repeat('7'))
-                .simple(Key::Char('8'), Repeat('8'))
-                .simple(Key::Char('9'), Repeat('9'));
+                .simple(Key::Char('N'), PrevMatch);
             StateMachine::new(command_map, Duration::from_secs(1))
         };
 
@@ -314,8 +278,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
 
         // Set the command view number width manually.
         // FIXME: this limits the bar to always be exactly one in height.
-        let mut cmd_view = Viewport::new(w, 1, 0, 0, x_off, y_off, None);
-        cmd_view.set_absolute_gutter_width(COMMAND_PROMPT.len());
+        let cmd_view = Viewport::new(w, 1, 0, 0, x_off, y_off, None);
 
         let count = contents.as_ref().map_or(1, |buff| buff.len().max(1));
         Ok(Self {
@@ -329,7 +292,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             cmd_view,
             sel: None,
             mode: Mode::View,
-            motion_repeat: String::new(),
             clipboard: Clipboard::new().map_err(Error::other)?,
             matches: Vec::new(),
             matches_idx: None,
@@ -343,7 +305,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
 
     /// Resizes the viewports of the buffer.
     pub fn resize(&mut self, w: usize, h: usize, x_off: usize, y_off: usize) {
-        let doc_count = self.doc.buff.len();
+        let doc_count = self.doc.len();
 
         // Shifted by one because of info/command line.
         // FIXME: this limits the bar to always be exactly one in height.
@@ -353,8 +315,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         self.info_view.resize(w, 1, x_off, y_off, None);
         // FIXME: this limits the bar to always be exactly one in height.
         self.cmd_view.resize(w, 1, x_off, y_off, None);
-        self.cmd_view
-            .set_absolute_gutter_width(COMMAND_PROMPT.len());
     }
 
     /// Jumps to the next search match if any.
@@ -401,9 +361,10 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
 
         self.cmd_history_idx += 1;
         if self.cmd_history_idx == self.cmd_history.len() {
-            self.cmd.buff[0] = Cow::from("");
+            self.cmd.from("");
         } else {
-            self.cmd.buff[0].clone_from(&self.cmd_history[self.cmd_history_idx]);
+            self.cmd
+                .from(self.cmd_history[self.cmd_history_idx].as_str());
         }
 
         cursor::jump_to_end_of_line(&mut self.cmd, &mut self.cmd_view);
@@ -416,7 +377,8 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         }
 
         self.cmd_history_idx -= 1;
-        self.cmd.buff[0].clone_from(&self.cmd_history[self.cmd_history_idx]);
+        self.cmd
+            .from(self.cmd_history[self.cmd_history_idx].as_str());
 
         cursor::jump_to_end_of_line(&mut self.cmd, &mut self.cmd_view);
     }
@@ -427,13 +389,11 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             Mode::Command => {
                 // Clear command line so its ready for next entry. Don't save contents here since they are only
                 // saved when hitting enter.
-                self.cmd.buff[0].to_mut().clear();
+                self.cmd.from("");
                 self.cmd.cur = Cursor::new(0, 0);
                 self.cmd_view.cur = Cursor::new(0, 0);
             }
             Mode::View => {
-                self.motion_repeat.clear();
-
                 if self.doc.edited {
                     self.clear_matches();
                 }
@@ -501,12 +461,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             A(CommandMode) => self.change_mode(Mode::Command),
             A(NextMatch) => self.next_match(),
             A(PrevMatch) => self.prev_match(),
-            A(Repeat(ch)) => {
-                self.motion_repeat.push(ch);
-
-                // Skip resetting motion repeat buffer when new repeat was issued.
-                return Ok(CommandResult::Ok);
-            }
             // Don't clear motion repeat buffer since the Other(_) handler might need to use it.
             // The Other(_) handler must clear it if it needs clearing.
             A(Other(action)) => return Err(action),
@@ -514,8 +468,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             Invalid => {}
         }
 
-        // Rest motion repeat buffer after successful command.
-        self.motion_repeat.clear();
         Ok(CommandResult::Ok)
     }
 
@@ -539,7 +491,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             A(PrevWord) => cursor::prev_word(&mut self.cmd, &mut self.cmd_view, 1),
             A(Newline) => {
                 // Commands have only one line.
-                let cmd = self.cmd.buff[0].clone();
+                let cmd = self.cmd.line(0).unwrap().to_string();
                 if !cmd.is_empty() {
                     self.cmd_history.push(cmd.clone());
                 }

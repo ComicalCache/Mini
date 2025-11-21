@@ -1,11 +1,9 @@
 use crate::{
-    cursor::Cursor,
+    cursor::{Cursor, CursorStyle},
     display::{Cell, Display},
-    document::Document,
-    util::CursorStyle,
+    document::{Document, highlight_event::HighlightEvent},
 };
 use termion::color::{self, Bg, Fg};
-use tree_sitter_highlight::HighlightEvent;
 
 /// Background color.
 const BG: Bg<color::Rgb> = Bg(color::Rgb(41, 44, 51));
@@ -96,12 +94,6 @@ impl Viewport {
         self.buff_w = self.w - n - 4;
     }
 
-    /// Sets the absolute gutter width.
-    pub const fn set_absolute_gutter_width(&mut self, n: usize) {
-        self.gutter_w = n;
-        self.buff_w = self.w - n;
-    }
-
     /// Renders a document to the `Display`.
     pub fn render_document(&self, display: &mut Display, doc: &Document, sel: Option<Cursor>) {
         // Prepre the selection to be in order if a selection state is active.
@@ -126,17 +118,12 @@ impl Viewport {
 
         'event_loop: for event in &doc.highlighter.highlights {
             match event {
-                HighlightEvent::HighlightStart(h) => match doc.highlighter.names.get(h.0) {
-                    Some(name) => {
-                        color_stack.push(*doc.highlighter.colors.get(name).unwrap_or(&TXT));
-                    }
-                    None => color_stack.push(TXT),
-                },
+                HighlightEvent::HighlightStart { .. } => {}
                 HighlightEvent::HighlightEnd => {
                     color_stack.pop();
                 }
                 HighlightEvent::Source { start, end } => {
-                    for ch in doc.contiguous_buff[*start..*end].chars() {
+                    for ch in doc.get_byte_range(*start, *end).chars() {
                         if y >= y_off && y < y_max && x >= x_off && x < x_max {
                             let mut display_ch = ch;
                             let mut fg = *color_stack.last().unwrap_or(&TXT);
@@ -198,7 +185,7 @@ impl Viewport {
             let base_bg = if y == self.cur.y { HIGHLIGHT } else { BG };
 
             // Skip screen lines outside the text line bounds.
-            if doc_idx >= doc.buff.len() {
+            if doc_idx >= doc.len() {
                 for x in self.gutter_w..self.w {
                     display.update(Cell::new(' ', TXT, base_bg), x + self.x_off, y + self.y_off);
                 }
@@ -223,8 +210,8 @@ impl Viewport {
 
         // Update the nums width if the supplied buffer is not correct.
         // log10 + 1 for length + 4 for whitespace and separator.
-        if self.gutter && doc.buff.len().ilog10() as usize + 5 != self.gutter_w {
-            self.resize(self.w, self.h, self.x_off, self.y_off, Some(doc.buff.len()));
+        if self.gutter && doc.len().ilog10() as usize + 5 != self.gutter_w {
+            self.resize(self.w, self.h, self.x_off, self.y_off, Some(doc.len()));
         }
 
         // Calculate which line of text is visible at what line on the screen.
@@ -243,7 +230,7 @@ impl Viewport {
             // Skip screen lines outside the text line bounds.
             // The value is guaranteed positive at that point.
             #[allow(clippy::cast_sign_loss)]
-            if doc_idx < 0 || (doc_idx as usize) >= doc.buff.len() {
+            if doc_idx < 0 || (doc_idx as usize) >= doc.len() {
                 for ch in format!("{}┃ ", " ".repeat(self.gutter_w - 2)).chars() {
                     display.update(Cell::new(ch, base_fg, base_bg), x, y + self.y_off);
                     x += 1;
@@ -257,33 +244,17 @@ impl Viewport {
 
             // Write line numbers.
             let padding = self.gutter_w - 3;
-            if doc_idx == doc.cur.y {
-                for ch in format!("{:>padding$} ┃ ", doc_idx + 1).chars() {
-                    display.update(Cell::new(ch, base_fg, base_bg), x, y + self.y_off);
-                    x += 1;
-                }
-            } else {
-                for ch in format!("{:>padding$} ┃ ", doc.cur.y.abs_diff(doc_idx)).chars() {
-                    display.update(Cell::new(ch, base_fg, base_bg), x, y + self.y_off);
-                    x += 1;
-                }
+            for ch in format!("{:>padding$} ┃ ", doc_idx + 1).chars() {
+                display.update(Cell::new(ch, base_fg, base_bg), x, y + self.y_off);
+                x += 1;
             }
         }
     }
 
     /// Renders a bar to the `Display`.
-    pub fn render_bar(
-        &self,
-        line: &str,
-        y: usize,
-        display: &mut Display,
-        doc: &Document,
-        prompt: &str,
-    ) {
-        let w = self.w.saturating_sub(prompt.len());
-
+    pub fn render_bar(&self, line: &str, y: usize, display: &mut Display, doc: &Document) {
         let start = doc.cur.x.saturating_sub(self.cur.x);
-        let end = (start + w).min(line.chars().count());
+        let end = (start + self.w).min(line.chars().count());
 
         let start_idx = line
             .char_indices()
@@ -294,35 +265,23 @@ impl Viewport {
             .nth(end)
             .map_or(line.len(), |(idx, _)| idx);
         let cmd = &line[start_idx..end_idx];
-        let padding = self.w.saturating_sub(prompt.len() + cmd.chars().count());
+        let padding = self.w.saturating_sub(cmd.chars().count());
 
-        for (x, ch) in format!("{prompt}{cmd}{}", " ".repeat(padding))
-            .chars()
-            .enumerate()
-        {
+        for (x, ch) in format!("{cmd}{}", " ".repeat(padding)).chars().enumerate() {
             display.update(Cell::new(ch, TXT, INFO), x + self.x_off, y + self.y_off);
         }
     }
 
     /// Renders a `Cursor` to the `Display`.
-    pub fn render_cursor(
-        &self,
-        display: &mut Display,
-        cursor_style: CursorStyle,
-        off: Option<usize>,
-    ) {
+    pub const fn render_cursor(&self, display: &mut Display, cursor_style: CursorStyle) {
         // The cursor is bound by the buffer width which is bound by terminal width.
         #[allow(clippy::cast_possible_truncation)]
-        let cur = off.map_or_else(
-            || {
-                Cursor::new(
-                    self.gutter_w + self.cur.x + self.x_off,
-                    self.cur.y + self.y_off,
-                )
-            },
-            |off| Cursor::new(self.cur.x + off + self.x_off, self.y_off),
+        display.set_cursor(
+            Cursor::new(
+                self.gutter_w + self.cur.x + self.x_off,
+                self.cur.y + self.y_off,
+            ),
+            cursor_style,
         );
-
-        display.set_cursor(cur, cursor_style);
     }
 }

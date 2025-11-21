@@ -1,6 +1,14 @@
 use crate::{document::Document, viewport::Viewport};
 
 #[derive(Clone, Copy)]
+/// The displayed cursor style.
+pub enum CursorStyle {
+    BlinkingBar,
+    BlinkingBlock,
+    SteadyBlock,
+}
+
+#[derive(Clone, Copy)]
 /// A cursor position in a document or viewport.
 pub struct Cursor {
     /// X position.
@@ -111,7 +119,7 @@ pub fn shift_left(_: &mut Document, view: &mut Viewport, n: usize) {
 /// Moves the cursors to the right
 pub fn right(doc: &mut Document, view: &mut Viewport, n: usize) {
     let mut line_bound = doc.line_count(doc.cur.y).unwrap();
-    if doc.buff[doc.cur.y].ends_with('\n') {
+    if doc.ends_with_newline(doc.cur.y) {
         line_bound = line_bound.saturating_sub(1);
     }
 
@@ -133,7 +141,7 @@ pub fn up(doc: &mut Document, view: &mut Viewport, n: usize) {
 
     // When moving up, handle case that new line contains less text than previous.
     let mut line_bound = doc.line_count(doc.cur.y).unwrap();
-    if doc.buff[doc.cur.y].ends_with('\n') {
+    if doc.ends_with_newline(doc.cur.y) {
         line_bound = line_bound.saturating_sub(1);
     }
 
@@ -150,14 +158,14 @@ pub fn shift_up(_: &mut Document, view: &mut Viewport, n: usize) {
 
 /// Moves the cursors down.
 pub fn down(doc: &mut Document, view: &mut Viewport, n: usize) {
-    let bound = doc.buff.len().saturating_sub(1);
+    let bound = doc.len().saturating_sub(1);
     doc.cur.down(n, bound);
     // Minus one because zero based.
     view.cur.down(n, (view.h - 1).min(bound));
 
     // When moving down, handle case that new line contains less text than previous.
     let mut line_bound = doc.line_count(doc.cur.y).unwrap();
-    if doc.buff[doc.cur.y].ends_with('\n') {
+    if doc.ends_with_newline(doc.cur.y) {
         line_bound = line_bound.saturating_sub(1);
     }
 
@@ -182,16 +190,18 @@ pub fn next_word(doc: &mut Document, view: &mut Viewport, n: usize) {
 fn __next_word(doc: &mut Document, view: &mut Viewport) {
     // Move line down if at end of line and not at end of document.
     let mut len = doc.line_count(doc.cur.y).unwrap();
-    if doc.buff[doc.cur.y].ends_with('\n') {
+    if doc.ends_with_newline(doc.cur.y) {
         len = len.saturating_sub(1);
     }
 
-    if len <= doc.cur.x && doc.cur.y < doc.buff.len() {
+    if len <= doc.cur.x && doc.cur.y < doc.len() {
         jump_to_beginning_of_line(doc, view);
         down(doc, view, 1);
 
         // If empty line or not whitespace, abort.
-        if doc.buff[doc.cur.y]
+        if doc
+            .line(doc.cur.y)
+            .unwrap()
             .chars()
             .next()
             .is_none_or(|ch| !ch.is_whitespace())
@@ -200,12 +210,12 @@ fn __next_word(doc: &mut Document, view: &mut Viewport) {
         }
 
         len = doc.line_count(doc.cur.y).unwrap();
-        if doc.buff[doc.cur.y].ends_with('\n') {
+        if doc.ends_with_newline(doc.cur.y) {
             len = len.saturating_sub(1);
         }
     }
 
-    let line = &doc.buff[doc.cur.y];
+    let line = doc.line(doc.cur.y).unwrap();
     let curr = line
         .chars()
         .nth(doc.cur.x.min(len.saturating_sub(1)))
@@ -273,26 +283,26 @@ pub fn next_word_end(doc: &mut Document, view: &mut Viewport, n: usize) {
 fn __next_word_end(doc: &mut Document, view: &mut Viewport) {
     // Move line down if at end of line and not at end of document.
     let mut len = doc.line_count(doc.cur.y).unwrap();
-    if doc.buff[doc.cur.y].ends_with('\n') {
+    if doc.ends_with_newline(doc.cur.y) {
         len = len.saturating_sub(1);
     }
 
-    if len <= doc.cur.x && doc.cur.y < doc.buff.len() {
+    if len <= doc.cur.x && doc.cur.y < doc.len() {
         jump_to_beginning_of_line(doc, view);
         down(doc, view, 1);
 
         // If empty line, abort.
-        if doc.buff[doc.cur.y].chars().next().is_none() {
+        if doc.line(doc.cur.y).unwrap().chars().next().is_none() {
             return;
         }
 
         len = doc.line_count(doc.cur.y).unwrap();
-        if doc.buff[doc.cur.y].ends_with('\n') {
+        if doc.ends_with_newline(doc.cur.y) {
             len = len.saturating_sub(1);
         }
     }
 
-    let line = &doc.buff[doc.cur.y];
+    let line = doc.line(doc.cur.y).unwrap();
     let curr = line
         .chars()
         .nth(doc.cur.x.min(len.saturating_sub(1)))
@@ -364,19 +374,17 @@ fn __prev_word(doc: &mut Document, view: &mut Viewport) {
         jump_to_end_of_line(doc, view);
 
         // If empty line, abort.
-        if doc.buff[doc.cur.y].is_empty() {
+        if doc.line(doc.cur.y).unwrap().len_chars() == 0 {
             return;
         }
     }
 
-    let len = doc.line_count(doc.cur.y).unwrap();
-    let line = &doc.buff[doc.cur.y];
+    let line = doc.line(doc.cur.y).unwrap();
 
     // Find next non-whitespace character.
     if let Some((idx, ch)) = line
-        .chars()
-        .rev()
-        .skip(len - doc.cur.x)
+        .chars_at(doc.cur.x)
+        .reversed()
         .enumerate()
         .find(|(_, ch)| !ch.is_whitespace())
     {
@@ -385,9 +393,8 @@ fn __prev_word(doc: &mut Document, view: &mut Viewport) {
         // If it's alphanumeric, find first character of that sequence of alphanumeric characters.
         if ch.is_alphanumeric() {
             offset += line
-                .chars()
-                .rev()
-                .skip(len - doc.cur.x + offset)
+                .chars_at(doc.cur.x - offset)
+                .reversed()
                 .take_while(|ch| ch.is_alphanumeric())
                 .count();
         }
@@ -412,22 +419,19 @@ fn __prev_word_end(doc: &mut Document, view: &mut Viewport) {
         up(doc, view, 1);
         jump_to_end_of_line(doc, view);
 
+        let line = doc.line(doc.cur.y).unwrap();
         // If empty line or not whitespace, abort.
-        if doc.buff[doc.cur.y].is_empty()
-            || !doc.buff[doc.cur.y].chars().last().unwrap().is_whitespace()
-        {
+        if line.len_chars() == 0 || !line.chars().last().unwrap().is_whitespace() {
             return;
         }
     }
 
-    let len = doc.line_count(doc.cur.y).unwrap();
-    let line = &doc.buff[doc.cur.y];
+    let line = doc.line(doc.cur.y).unwrap();
 
     // Find next non alphanumeric character.
     if let Some((idx, ch)) = line
-        .chars()
-        .rev()
-        .skip(len - doc.cur.x)
+        .chars_at(doc.cur.x)
+        .reversed()
         .enumerate()
         .find(|(_, ch)| !ch.is_alphanumeric())
     {
@@ -436,9 +440,8 @@ fn __prev_word_end(doc: &mut Document, view: &mut Viewport) {
         // If it's whitespace, find first character of that sequence of alphanumeric characters.
         if ch.is_whitespace() {
             offset += line
-                .chars()
-                .rev()
-                .skip(len - doc.cur.x + offset)
+                .chars_at(doc.cur.x - offset)
+                .reversed()
                 .take_while(|ch| ch.is_whitespace())
                 .count();
         }
@@ -460,16 +463,18 @@ pub fn next_whitespace(doc: &mut Document, view: &mut Viewport, n: usize) {
 fn __next_whitespace(doc: &mut Document, view: &mut Viewport) {
     // Move line down if at end of line and not at end of document.
     let mut len = doc.line_count(doc.cur.y).unwrap();
-    if doc.buff[doc.cur.y].ends_with('\n') {
+    if doc.ends_with_newline(doc.cur.y) {
         len = len.saturating_sub(1);
     }
 
-    if len <= doc.cur.x && doc.cur.y < doc.buff.len() {
+    if len <= doc.cur.x && doc.cur.y < doc.len() {
         jump_to_beginning_of_line(doc, view);
         down(doc, view, 1);
 
         // If empty line or whitespace, abort.
-        if doc.buff[doc.cur.y]
+        if doc
+            .line(doc.cur.y)
+            .unwrap()
             .chars()
             .next()
             .is_none_or(char::is_whitespace)
@@ -478,12 +483,12 @@ fn __next_whitespace(doc: &mut Document, view: &mut Viewport) {
         }
 
         len = doc.line_count(doc.cur.y).unwrap();
-        if doc.buff[doc.cur.y].ends_with('\n') {
+        if doc.ends_with_newline(doc.cur.y) {
             len = len.saturating_sub(1);
         }
     }
 
-    let line = &doc.buff[doc.cur.y];
+    let line = doc.line(doc.cur.y).unwrap();
 
     let (n, _) = line
         .chars()
@@ -511,13 +516,11 @@ fn __prev_whitespace(doc: &mut Document, view: &mut Viewport) {
         return;
     }
 
-    let len = doc.line_count(doc.cur.y).unwrap();
-    let line = &doc.buff[doc.cur.y];
+    let line = doc.line(doc.cur.y).unwrap();
 
     let Some((n, _)) = line
-        .chars()
-        .rev()
-        .skip(len - doc.cur.x)
+        .chars_at(doc.cur.x)
+        .reversed()
         .enumerate()
         .find(|(_, ch)| ch.is_whitespace())
     else {
@@ -544,11 +547,10 @@ pub fn next_empty_line(doc: &mut Document, view: &mut Viewport, n: usize) {
 
 fn __next_empty_line(doc: &mut Document, view: &mut Viewport) {
     if let Some((y, _)) = doc
-        .buff
-        .iter()
+        .lines()
         .enumerate()
         .skip(doc.cur.y + 1)
-        .find(|(_, l)| *l == "\n" || l.is_empty())
+        .find(|(_, l)| *l == "\n" || l.len_chars() == 0)
     {
         down(doc, view, y - doc.cur.y);
     } else {
@@ -564,18 +566,17 @@ pub fn prev_empty_line(doc: &mut Document, view: &mut Viewport, n: usize) {
 }
 
 pub fn __prev_empty_line(doc: &mut Document, view: &mut Viewport) {
-    if let Some((y, _)) = doc
-        .buff
-        .iter()
-        .enumerate()
-        .rev()
-        .skip(doc.buff.len() - doc.cur.y)
-        .find(|(_, l)| *l == "\n" || l.is_empty())
-    {
-        up(doc, view, doc.cur.y - y);
-    } else {
-        jump_to_beginning_of_file(doc, view);
+    for y in (0..doc.cur.y).rev() {
+        let line = doc.line(y).unwrap();
+
+        if line.len_chars() == 0 || line == "\n" {
+            up(doc, view, doc.cur.y - y);
+            return;
+        }
     }
+
+    // If no empty line was found in the loop, jump to the start.
+    jump_to_beginning_of_file(doc, view);
 }
 
 /// Jumps the cursors the the beginning of a line.
@@ -586,7 +587,7 @@ pub fn jump_to_beginning_of_line(doc: &mut Document, view: &mut Viewport) {
 /// Jumps the cursors to the end of a line.
 pub fn jump_to_end_of_line(doc: &mut Document, view: &mut Viewport) {
     let mut line_bound = doc.line_count(doc.cur.y).unwrap();
-    if doc.buff[doc.cur.y].ends_with('\n') {
+    if doc.ends_with_newline(doc.cur.y) {
         line_bound = line_bound.saturating_sub(1);
     }
 
@@ -602,7 +603,7 @@ pub fn jump_to_matching_opposite(doc: &mut Document, view: &mut Viewport) {
 
 fn find_matching_bracket(doc: &Document) -> Option<(usize, usize)> {
     let cur = doc.cur;
-    let Some(current_char) = doc.buff[cur.y].chars().nth(cur.x) else {
+    let Some(current_char) = doc.line(cur.y).unwrap().chars().nth(cur.x) else {
         return None; // Cursor is at the end of line.
     };
 
@@ -621,11 +622,11 @@ fn find_matching_bracket(doc: &Document) -> Option<(usize, usize)> {
     let mut depth = 1;
     if forward {
         // Search forward from the character after the cursor.
-        for y in cur.y..doc.buff.len() {
-            let line = &doc.buff[y];
+        for y in cur.y..doc.len() {
+            let line = doc.line(y).unwrap();
             let offset = if y == cur.y { cur.x + 1 } else { 0 };
 
-            for (x, ch) in line.char_indices().skip(offset) {
+            for (x, ch) in line.chars().enumerate().skip(offset) {
                 if ch == opening {
                     depth += 1;
                 } else if ch == closing {
@@ -640,14 +641,10 @@ fn find_matching_bracket(doc: &Document) -> Option<(usize, usize)> {
     } else {
         // Search backward from the character before the cursor.
         for y in (0..=cur.y).rev() {
-            let line = &doc.buff[y];
-            let offset = if y == cur.y {
-                line.chars().count() - cur.x
-            } else {
-                0
-            };
+            let line = doc.line(y).unwrap();
+            let offset = if y == cur.y { cur.x } else { line.len_chars() };
 
-            for (x, ch) in line.char_indices().rev().skip(offset) {
+            for (x, ch) in line.chars_at(offset).reversed().enumerate() {
                 if ch == closing {
                     depth += 1;
                 } else if ch == opening {
@@ -655,7 +652,7 @@ fn find_matching_bracket(doc: &Document) -> Option<(usize, usize)> {
                 }
 
                 if depth == 0 {
-                    return Some((x, y));
+                    return Some((offset - x - 1, y));
                 }
             }
         }
@@ -666,7 +663,7 @@ fn find_matching_bracket(doc: &Document) -> Option<(usize, usize)> {
 
 /// Jumps the cursors to the last line of the file.
 pub fn jump_to_end_of_file(doc: &mut Document, view: &mut Viewport) {
-    down(doc, view, doc.buff.len() - (doc.cur.y + 1));
+    down(doc, view, doc.len() - (doc.cur.y + 1));
     jump_to_end_of_line(doc, view);
 }
 

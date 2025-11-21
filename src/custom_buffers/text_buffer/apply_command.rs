@@ -1,16 +1,11 @@
 use crate::{
-    INFO_BUFF_IDX,
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
     history::{Change, Replace},
-    sc_buff,
     util::{CommandResult, file_name, open_file},
 };
 use regex::Regex;
-use std::{
-    borrow::Cow,
-    io::{Error, Read},
-};
+use std::io::{Error, Read};
 
 impl TextBuffer {
     fn write_to_file(&mut self) -> Result<bool, Error> {
@@ -24,16 +19,14 @@ impl TextBuffer {
 
     fn open_command(&mut self, args: &str, force: bool) -> CommandResult {
         if !force && self.base.doc.edited {
-            return sc_buff!(
-                self,
-                INFO_BUFF_IDX,
+            return CommandResult::Info(
                 "There are unsaved changes, save or oo to force open a new document".to_string(),
             );
         }
 
         // Reset state.
-        self.base.doc.clear();
-        self.base.cmd.clear();
+        self.base.doc.from("");
+        self.base.cmd.from("");
         self.base.doc_view.cur = Cursor::new(0, 0);
         self.base.doc_view.set_gutter_width(1);
         self.file = None;
@@ -46,20 +39,24 @@ impl TextBuffer {
 
         self.file = match open_file(args) {
             Ok(file) => Some(file),
-            Err(err) => return sc_buff!(self, INFO_BUFF_IDX, err.to_string()),
+            Err(err) => {
+                return CommandResult::Info(err.to_string());
+            }
         };
         self.file_name = file_name(args);
 
         let mut buff = String::new();
         match self.file.as_mut().unwrap().read_to_string(&mut buff) {
             Ok(_) => {
-                self.base.doc.set_contents(buff);
+                self.base.doc.from(buff.as_str());
                 self.base
                     .doc
                     .highlighter
                     .set_lang_filename(self.file_name.as_ref().unwrap());
             }
-            Err(err) => return sc_buff!(self, INFO_BUFF_IDX, err.to_string()),
+            Err(err) => {
+                return CommandResult::Info(err.to_string());
+            }
         }
 
         CommandResult::Ok
@@ -69,20 +66,22 @@ impl TextBuffer {
         if !args.is_empty() {
             self.file = match open_file(args) {
                 Ok(file) => Some(file),
-                Err(err) => return sc_buff!(self, INFO_BUFF_IDX, err.to_string()),
+                Err(err) => {
+                    return CommandResult::Info(err.to_string());
+                }
             };
             self.file_name = file_name(args);
         }
 
         let res = match self.write_to_file() {
             Ok(res) => res,
-            Err(err) => return sc_buff!(self, INFO_BUFF_IDX, err.to_string()),
+            Err(err) => {
+                return CommandResult::Info(err.to_string());
+            }
         };
         // Failed to write file because no path exists.
         if !res {
-            return sc_buff!(
-                self,
-                INFO_BUFF_IDX,
+            return CommandResult::Info(
                 "Please specify a file location using 'w <path>' to write the file to".to_string(),
             );
         }
@@ -91,11 +90,8 @@ impl TextBuffer {
     }
 
     fn replace_command(&mut self, args: &str) -> CommandResult {
-        let err = sc_buff!(
-            self,
-            INFO_BUFF_IDX,
-            "Invalid format. Expected: r /<regex>/<replace>/".to_string(),
-        );
+        let err =
+            CommandResult::Info("Invalid format. Expected: r /<regex>/<replace>/".to_string());
         let Some(args) = args.strip_prefix('/') else {
             return err;
         };
@@ -112,11 +108,9 @@ impl TextBuffer {
         let regex = match Regex::new(regex_str) {
             Ok(regex) => regex,
             Err(err) => {
-                return sc_buff!(
-                    self,
-                    INFO_BUFF_IDX,
-                    format!("'{regex_str}' is not a valid regular expression:\n{err}"),
-                );
+                return CommandResult::Info(format!(
+                    "'{regex_str}' is not a valid regular expression:\n{err}"
+                ));
             }
         };
 
@@ -143,7 +137,7 @@ impl TextBuffer {
             (start, end)
         };
 
-        let hay = self.base.doc.get_range(start, end).unwrap();
+        let hay = self.base.doc.get_range(start, end).unwrap().to_string();
 
         let mut new = String::new();
         let mut last_match = 0;
@@ -162,8 +156,8 @@ impl TextBuffer {
             new.push_str(&replacement);
 
             // Add replace operation to history.
-            let delete_data = Cow::from(mat.as_str().to_string());
-            let insert_data = Cow::from(replacement);
+            let delete_data = mat.as_str().to_string();
+            let insert_data = replacement;
             changes.push(Replace {
                 pos,
                 delete_data,
@@ -188,7 +182,7 @@ impl TextBuffer {
 
     fn syntax_command(&mut self, args: &str) -> CommandResult {
         if !self.base.doc.highlighter.set_lang(args) {
-            return sc_buff!(self, INFO_BUFF_IDX, "Invalid language selected".to_string());
+            return CommandResult::Info("Invalid language selected".to_string());
         }
 
         CommandResult::Ok
@@ -209,13 +203,11 @@ impl TextBuffer {
             "q" => CommandResult::Quit,
             "qq" => CommandResult::ForceQuit,
             "wq" => match self.write_to_file() {
-                Ok(res) if !res => sc_buff!(
-                    self,
-                    INFO_BUFF_IDX,
+                Ok(res) if !res => CommandResult::Info(
                     "Please specify a file location using 'w <path>' to write the file to"
                         .to_string(),
                 ),
-                Err(err) => sc_buff!(self, INFO_BUFF_IDX, err.to_string()),
+                Err(err) => CommandResult::Info(err.to_string()),
                 _ => CommandResult::Quit,
             },
             "w" => self.write_command(args),
@@ -223,11 +215,7 @@ impl TextBuffer {
             "oo" => self.open_command(args, true),
             "r" => self.replace_command(args),
             "syntax" => self.syntax_command(args),
-            _ => sc_buff!(
-                self,
-                INFO_BUFF_IDX,
-                format!("Unrecognized command: '{cmd}'"),
-            ),
+            _ => CommandResult::Info(format!("Unrecognized command: '{cmd}'")),
         }
     }
 }

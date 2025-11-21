@@ -38,7 +38,10 @@ pub fn selection(
     if let Some(history) = history
         && let Some(data) = doc.get_range(start, end)
     {
-        history.add_change(Change::Delete { pos: start, data });
+        history.add_change(Change::Delete {
+            pos: start,
+            data: data.to_string(),
+        });
     }
 
     doc.remove_range(start, end);
@@ -51,37 +54,38 @@ pub fn selection(
 
 /// Deletes a line.
 pub fn line(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
-    if doc.buff.len() == 1 && doc.buff[0].is_empty() {
+    if doc.len() == 1 && doc.line(0).unwrap().len_chars() == 0 {
         return;
     }
 
-    if doc.cur.y + n >= doc.buff.len() {
-        cursor::up(doc, view, doc.cur.y + n - doc.buff.len());
+    if doc.cur.y + n >= doc.len() {
+        cursor::up(doc, view, doc.cur.y + n - doc.len());
     }
 
     // Begin of selection at the end of one line above the first line or at beginning of current line
     // if in the first line.
+    let tmp1 = doc.cur;
     cursor::up(doc, view, 1);
-    if doc.cur.y != 0 {
+    if tmp1.y != 0 {
         cursor::jump_to_end_of_line(doc, view);
     } else {
         cursor::jump_to_beginning_of_line(doc, view);
     }
-    let tmp = doc.cur;
 
     // End selection at the end of the last line or at the beginning of the next line if selection started
     // in the first line.
+    let tmp2 = doc.cur;
     cursor::down(doc, view, n);
-    if tmp.y != 0 || tmp.y + 1 == doc.buff.len() {
+    if tmp1.y != 0 || tmp2.y + 1 == doc.len() {
         cursor::jump_to_end_of_line(doc, view);
     } else {
         cursor::jump_to_beginning_of_line(doc, view);
     }
 
-    selection(doc, view, &mut Some(tmp), history);
+    selection(doc, view, &mut Some(tmp2), history);
 
     // Fix cursor moving up due to moving it one line up.
-    if tmp.y != 0 {
+    if tmp1.y != 0 {
         cursor::down(doc, view, 1);
     }
     cursor::jump_to_beginning_of_line(doc, view);

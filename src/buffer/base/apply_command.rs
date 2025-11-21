@@ -1,34 +1,27 @@
 use crate::{
-    INFO_BUFF_IDX, INFO_MSG,
+    INFO_MSG,
     buffer::base::{BaseBuffer, CommandTick},
     cursor::{self, Cursor},
     util::{CommandResult, line_column},
 };
 use regex::Regex;
-use std::borrow::Cow;
 
 impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     BaseBuffer<ModeEnum, ViewEnum, CommandEnum>
 {
     fn search(&mut self, args: &str) -> CommandResult {
         if args.len() == 2 || !args.starts_with('/') || !args.ends_with('/') {
-            return CommandResult::SetAndChangeBuffer(
-                INFO_BUFF_IDX,
+            return CommandResult::Info(
                 "Expected a valid regular expression like '/<regex>/'".to_string(),
-                None,
-                None,
             );
         }
 
         let regex = match Regex::new(&args[1..args.len() - 1]) {
             Ok(regex) => regex,
             Err(err) => {
-                return CommandResult::SetAndChangeBuffer(
-                    INFO_BUFF_IDX,
-                    format!("'{args}' is not a valid regular expression:\n{err}"),
-                    None,
-                    None,
-                );
+                return CommandResult::Info(format!(
+                    "'{args}' is not a valid regular expression:\n{err}"
+                ));
             }
         };
 
@@ -55,7 +48,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             (start, end)
         };
 
-        let hay = self.doc.get_range(start, end).unwrap();
+        let hay = self.doc.get_range(start, end).unwrap().to_string();
         self.matches = regex
             .find_iter(&hay)
             .map(|mat| {
@@ -67,12 +60,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         self.matches_idx = None;
 
         if self.matches.is_empty() {
-            return CommandResult::SetAndChangeBuffer(
-                INFO_BUFF_IDX,
-                "No matches found".to_string(),
-                None,
-                None,
-            );
+            return CommandResult::Info("No matches found".to_string());
         }
 
         self.matches_idx = self
@@ -108,7 +96,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     /// Applies the command entered during command mode.
     pub(super) fn apply_command(
         &mut self,
-        input: Cow<'static, str>,
+        input: String,
     ) -> Result<CommandResult, CommandTick<CommandEnum>> {
         if input.is_empty() {
             return Ok(CommandResult::Ok);
@@ -120,15 +108,10 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         };
 
         match cmd {
-            "?" => Ok(CommandResult::SetAndChangeBuffer(
-                INFO_BUFF_IDX,
-                format!(
-                    "Mini - A terminal text-editor (v{})\n\n{INFO_MSG}",
-                    option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap()
-                ),
-                None,
-                None,
-            )),
+            "?" => Ok(CommandResult::Info(format!(
+                "Mini - A terminal text-editor (v{})\n\n{INFO_MSG}",
+                option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap()
+            ))),
             "goto" => Ok(self.goto(args)),
             "s" => Ok(self.search(args)),
             _ => Err(CommandTick::Apply(input)),

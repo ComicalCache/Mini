@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     fs::{File, OpenOptions},
     io::Error,
     path::{Path, PathBuf},
@@ -9,18 +8,11 @@ use std::{
 /// The result of a command entered by the user.
 pub enum CommandResult {
     Ok,
-    ChangeBuffer(usize),
-    SetAndChangeBuffer(usize, String, Option<PathBuf>, Option<String>),
+    Change(usize),
+    Info(String),
+    Init(usize, String, Option<PathBuf>, Option<String>),
     Quit,
     ForceQuit,
-}
-
-#[derive(Clone, Copy)]
-/// The displayed cursor style.
-pub enum CursorStyle {
-    BlinkingBar,
-    BlinkingBlock,
-    SteadyBlock,
 }
 
 /// Retreives the filename of a given path.
@@ -45,24 +37,6 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
         .create(true)
         .truncate(false)
         .open(path)
-}
-
-/// Splits a string into a vector of lines.
-pub fn split_to_lines<S: AsRef<str>>(data: S) -> Vec<Cow<'static, str>> {
-    let mut buff = Vec::new();
-    buff.extend(
-        data.as_ref()
-            .split_inclusive('\n')
-            .map(str::to_string)
-            .map(Cow::from),
-    );
-
-    // Add trailing line without newline character.
-    if data.as_ref().ends_with('\n') {
-        buff.push(Cow::from(""));
-    }
-
-    buff
 }
 
 /// Parses a line column string 'y:x' where y is the line and x is the column.

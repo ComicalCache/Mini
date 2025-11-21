@@ -7,8 +7,6 @@ pub mod text_buffer;
 macro_rules! c_buff {
     ($self:ident, $buff:ident) => {{
         use $crate::util::CommandResult;
-
-        $self.base.motion_repeat.clear();
         return CommandResult::ChangeBuffer($buff);
     }};
 }
@@ -19,13 +17,11 @@ macro_rules! sc_buff {
     ($self:ident, $buff:ident, $contents:expr $(,)?) => {{
         use $crate::util::CommandResult;
 
-        $self.base.motion_repeat.clear();
         CommandResult::SetAndChangeBuffer($buff, $contents, None, None)
     }};
     ($self:ident, $buff:ident, $contents:expr, $path:expr, $file_name:expr $(,)?) => {{
         use $crate::util::CommandResult;
 
-        $self.base.motion_repeat.clear();
         CommandResult::SetAndChangeBuffer($buff, $contents, $path, $file_name)
     }};
 }

@@ -1,12 +1,11 @@
 Run Mini with a file(path) argument to open or create a file or a directory to open it in the file browser. Omit the
 file(path) to create a "scratchpad" buffer with no backing file. A few things that make Mini interesting: it has
-(relative) line-numbers, diffed-rendering, undo and redo, contains a file browser and syntax highlighting.
+line-numbers, diffed-rendering, undo and redo and contains a file browser.
 
 Mini should feel familiar to those who have used VIm before. It features three kinds of buffers: a text buffer, an info
 buffer, and a file browser buffer. You can switch to the text buffer, info buffer and files buffer, from any of the
-buffers, by hitting 't', '?', or 'e' respectively. You can navigate and manipulate buffers using "motions". Typing a
-string of numbers before a motion makes the motion execute the specified amount of times. All buffers support these
-basic motions:
+buffers, by hitting 't', '?', or 'e' respectively. You can navigate and manipulate buffers using "motions". All buffers
+support these basic motions:
 - 'h' | 'j' | 'k' | 'l' to move the cursor
 - 'H' | 'J' | 'K' | 'L' to shift the viewport
 - 'w' to skip to the next word
@@ -88,14 +87,6 @@ mode.
 
     Syntax Highlighting:
     Currently supported are following languages (followed by their name to enable it):
-    - Toml (toml)
-    - JSON (json)
-    - YAML (yaml)
-    - Rust (rust)
-    - Python (python)
-    - C (c)
-    - C++ (cpp)
-    - Lua (lua)
 
 Info Buffer:
 The info buffer is a read only buffer that displays errors, warnings or other types of information. It has two modes:

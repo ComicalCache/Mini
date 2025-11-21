@@ -1,7 +1,6 @@
 use crate::{
     TXT_BUFF_IDX,
     custom_buffers::files_buffer::FilesBuffer,
-    sc_buff,
     util::{CommandResult, file_name, open_file},
 };
 use std::{
@@ -64,8 +63,7 @@ impl FilesBuffer {
             let mut buff = String::new();
             open_file(entry)?.read_to_string(&mut buff)?;
 
-            return Ok(sc_buff!(
-                self,
+            return Ok(CommandResult::Init(
                 TXT_BUFF_IDX,
                 buff,
                 Some(entry.clone()),

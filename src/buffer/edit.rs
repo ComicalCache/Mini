@@ -4,7 +4,6 @@ use crate::{
     history::{Change, History},
     viewport::Viewport,
 };
-use std::borrow::Cow;
 
 pub const TAB_WIDTH: usize = 4;
 
@@ -19,7 +18,7 @@ pub fn write_char(
     if let Some(history) = history {
         history.add_change(Change::Insert {
             pos: doc.cur,
-            data: Cow::from(ch.to_string()),
+            data: ch.to_string(),
         });
     }
 
@@ -51,7 +50,7 @@ pub fn write_tab(
     if let Some(history) = history {
         history.add_change(Change::Insert {
             pos: doc.cur,
-            data: Cow::from(spaces.clone()), // Use the calculated spaces
+            data: spaces.clone(), // Use the calculated spaces
         });
     }
 
@@ -67,33 +66,24 @@ pub fn delete_char(doc: &mut Document, view: &mut Viewport, history: Option<&mut
     if cur.x > 0 {
         // If deleting a character in a line.
         cursor::left(doc, view, 1);
-        let ch = doc.delete_char(doc.cur.x, doc.cur.y).unwrap();
+        let ch = doc.delete_char(doc.cur.x, doc.cur.y);
 
         if let Some(history) = history {
             history.add_change(Change::Delete {
                 pos: doc.cur,
-                data: Cow::from(ch.to_string()),
+                data: ch.to_string(),
             });
         }
     } else if cur.y > 0 {
         // If deleting at the beginning of a line and it's not the first line.
         cursor::up(doc, view, 1);
         cursor::jump_to_end_of_line(doc, view);
-
-        // Remove line from document.
-        let line = doc.remove_line(doc.cur.y + 1).unwrap();
-
-        // Remove newline from previous line.
-        let len = doc.buff[cur.y - 1].len();
-        doc.buff[cur.y - 1].to_mut().remove(len - 1);
-
-        // Append removed line to previous line.
-        doc.buff[cur.y - 1].to_mut().push_str(&line);
+        let ch = doc.delete_char(doc.cur.x, doc.cur.y);
 
         if let Some(history) = history {
             history.add_change(Change::Delete {
                 pos: doc.cur,
-                data: Cow::from("\n"),
+                data: ch.to_string(),
             });
         }
     }

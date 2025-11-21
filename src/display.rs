@@ -5,8 +5,7 @@ use termion::{
     raw::RawTerminal,
 };
 
-use crate::cursor::Cursor;
-use crate::util::CursorStyle;
+use crate::cursor::{Cursor, CursorStyle};
 
 /// Reset text color.
 const NO_TXT: Fg<Reset> = Fg(Reset);

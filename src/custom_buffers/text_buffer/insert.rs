@@ -1,13 +1,10 @@
 use crate::{
-    INFO_BUFF_IDX,
     buffer::edit::{self, TAB_WIDTH},
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
     history::{Change, Replace},
-    sc_buff,
     util::CommandResult,
 };
-use std::borrow::Cow;
 
 impl TextBuffer {
     /// Inserts a new line above the current cursor position.
@@ -16,12 +13,10 @@ impl TextBuffer {
         cursor::jump_to_beginning_of_line(&mut self.base.doc, &mut self.base.doc_view);
         self.history.add_change(Change::Insert {
             pos: self.base.doc.cur,
-            data: Cow::from("\n"),
+            data: String::from("\n"),
         });
 
-        self.base
-            .doc
-            .insert_line(Cow::from("\n"), self.base.doc.cur.y);
+        self.base.doc.insert_line(self.base.doc.cur.y);
     }
 
     /// Inserts a new line bellow the current cursor position.
@@ -30,19 +25,10 @@ impl TextBuffer {
         let y = self.base.doc.cur.y;
         self.history.add_change(Change::Insert {
             pos: Cursor::new(self.base.doc.line_count(y).unwrap(), y),
-            data: Cow::from("\n"),
+            data: String::from("\n"),
         });
 
-        if self.base.doc.cur.y + 1 == self.base.doc.buff.len() {
-            self.base.doc.buff[self.base.doc.cur.y].to_mut().push('\n');
-        }
-
-        let content = if self.base.doc.cur.y + 1 == self.base.doc.buff.len() {
-            Cow::from("")
-        } else {
-            Cow::from("\n")
-        };
-        self.base.doc.insert_line(content, self.base.doc.cur.y + 1);
+        self.base.doc.insert_line(self.base.doc.cur.y + 1);
         cursor::down(&mut self.base.doc, &mut self.base.doc_view, 1);
 
         // Set target x coordinate, otherwise it would snap back when moving without inserting.
@@ -58,8 +44,7 @@ impl TextBuffer {
         let old_ch = self
             .base
             .doc
-            .delete_char(self.base.doc.cur.x, self.base.doc.cur.y)
-            .unwrap();
+            .delete_char(self.base.doc.cur.x, self.base.doc.cur.y);
 
         // Store the change in one replace change.
         {
@@ -71,8 +56,8 @@ impl TextBuffer {
 
             self.history.add_change(Change::Replace(vec![Replace {
                 pos: self.base.doc.cur,
-                delete_data: Cow::from(old_ch.to_string()),
-                insert_data: Cow::from(ch),
+                delete_data: old_ch.to_string(),
+                insert_data: ch,
             }]));
         }
 
@@ -88,28 +73,25 @@ impl TextBuffer {
 
     /// Paste the system clipboard contents after the current cursor.
     pub(super) fn paste(&mut self, trim_newline: bool, move_to: bool) -> Option<CommandResult> {
-        let mut content = match self.base.clipboard.get_text() {
+        let mut data = match self.base.clipboard.get_text() {
             Ok(content) => content,
             Err(err) => {
-                return Some(sc_buff!(self, INFO_BUFF_IDX, err.to_string()));
+                return Some(CommandResult::Info(err.to_string()));
             }
         };
 
-        if trim_newline && content.ends_with('\n') {
-            content.truncate(content.len() - 1);
+        if trim_newline && data.ends_with('\n') {
+            data.truncate(data.len() - 1);
         }
 
-        self.base.doc.write_str(content.as_str());
+        self.base.doc.write_str(data.as_str());
         let pos = self.base.doc.cur;
         if move_to {
-            let end_pos = cursor::end_pos(&pos, content.as_str());
+            let end_pos = cursor::end_pos(&pos, data.as_str());
             cursor::move_to(&mut self.base.doc, &mut self.base.doc_view, end_pos);
         }
 
-        self.history.add_change(Change::Insert {
-            pos,
-            data: Cow::from(content),
-        });
+        self.history.add_change(Change::Insert { pos, data });
 
         None
     }

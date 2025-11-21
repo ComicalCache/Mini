@@ -1,17 +1,18 @@
+pub mod highlight_event;
 mod highlighter;
 
-use crate::{cursor::Cursor, util::split_to_lines};
+use crate::cursor::Cursor;
 use highlighter::Highlighter;
+use ropey::{Rope, RopeSlice, iter::Lines};
 use std::{
-    borrow::Cow,
     fs::File,
-    io::{Error, Seek, SeekFrom, Write},
+    io::{BufWriter, Error, Seek, SeekFrom, Write},
 };
 
 // The document of a buffer containing its contents.
 pub struct Document {
     // The buffer contents.
-    pub buff: Vec<Cow<'static, str>>,
+    rope: Rope,
     // The cursor inside the buffer.
     pub cur: Cursor,
     // Flag if the buffer was modified.
@@ -19,46 +20,57 @@ pub struct Document {
 
     // The highlighter component responsible for syntax highlighting.
     pub highlighter: Highlighter,
-    // A contiguous buffer of the contents required by the highlighter.
-    pub contiguous_buff: String,
 }
 
 impl Document {
     pub fn new(x: usize, y: usize, contents: Option<String>) -> Self {
-        let contiguous_buff = contents
-            .clone()
-            .filter(|c| !c.is_empty())
-            .map_or(String::new(), |c| c);
-
-        // Always have at least one line in the document.
-        let buff = contents.filter(|c| !c.is_empty()).map_or_else(
-            || vec![Cow::from("")],
-            |c| split_to_lines(c).into_iter().collect(),
-        );
-
         Self {
-            buff,
+            rope: Rope::from_str(contents.unwrap_or_default().as_str()),
             cur: Cursor::new(x, y),
             edited: false,
             highlighter: Highlighter::new(),
-            contiguous_buff,
         }
     }
 
-    /// Clears the document and sets the cursor to a specified position.
-    pub fn clear(&mut self) {
-        self.buff.truncate(1);
-        self.buff[0].to_mut().clear();
+    /// Initializes the document with new contents.
+    pub fn from(&mut self, buff: &str) {
+        self.rope = Rope::from_str(buff);
         self.cur = Cursor::new(0, 0);
         self.edited = false;
-
-        self.contiguous_buff.clear();
         self.highlighter.highlights.clear();
+    }
+
+    /// Returns the number of lines.
+    pub fn len(&self) -> usize {
+        self.rope.len_lines()
     }
 
     /// Returns the count of chars in a line.
     pub fn line_count(&self, y: usize) -> Option<usize> {
-        self.buff.get(y).map(|l| l.chars().count())
+        if y >= self.len() {
+            return None;
+        }
+
+        Some(self.rope.line(y).len_chars())
+    }
+
+    /// Returns if the line ends with a newline character.
+    pub fn ends_with_newline(&self, y: usize) -> bool {
+        if y >= self.len() {
+            return false;
+        }
+
+        self.rope.line(y).chars().last().is_some_and(|l| l == '\n')
+    }
+
+    /// Returns a line of the document.
+    pub fn line(&self, y: usize) -> Option<RopeSlice<'_>> {
+        self.rope.get_line(y)
+    }
+
+    /// Returns an iterator over the lines of the document.
+    pub fn lines(&self) -> Lines<'_> {
+        self.rope.lines()
     }
 
     /// Writes the document to a specified file.
@@ -67,150 +79,69 @@ impl Document {
             return Ok(());
         }
 
-        file.set_len(self.contiguous_buff.len() as u64)?;
+        file.set_len(self.rope.len_bytes() as u64)?;
+        let mut file = BufWriter::new(file);
         file.seek(SeekFrom::Start(0))?;
-        file.write_all(self.contiguous_buff.as_bytes())?;
+        self.rope.write_to(&mut file)?;
         file.flush()?;
 
         self.edited = false;
         Ok(())
     }
 
-    /// Replaces the document buffer and sets the cursor to the beginning of the buffer.
-    pub fn set_contents(&mut self, buff: String) {
-        if buff.is_empty() {
-            // Always have at least one line in the document.
-            self.buff.truncate(1);
-            self.buff[0].to_mut().clear();
-        } else {
-            self.buff.clear();
-            for line in split_to_lines(&buff) {
-                self.buff.push(line.clone());
-            }
-        }
-        self.cur = Cursor::new(0, 0);
-        self.edited = false;
-
-        self.contiguous_buff = buff;
-        self.highlighter.highlights.clear();
-    }
-
     /// Inserts a new line at a specified y position.
-    pub fn insert_line(&mut self, line: Cow<'static, str>, y: usize) {
-        assert!(y <= self.buff.len());
-        if y < self.buff.len().saturating_sub(1) {
-            // Don't insert lines in the middle that don't have a newline character.
-            assert!(line.ends_with('\n'));
-        }
-
-        self.buff.insert(y, line);
+    pub fn insert_line(&mut self, y: usize) {
+        self.rope.insert(self.rope.line_to_char(y), "\n");
         self.edited = true;
-    }
-
-    /// Removes a line at a specified y position.
-    pub fn remove_line(&mut self, y: usize) -> Option<Cow<'static, str>> {
-        if y >= self.buff.len() {
-            return None;
-        }
-
-        let line = self.buff.remove(y);
-        if self.buff.is_empty() {
-            self.buff.push(Cow::from(""));
-        }
-
-        self.edited = true;
-        Some(line)
     }
 
     /// Writes a char at a specified position.
     pub fn write_char(&mut self, ch: char, x: usize, y: usize) {
-        assert!(x <= self.line_count(y).unwrap());
-
-        let idx = self.buff[y]
-            .char_indices()
-            .nth(x)
-            .map_or(self.buff[y].len(), |(idx, _)| idx);
-        if ch == '\n' {
-            let tail = self.buff[y].to_mut().split_off(idx);
-
-            if !self.buff[y].ends_with('\n') {
-                self.buff[y].to_mut().push('\n');
-            }
-
-            self.insert_line(std::borrow::Cow::from(tail), y + 1);
-        } else {
-            self.buff[y].to_mut().insert(idx, ch);
-        }
-
+        self.rope.insert_char(self.xy_to_idx(x, y), ch);
         self.edited = true;
     }
 
     /// Deletes a char at a specified position.
-    pub fn delete_char(&mut self, x: usize, y: usize) -> Option<char> {
-        if y >= self.buff.len() {
-            return None;
-        }
+    pub fn delete_char(&mut self, x: usize, y: usize) -> char {
+        let idx = self.xy_to_idx(x, y);
+        let ch = self.rope.char(idx);
 
-        let (idx, ch) = self.buff[y].char_indices().nth(x)?;
-
-        self.buff[y].to_mut().remove(idx);
-        if ch == '\n'
-            && let Some(line) = self.remove_line(y + 1)
-        {
-            self.buff[y].to_mut().push_str(&line);
-        }
-
+        self.rope.remove(idx..=idx);
         self.edited = true;
-        Some(ch)
+
+        ch
     }
 
     /// Writes a str at the current cursor position.
     /// Creates new lines if the content contains new lines.
-    pub fn write_str(&mut self, r#str: &str) {
-        self.write_str_at(self.cur.x, self.cur.y, r#str);
+    pub fn write_str(&mut self, str: &str) {
+        self.write_str_at(self.cur.x, self.cur.y, str);
     }
 
     /// Writes a str at a specified position.
     /// Creates new lines if the content contains new lines.
-    pub fn write_str_at(&mut self, x: usize, mut y: usize, r#str: &str) {
-        let count = self.line_count(y).unwrap();
-        assert!(x <= count);
-
-        let mut lines = r#str.split_inclusive('\n');
-
-        // Insertion point of current line.
-        let line = &mut self.buff[y];
-        let idx = line
-            .char_indices()
-            .nth(x)
-            .map_or(line.len(), |(idx, _)| idx);
-
-        // Content of the original line after the cursor.
-        let tail = line.to_mut().split_off(idx);
-        line.to_mut().push_str(lines.next().unwrap_or(""));
-
+    pub fn write_str_at(&mut self, x: usize, y: usize, str: &str) {
+        self.rope.insert(self.xy_to_idx(x, y), str);
         self.edited = true;
+    }
 
-        // Insert in-between lines.
-        for new_line in lines {
-            y += 1;
-
-            if new_line.ends_with('\n') {
-                self.insert_line(Cow::from(new_line.to_string()), y);
-            } else {
-                // Only the last line part can have no new-line. Append tail.
-                self.insert_line(Cow::from(format!("{new_line}{tail}")), y);
-                return;
-            }
-        }
-
-        // If case no in-between lines existed, we need to check this again
-        if self.buff[y].ends_with('\n') {
-            y += 1;
-            self.insert_line(Cow::from(tail), y);
+    /// Gets a range of text from the document.
+    pub fn get_range(&self, pos1: Cursor, pos2: Cursor) -> Option<RopeSlice<'_>> {
+        let (start, end) = if pos1 <= pos2 {
+            (pos1, pos2)
         } else {
-            self.buff[y].to_mut().push_str(&tail);
-        }
+            (pos2, pos1)
+        };
+
+        let start_idx = self.xy_to_idx(start.x, start.y);
+        let end_idx = self.xy_to_idx(end.x, end.y);
+
+        self.rope.get_slice(start_idx..end_idx)
+    }
+
+    /// Gets a range of text from the document using absolute byte indices.
+    pub fn get_byte_range(&self, start: usize, end: usize) -> RopeSlice<'_> {
+        self.rope.byte_slice(start..end)
     }
 
     /// Removes a range of text from the document.
@@ -221,98 +152,18 @@ impl Document {
             (pos2, pos1)
         };
 
-        if start.y == end.y {
-            // Single-line deletion.
-            let line = &mut self.buff[start.y];
-            let start_idx = line
-                .char_indices()
-                .nth(start.x)
-                .map_or(line.len(), |(idx, _)| idx);
-            let end_idx = line
-                .char_indices()
-                .nth(end.x)
-                .map_or(line.len(), |(idx, _)| idx);
-
-            line.to_mut().drain(start_idx..end_idx);
-
-            if !self.buff[start.y].ends_with('\n')
-                && let Some(next_line) = self.remove_line(start.y + 1)
-            {
-                self.buff[start.y].to_mut().push_str(&next_line);
-            }
-        } else {
-            // Multi-line deletion.
-            let end_line = &self.buff[end.y];
-            let end_idx = end_line
-                .char_indices()
-                .nth(end.x)
-                .map_or(end_line.len(), |(idx, _)| idx);
-            let tail = end_line[end_idx..].to_string();
-
-            let start_line = &mut self.buff[start.y];
-            let start_idx = start_line
-                .char_indices()
-                .nth(start.x)
-                .map_or(start_line.len(), |(idx, _)| idx);
-            start_line.to_mut().truncate(start_idx);
-            start_line.to_mut().push_str(&tail);
-
-            // Remove the in-between lines.
-            self.buff.drain(start.y + 1..=end.y);
-        }
-
+        let start_idx = self.xy_to_idx(start.x, start.y);
+        let end_idx = self.xy_to_idx(end.x, end.y);
+        self.rope.remove(start_idx..end_idx);
         self.edited = true;
     }
 
-    /// Copies a range of text from the document.
-    pub fn get_range(&self, pos1: Cursor, pos2: Cursor) -> Option<Cow<'static, str>> {
-        let (start, end) = if pos1 <= pos2 {
-            (pos1, pos2)
-        } else {
-            (pos2, pos1)
-        };
+    pub fn highlight(&mut self) {
+        self.highlighter.highlight(self.rope.chunks());
+    }
 
-        let start_len = self.line_count(start.y)?;
-        let end_len = self.line_count(end.y)?;
-        if start_len < start.x || end_len < end.x {
-            return None;
-        }
-
-        if start.y == end.y {
-            let line = &self.buff[start.y];
-            let start_idx = line
-                .char_indices()
-                .nth(start.x)
-                .map_or(line.len(), |(idx, _)| idx);
-            let end_idx = line
-                .char_indices()
-                .nth(end.x)
-                .map_or(line.len(), |(idx, _)| idx);
-
-            return Some(Cow::from(line[start_idx..end_idx].to_string()));
-        }
-
-        // First line
-        let first_line = &self.buff[start.y];
-        let start_idx = first_line
-            .char_indices()
-            .nth(start.x)
-            .map_or(first_line.len(), |(idx, _)| idx);
-        let mut result = Cow::from(first_line[start_idx..].to_string());
-
-        // Lines between first and last line
-        for line in self.buff.iter().skip(start.y + 1).take(end.y - start.y - 1) {
-            result.to_mut().push_str(line);
-        }
-
-        // Last line
-        let last_line = &self.buff[end.y];
-        let end_idx = last_line
-            .char_indices()
-            .nth(end.x)
-            .map_or(last_line.len(), |(idx, _)| idx);
-        result.to_mut().push_str(&last_line[..end_idx]);
-
-        Some(result)
+    /// Converts (x, y) coordinates to a rope index.
+    fn xy_to_idx(&self, x: usize, y: usize) -> usize {
+        self.rope.line_to_char(y) + x
     }
 }

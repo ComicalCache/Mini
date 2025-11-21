@@ -1,17 +1,16 @@
 use crate::cursor::Cursor;
-use std::borrow::Cow;
 
 /// A reversible change to a document.
 pub enum Change {
     /// Text insertion.
     Insert {
         pos: Cursor,
-        data: Cow<'static, str>,
+        data: String,
     },
     /// Text deletion.
     Delete {
         pos: Cursor,
-        data: Cow<'static, str>,
+        data: String,
     },
     Replace(Vec<Replace>),
 }
@@ -19,8 +18,8 @@ pub enum Change {
 /// A change replacing data.
 pub struct Replace {
     pub pos: Cursor,
-    pub delete_data: Cow<'static, str>,
-    pub insert_data: Cow<'static, str>,
+    pub delete_data: String,
+    pub insert_data: String,
 }
 
 /// A history of changes to a document.

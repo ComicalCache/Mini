@@ -1,5 +1,4 @@
 use crate::{
-    INFO_BUFF_IDX,
     cursor::{self, Cursor},
     document::Document,
     util::CommandResult,
@@ -45,12 +44,7 @@ pub fn selection(
     *sel = None;
     match res {
         Ok(()) => Ok(()),
-        Err(err) => Err(CommandResult::SetAndChangeBuffer(
-            INFO_BUFF_IDX,
-            err.to_string(),
-            None,
-            None,
-        )),
+        Err(err) => Err(CommandResult::Info(err.to_string())),
     }
 }
 
@@ -74,12 +68,7 @@ pub fn line(
 
     match res {
         Ok(()) => Ok(()),
-        Err(err) => Err(CommandResult::SetAndChangeBuffer(
-            INFO_BUFF_IDX,
-            err.to_string(),
-            None,
-            None,
-        )),
+        Err(err) => Err(CommandResult::Info(err.to_string())),
     }
 }
 

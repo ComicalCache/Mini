@@ -1,6 +1,6 @@
 use crate::{
-    INFO_BUFF_IDX, TXT_BUFF_IDX, buffer::Buffer, c_buff, cursor::Cursor,
-    custom_buffers::info_buffer::InfoBuffer, sc_buff, util::CommandResult,
+    TXT_BUFF_IDX, buffer::Buffer, cursor::Cursor, custom_buffers::info_buffer::InfoBuffer,
+    util::CommandResult,
 };
 
 impl InfoBuffer {
@@ -16,19 +16,14 @@ impl InfoBuffer {
         };
 
         match cmd {
-            "q" => c_buff!(self, TXT_BUFF_IDX),
-            "qq" => c_buff!(self, TXT_BUFF_IDX),
+            "q" | "qq" => CommandResult::Change(TXT_BUFF_IDX),
             "clear" => {
                 // Set contents moves the doc.cur to the beginning.
                 self.set_contents(String::new(), None, None);
                 self.base.doc_view.cur = Cursor::new(0, 0);
                 CommandResult::Ok
             }
-            _ => sc_buff!(
-                self,
-                INFO_BUFF_IDX,
-                format!("Unrecognized command: '{cmd}'"),
-            ),
+            _ => CommandResult::Info(format!("Unrecognized command: '{cmd}'")),
         }
     }
 }

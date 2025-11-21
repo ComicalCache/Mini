@@ -149,12 +149,17 @@ fn main() -> Result<(), std::io::Error> {
         match buffs[curr_buff].tick(key) {
             CommandResult::Ok => {}
             // Change to a different buffer.
-            CommandResult::ChangeBuffer(idx) => {
+            CommandResult::Change(idx) => {
                 rerender_changed_buff = true;
                 curr_buff = idx;
             }
             // Set a buffer and change to it if the buffer has no pending changes.
-            CommandResult::SetAndChangeBuffer(idx, contents, path, file_name) => {
+            CommandResult::Info(contents) => {
+                buffs[INFO_BUFF_IDX].set_contents(contents, None, None);
+                curr_buff = INFO_BUFF_IDX;
+            }
+            // Set a buffer and change to it if the buffer has no pending changes.
+            CommandResult::Init(idx, contents, path, file_name) => {
                 if let Err(err) = buffs[idx].can_quit() {
                     buffs[INFO_BUFF_IDX].set_contents(err, path, file_name);
                     curr_buff = INFO_BUFF_IDX;
