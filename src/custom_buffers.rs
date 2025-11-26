@@ -1,5 +1,4 @@
 pub mod files_buffer;
-pub mod info_buffer;
 pub mod text_buffer;
 
 /// Sends a change buffer result, clearing the motion repeat buffer.

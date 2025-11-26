@@ -3,7 +3,7 @@ mod history;
 mod insert;
 
 use crate::{
-    FILES_BUFF_IDX, INFO_BUFF_IDX,
+    FILES_BUFF_IDX, INFO_BUFF_IDX, TXT_BUFF_IDX,
     buffer::{
         Buffer,
         base::{BaseBuffer, CommandTick, Mode, ViewAction},
@@ -83,6 +83,7 @@ enum OtherViewAction {
     InsertAbove,
 
     // Buffers
+    ChangeToTextBuffer,
     ChangeToInfoBuffer,
     ChangeToFilesBuffer,
 
@@ -203,6 +204,7 @@ impl TextBuffer {
                 .simple(Key::Char('A'), Other(AppendEndOfLine))
                 .simple(Key::Char('o'), Other(InsertBellow))
                 .simple(Key::Char('O'), Other(InsertAbove))
+                .simple(Key::Char('t'), Other(ChangeToTextBuffer))
                 .simple(Key::Char('?'), Other(ChangeToInfoBuffer))
                 .simple(Key::Char('e'), Other(ChangeToFilesBuffer))
                 .operator(Key::Char('d'), |key| match key {
@@ -362,6 +364,7 @@ impl TextBuffer {
                 self.insert_move_new_line_above();
                 self.base.change_mode(Mode::Other(Write));
             }
+            ChangeToTextBuffer => return CommandResult::Change(TXT_BUFF_IDX),
             ChangeToInfoBuffer => return CommandResult::Change(INFO_BUFF_IDX),
             ChangeToFilesBuffer => return CommandResult::Change(FILES_BUFF_IDX),
             DeleteChar | DeleteRight => delete!(self, right, REPEAT),

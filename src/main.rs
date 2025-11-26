@@ -14,7 +14,7 @@ mod viewport;
 
 use crate::{
     buffer::Buffer,
-    custom_buffers::{files_buffer::FilesBuffer, info_buffer::InfoBuffer, text_buffer::TextBuffer},
+    custom_buffers::{files_buffer::FilesBuffer, text_buffer::TextBuffer},
     display::Display,
     util::{CommandResult, file_name, open_file},
 };
@@ -87,7 +87,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut display = Display::new(w as usize, h as usize);
 
     // Setting the current buffer and error in case of file opening error.
-    let mut info_buffer = Box::new(InfoBuffer::new(w as usize, h as usize, 0, 0)?);
+    let mut info_buffer = Box::new(TextBuffer::new(w as usize, h as usize, 0, 0, None, None)?);
     let files_buffer = Box::new(FilesBuffer::new(w as usize, h as usize, 0, 0, base)?);
     let mut curr_buff = if let Some(Err(err)) = &file {
         // Open the `FilesBuffer` if a directory was specified as argument.
