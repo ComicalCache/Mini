@@ -170,55 +170,51 @@ impl Viewport {
         let x_off = doc.cur.x - self.cur.x;
         let x_max = x_off + self.buff_w;
 
-        let mut y = 0;
-        let mut x = 0;
+        for y in y_off..y_max {
+            let mut x = 0;
 
-        for ch in doc.get_contents().flat_map(|c| c.chars()) {
-            if y >= y_off && y < y_max && x >= x_off && x < x_max {
-                let mut display_ch = ch;
-                let mut fg = TXT;
-                let mut bg = if y == doc.cur.y { HIGHLIGHT } else { BG };
-
-                let screen_y = y - y_off + self.y_off;
-                let screen_x = self.gutter_w + x - x_off + self.x_off;
-
-                // Layer 1: Selection.
-                if let Some((start, end)) = sel {
-                    let pos = Cursor::new(x, y);
-                    if pos >= start && pos < end {
-                        bg = SEL;
-                    }
-                }
-
-                // Layer 2: Character replacement.
-                if display_ch == ' ' {
-                    display_ch = '·';
-                    fg = WHITESPACE;
-                } else if display_ch == '\n' {
-                    display_ch = '⏎';
-                    fg = WHITESPACE;
-                } else if display_ch == '\r' {
-                    display_ch = '↤';
-                    fg = TXT;
-                    bg = CHAR_WARN;
-                } else if display_ch == '\t' {
-                    display_ch = '↦';
-                    fg = TXT;
-                    bg = CHAR_WARN;
-                }
-
-                display.update(Cell::new(display_ch, fg, bg), screen_x, screen_y);
-            }
-
-            if ch == '\n' {
-                y += 1;
-                x = 0;
-            } else {
-                x += 1;
-            }
-
-            if y >= y_max {
+            let Some(line) = doc.line(y) else {
                 break;
+            };
+
+            for ch in line.chars() {
+                if x >= x_off && x < x_max {
+                    let mut display_ch = ch;
+                    let mut fg = TXT;
+                    let mut bg = if y == doc.cur.y { HIGHLIGHT } else { BG };
+
+                    let screen_y = y - y_off + self.y_off;
+                    let screen_x = self.gutter_w + x - x_off + self.x_off;
+
+                    // Layer 1: Selection.
+                    if let Some((start, end)) = sel {
+                        let pos = Cursor::new(x, y);
+                        if pos >= start && pos < end {
+                            bg = SEL;
+                        }
+                    }
+
+                    // Layer 2: Character replacement.
+                    if display_ch == ' ' {
+                        display_ch = '·';
+                        fg = WHITESPACE;
+                    } else if display_ch == '\n' {
+                        display_ch = '⏎';
+                        fg = WHITESPACE;
+                    } else if display_ch == '\r' {
+                        display_ch = '↤';
+                        fg = TXT;
+                        bg = CHAR_WARN;
+                    } else if display_ch == '\t' {
+                        display_ch = '↦';
+                        fg = TXT;
+                        bg = CHAR_WARN;
+                    }
+
+                    display.update(Cell::new(display_ch, fg, bg), screen_x, screen_y);
+                }
+
+                x += 1;
             }
         }
 

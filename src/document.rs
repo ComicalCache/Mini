@@ -1,8 +1,5 @@
 use crate::cursor::Cursor;
-use ropey::{
-    Rope, RopeSlice,
-    iter::{Chunks, Lines},
-};
+use ropey::{Rope, RopeSlice, iter::Lines};
 use std::{
     fs::File,
     io::{BufWriter, Error, Seek, SeekFrom, Write},
@@ -131,11 +128,6 @@ impl Document {
         let end_idx = self.xy_to_idx(end.x, end.y);
 
         self.rope.get_slice(start_idx..end_idx)
-    }
-
-    /// Gets a range of text from the document using absolute byte indices.
-    pub fn get_contents(&self) -> Chunks<'_> {
-        self.rope.chunks()
     }
 
     /// Removes a range of text from the document.
