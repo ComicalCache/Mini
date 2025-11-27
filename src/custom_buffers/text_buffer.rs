@@ -101,13 +101,13 @@ impl TextBuffer {
         let percentage = 100 * line / total;
         let size: usize = self.base.doc.lines().map(|l| l.bytes().len()).sum();
 
-        let indicator = match &self.file {
-            Some(_) => self.file_name.as_ref().unwrap(),
-            None => "Text",
-        };
+        match &self.file {
+            Some(_) => write!(&mut info_line, "[{}] ", self.file_name.as_ref().unwrap()).unwrap(),
+            None => {}
+        }
         write!(
             &mut info_line,
-            "[{indicator}] [{mode}] [{line}:{col}] [{line}/{total} {percentage}%] [{size}B]",
+            "[{mode}] [{line}:{col}] [{line}/{total} {percentage}%] [{size}B]",
         )
         .unwrap();
 
