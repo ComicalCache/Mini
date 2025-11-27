@@ -3,6 +3,7 @@ use crate::{document::Document, viewport::Viewport};
 #[derive(Clone, Copy)]
 /// The displayed cursor style.
 pub enum CursorStyle {
+    Hidden,
     BlinkingBar,
     BlinkingBlock,
     SteadyBlock,

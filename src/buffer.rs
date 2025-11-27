@@ -28,6 +28,9 @@ pub trait Buffer {
     /// Sets the contents of a buffer.
     fn set_contents(&mut self, contents: String, path: Option<PathBuf>, file_name: Option<String>);
 
+    /// Set the buffer message.
+    fn set_message(&mut self, text: String);
+
     /// Asks if the buffer is ready to quit/has pending changes.
     fn can_quit(&self) -> Result<(), String>;
 }

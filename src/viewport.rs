@@ -2,6 +2,7 @@ use crate::{
     cursor::{Cursor, CursorStyle},
     display::{Cell, Display},
     document::Document,
+    message::Message,
 };
 use termion::color::{self, Bg, Fg};
 
@@ -21,6 +22,8 @@ const REL_NUMS: Fg<color::Rgb> = Fg(color::Rgb(101, 103, 105));
 const WHITESPACE: Fg<color::Rgb> = Fg(color::Rgb(68, 71, 79));
 /// Background to warn of tab characters.
 const CHAR_WARN: Bg<color::Rgb> = Bg(color::Rgb(181, 59, 59));
+/// Error message text color.
+const ERROR: Fg<color::Rgb> = Fg(color::Rgb(181, 59, 59));
 
 /// The viewport of a (section of a) `Display`.
 pub struct Viewport {
@@ -94,6 +97,61 @@ impl Viewport {
         self.buff_w = self.w - n - 4;
     }
 
+    /// Renders a message overlay to the `Display`. Should be called after `render_document` because it will get
+    /// overwritten otherwise.
+    pub fn render_message(&self, display: &mut Display, message: &Message) {
+        let mut chars = message.text.chars();
+
+        // Skip lines that are "scrolled off" the screen.
+        for _ in 0..message.scroll {
+            for _ in 0..self.w {
+                match chars.next() {
+                    Some('\n') => break,
+                    Some(_) => {}
+                    None => unreachable!(),
+                }
+            }
+        }
+
+        // Skip the "scrolled off" lines and only show at most 1/3rd of the height of error.
+        for y in 0..(message.lines - message.scroll).min(self.h / 3) {
+            let mut newline = false;
+            for x in 0..self.w {
+                if newline {
+                    // Fill the remaining line.
+                    display.update(Cell::new(' ', ERROR, INFO), self.x_off + x, self.y_off + y);
+                } else {
+                    let mut display_ch = chars.next().unwrap_or(' ');
+
+                    if display_ch == '\n' {
+                        newline = true;
+                        display.update(Cell::new(' ', ERROR, INFO), self.x_off + x, self.y_off + y);
+                    } else {
+                        let mut fg = ERROR;
+                        let mut bg = INFO;
+
+                        // Layer 1: Character replacement.
+                        if display_ch == '\r' {
+                            display_ch = '↤';
+                            fg = TXT;
+                            bg = CHAR_WARN;
+                        } else if display_ch == '\t' {
+                            display_ch = '↦';
+                            fg = TXT;
+                            bg = CHAR_WARN;
+                        }
+
+                        display.update(
+                            Cell::new(display_ch, fg, bg),
+                            self.x_off + x,
+                            self.y_off + y,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// Renders a document to the `Display`.
     pub fn render_document(&self, display: &mut Display, doc: &Document, sel: Option<Cursor>) {
         // Prepre the selection to be in order if a selection state is active.
@@ -136,17 +194,14 @@ impl Viewport {
                 if display_ch == ' ' {
                     display_ch = '·';
                     fg = WHITESPACE;
-                }
-                if display_ch == '\n' {
+                } else if display_ch == '\n' {
                     display_ch = '⏎';
                     fg = WHITESPACE;
-                }
-                if display_ch == '\r' {
+                } else if display_ch == '\r' {
                     display_ch = '↤';
                     fg = TXT;
                     bg = CHAR_WARN;
-                }
-                if display_ch == '\t' {
+                } else if display_ch == '\t' {
                     display_ch = '↦';
                     fg = TXT;
                     bg = CHAR_WARN;

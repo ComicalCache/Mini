@@ -6,7 +6,7 @@ use crate::{
 };
 use regex::Regex;
 
-impl<ModeEnum: Clone> BaseBuffer<ModeEnum> {
+impl<ModeEnum> BaseBuffer<ModeEnum> {
     fn search(&mut self, args: &str) -> CommandResult {
         if args.len() == 2 || !args.starts_with('/') || !args.ends_with('/') {
             return CommandResult::Info(

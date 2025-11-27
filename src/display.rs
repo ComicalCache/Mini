@@ -127,13 +127,14 @@ impl Display {
         #[allow(clippy::cast_possible_truncation)]
         let cur = Goto(self.cursor.0.x as u16 + 1, self.cursor.0.y as u16 + 1);
         match self.cursor.1 {
-            CursorStyle::BlinkingBar => write!(stdout, "{cur}{BlinkingBar}")?,
-            CursorStyle::BlinkingBlock => write!(stdout, "{cur}{BlinkingBlock}")?,
-            CursorStyle::SteadyBlock => write!(stdout, "{cur}{SteadyBlock}")?,
+            CursorStyle::Hidden => {}
+            CursorStyle::BlinkingBar => write!(stdout, "{cur}{BlinkingBar}{Show}")?,
+            CursorStyle::BlinkingBlock => write!(stdout, "{cur}{BlinkingBlock}{Show}")?,
+            CursorStyle::SteadyBlock => write!(stdout, "{cur}{SteadyBlock}{Show}")?,
         }
 
         // Always reset styling and show cursor.
-        write!(stdout, "{NO_TXT}{NO_BG}{Show}")?;
+        write!(stdout, "{NO_TXT}{NO_BG}")?;
 
         stdout.flush()
     }

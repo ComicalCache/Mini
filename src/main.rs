@@ -8,6 +8,7 @@ mod custom_buffers;
 mod display;
 mod document;
 mod history;
+mod message;
 mod util;
 mod viewport;
 
@@ -37,7 +38,6 @@ const INFO_MSG: &str = include_str!("../info.txt");
 // Indices of buffers.
 const TXT_BUFF_IDX: usize = 0;
 const FILES_BUFF_IDX: usize = 1;
-const INFO_BUFF_IDX: usize = 2;
 
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), std::io::Error> {
@@ -86,23 +86,21 @@ fn main() -> Result<(), std::io::Error> {
     let mut display = Display::new(w as usize, h as usize);
 
     // Setting the current buffer and error in case of file opening error.
-    let mut info_buffer = Box::new(TextBuffer::new(w as usize, h as usize, 0, 0, None, None)?);
-    let files_buffer = Box::new(FilesBuffer::new(w as usize, h as usize, 0, 0, base)?);
+    let mut files_buffer = Box::new(FilesBuffer::new(w as usize, h as usize, 0, 0, base)?);
     let mut curr_buff = if let Some(Err(err)) = &file {
         // Open the `FilesBuffer` if a directory was specified as argument.
         if err.kind() == ErrorKind::IsADirectory {
             FILES_BUFF_IDX
         } else {
-            info_buffer.set_contents(err.to_string(), None, None);
-            INFO_BUFF_IDX
+            files_buffer.set_message(err.to_string());
+            TXT_BUFF_IDX
         }
     } else {
         TXT_BUFF_IDX
     };
 
     // Vector of buffers.
-    let mut buffs: [Box<dyn Buffer>; 3] = [
-        // 1
+    let mut buffs: [Box<dyn Buffer>; 2] = [
         Box::new(TextBuffer::new(
             w as usize,
             h as usize,
@@ -111,10 +109,7 @@ fn main() -> Result<(), std::io::Error> {
             file.and_then(std::result::Result::ok),
             file_name,
         )?),
-        // 2
         files_buffer,
-        // 3
-        info_buffer,
     ];
 
     // Init terminal by switching to alternate screen.
@@ -154,14 +149,12 @@ fn main() -> Result<(), std::io::Error> {
             }
             // Set a buffer and change to it if the buffer has no pending changes.
             CommandResult::Info(contents) => {
-                buffs[INFO_BUFF_IDX].set_contents(contents, None, None);
-                curr_buff = INFO_BUFF_IDX;
+                buffs[curr_buff].set_message(contents);
             }
             // Set a buffer and change to it if the buffer has no pending changes.
             CommandResult::Init(idx, contents, path, file_name) => {
                 if let Err(err) = buffs[idx].can_quit() {
-                    buffs[INFO_BUFF_IDX].set_contents(err, path, file_name);
-                    curr_buff = INFO_BUFF_IDX;
+                    buffs[curr_buff].set_message(err);
                 } else {
                     buffs[idx].set_contents(contents, path, file_name);
                     curr_buff = idx;
@@ -173,8 +166,8 @@ fn main() -> Result<(), std::io::Error> {
 
                 for idx in 0..buffs.len() {
                     if let Err(err) = buffs[idx].can_quit() {
-                        buffs[INFO_BUFF_IDX].set_contents(err, None, None);
-                        curr_buff = INFO_BUFF_IDX;
+                        curr_buff = idx;
+                        buffs[curr_buff].set_message(err);
 
                         quit = false;
                         break;

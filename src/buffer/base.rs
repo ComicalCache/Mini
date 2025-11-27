@@ -3,12 +3,12 @@ mod apply_command;
 use crate::{
     cursor::{self, Cursor},
     document::Document,
+    message::Message,
     viewport::Viewport,
 };
 use arboard::Clipboard;
 use std::io::Error;
 
-#[derive(Clone, Copy)]
 /// A base set of buffer mode.
 pub enum Mode<T> {
     /// View mode, made for inspecting a document.
@@ -22,7 +22,7 @@ pub enum Mode<T> {
 /// A struct defining the base functionality of a buffer. Specialized buffers can keep
 /// it as a field to "inherit" this base. Buffers with completely separate functionality
 /// can use it as a blueprint and define their own functionality from scratch.
-pub struct BaseBuffer<ModeEnum: Clone> {
+pub struct BaseBuffer<ModeEnum> {
     /// The main content of the buffer.
     pub doc: Document,
     /// The command content.
@@ -52,11 +52,14 @@ pub struct BaseBuffer<ModeEnum: Clone> {
     /// The current index in the command history.
     pub cmd_history_idx: usize,
 
+    /// The active message.
+    pub message: Option<Message>,
+
     /// Flag if the buffer needs re-rendering.
     pub rerender: bool,
 }
 
-impl<ModeEnum: Clone> BaseBuffer<ModeEnum> {
+impl<ModeEnum> BaseBuffer<ModeEnum> {
     pub fn new(
         w: usize,
         h: usize,
@@ -85,6 +88,7 @@ impl<ModeEnum: Clone> BaseBuffer<ModeEnum> {
             matches_idx: None,
             cmd_history: Vec::new(),
             cmd_history_idx: 0,
+            message: None,
             rerender: true,
         })
     }
@@ -101,6 +105,10 @@ impl<ModeEnum: Clone> BaseBuffer<ModeEnum> {
         self.info_view.resize(w, 1, x_off, y_off, None);
         // FIXME: this limits the bar to always be exactly one in height.
         self.cmd_view.resize(w, 1, x_off, y_off, None);
+
+        if let Some(message) = &mut self.message {
+            message.calculate_lines(w);
+        }
     }
 
     /// Jumps to the next search match if any.
@@ -193,5 +201,17 @@ impl<ModeEnum: Clone> BaseBuffer<ModeEnum> {
         }
 
         self.mode = mode;
+    }
+
+    /// Set a message to display to the user.
+    pub fn set_message(&mut self, text: String) {
+        self.message = Some(Message::new(text, self.doc_view.w));
+        self.rerender = true;
+    }
+
+    /// Clear the displayed message.
+    pub fn clear_message(&mut self) {
+        self.message = None;
+        self.rerender = true;
     }
 }

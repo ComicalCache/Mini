@@ -3,7 +3,7 @@ mod history;
 mod insert;
 
 use crate::{
-    FILES_BUFF_IDX, INFO_BUFF_IDX, TXT_BUFF_IDX,
+    FILES_BUFF_IDX, TXT_BUFF_IDX,
     buffer::{
         Buffer,
         base::{BaseBuffer, Mode},
@@ -26,7 +26,6 @@ use std::{
 };
 use termion::event::Key;
 
-#[derive(Clone, Copy)]
 enum OtherMode {
     Write,
 }
@@ -192,7 +191,6 @@ impl TextBuffer {
                     self.base.change_mode(Mode::Other(Write));
                 }
                 Key::Char('t') => return CommandResult::Change(TXT_BUFF_IDX),
-                Key::Char('?') => return CommandResult::Change(INFO_BUFF_IDX),
                 Key::Char('e') => return CommandResult::Change(FILES_BUFF_IDX),
                 Key::Char('d') => self.view_mode = ViewMode::Delete,
                 Key::Char('x') => delete!(self, right, REPEAT),
@@ -409,6 +407,11 @@ impl Buffer for TextBuffer {
             Mode::Other(OtherMode::Write) => (CursorStyle::BlinkingBar, false),
         };
 
+        self.base.doc_view.render_gutter(display, &self.base.doc);
+        self.base
+            .doc_view
+            .render_document(display, &self.base.doc, self.base.sel);
+
         if cmd {
             self.base.cmd_view.render_bar(
                 self.base.cmd.line(0).unwrap().to_string().as_str(),
@@ -425,10 +428,13 @@ impl Buffer for TextBuffer {
             );
         }
 
-        self.base.doc_view.render_gutter(display, &self.base.doc);
-        self.base
-            .doc_view
-            .render_document(display, &self.base.doc, self.base.sel);
+        if let Some(message) = &self.base.message {
+            self.base.doc_view.render_message(display, message);
+            self.base
+                .doc_view
+                .render_cursor(display, CursorStyle::Hidden);
+            return;
+        }
 
         let view = if cmd {
             &self.base.cmd_view
@@ -446,6 +452,35 @@ impl Buffer for TextBuffer {
     fn tick(&mut self, key: Option<Key>) -> CommandResult {
         // Only rerender if input was received.
         self.base.rerender |= key.is_some();
+
+        if let Some(message) = &mut self.base.message
+            && let Some(key) = key
+        {
+            match key {
+                Key::Char('j') => {
+                    if message.scroll + 1 < message.lines {
+                        message.scroll += 1;
+                        self.base.rerender = true;
+                    }
+                    return CommandResult::Ok;
+                }
+                Key::Char('k') => {
+                    message.scroll = message.scroll.saturating_sub(1);
+                    self.base.rerender = true;
+                    return CommandResult::Ok;
+                }
+                Key::Char('y') => {
+                    if let Err(err) = self.base.clipboard.set_text(message.text.clone()) {
+                        return CommandResult::Info(err.to_string());
+                    }
+
+                    return CommandResult::Info("Message yanked to clipboard".to_string());
+                }
+                // Clear the message on any other key press.
+                _ => self.base.clear_message(),
+            }
+        }
+
         match self.base.mode {
             Mode::View => self.view_tick(key),
             Mode::Command => self.command_tick(key),
@@ -469,6 +504,10 @@ impl Buffer for TextBuffer {
         self.history.clear();
 
         self.base.rerender = true;
+    }
+
+    fn set_message(&mut self, text: String) {
+        self.base.set_message(text);
     }
 
     fn can_quit(&self) -> Result<(), String> {
