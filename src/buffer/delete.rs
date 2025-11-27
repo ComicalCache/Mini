@@ -21,6 +21,59 @@ macro_rules! delete_fn {
     };
 }
 
+#[macro_export]
+/// Convenience macro for calling deletion functions. Expects a `BaseBuffer` as member `base`.
+macro_rules! delete {
+    ($self:ident, $func:ident) => {{
+        $crate::buffer::delete::$func(
+            &mut $self.base.doc,
+            &mut $self.base.doc_view,
+            Some(&mut $self.history),
+        );
+        $self.base.clear_matches();
+    }};
+    ($self:ident, $func:ident, REPEAT) => {{
+        $crate::buffer::delete::$func(
+            &mut $self.base.doc,
+            &mut $self.base.doc_view,
+            Some(&mut $self.history),
+            1,
+        );
+        $self.base.clear_matches();
+    }};
+    ($self:ident, $func:ident, SELECTION) => {{
+        $crate::buffer::delete::$func(
+            &mut $self.base.doc,
+            &mut $self.base.doc_view,
+            &mut $self.base.sel,
+            Some(&mut $self.history),
+        );
+        $self.base.clear_matches();
+    }};
+}
+
+#[macro_export]
+/// Convenience macro for calling change functions. Expects a `BaseBuffer` as member `base`.
+macro_rules! change {
+    ($self:ident, $func:ident) => {{
+        $crate::buffer::delete::$func(
+            &mut $self.base.doc,
+            &mut $self.base.doc_view,
+            Some(&mut $self.history),
+        );
+        $self.base.change_mode(Mode::Other(Write));
+    }};
+    ($self:ident, $func:ident, REPEAT) => {{
+        $crate::buffer::delete::$func(
+            &mut $self.base.doc,
+            &mut $self.base.doc_view,
+            Some(&mut $self.history),
+            1,
+        );
+        $self.base.change_mode(Mode::Other(Write));
+    }};
+}
+
 /// Deletes the selected area.
 pub fn selection(
     doc: &mut Document,

@@ -66,6 +66,22 @@ impl PartialOrd for Cursor {
     }
 }
 
+#[macro_export]
+/// Convenience macro for calling movement functions. Expects a `BaseBuffer` as member `base`.
+macro_rules! movement {
+    ($self:ident, $func:ident) => {
+        $crate::cursor::$func(&mut $self.base.doc, &mut $self.base.doc_view, 1)
+    };
+}
+
+#[macro_export]
+/// Convenience macro for calling jump functions. Expects a `BaseBuffer` as member `base`.
+macro_rules! jump {
+    ($self:ident, $func:ident) => {
+        $crate::cursor::$func(&mut $self.base.doc, &mut $self.base.doc_view)
+    };
+}
+
 /// Calculates the position of a cursor after skipping the supplied text.
 pub fn end_pos(start: &Cursor, text: &str) -> Cursor {
     let mut end = *start;

@@ -29,6 +29,40 @@ macro_rules! yank_fn {
     };
 }
 
+#[macro_export]
+/// Convenience macro for calling yank functions. Expects a `BaseBuffer` as member `base`.
+macro_rules! yank {
+    ($self:ident, $func:ident) => {
+        match $crate::buffer::yank::$func(
+            &mut $self.base.doc,
+            &mut $self.base.doc_view,
+            &mut $self.base.clipboard,
+        ) {
+            Ok(()) => {}
+            Err(err) => return err,
+        }
+    };
+    ($self:ident, $func:ident, REPEAT) => {{
+        if let Err(err) = $crate::buffer::yank::$func(
+            &mut $self.base.doc,
+            &mut $self.base.doc_view,
+            &mut $self.base.clipboard,
+            1,
+        ) {
+            return err;
+        }
+    }};
+    ($self:ident, $func:ident, SELECTION) => {
+        if let Err(err) = $crate::buffer::yank::$func(
+            &mut $self.base.doc,
+            &mut $self.base.sel,
+            &mut $self.base.clipboard,
+        ) {
+            return err;
+        }
+    };
+}
+
 /// Yanks the selected area.
 pub fn selection(
     doc: &Document,

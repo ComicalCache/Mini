@@ -5,32 +5,28 @@ use crate::{
     INFO_BUFF_IDX, TXT_BUFF_IDX,
     buffer::{
         Buffer,
-        base::{BaseBuffer, CommandTick, Mode, ViewAction},
+        base::{BaseBuffer, Mode},
+        edit,
     },
     cursor::{self, Cursor, CursorStyle},
     display::Display,
     document::Document,
+    jump, movement,
     util::CommandResult,
+    yank,
 };
 use std::{io::Error, path::PathBuf};
 use termion::event::Key;
 
-#[derive(Clone, Copy)]
-enum OtherViewAction {
-    // Interact
-    Refresh,
-    SelectItem,
-    Remove,
-    RecursiveRemove,
-
-    // Buffers
-    ChangeToTextBuffer,
-    ChangeToInfoBuffer,
+enum ViewMode {
+    Normal,
+    Yank,
 }
 
 /// A file browser buffer.
 pub struct FilesBuffer {
-    base: BaseBuffer<(), OtherViewAction, ()>,
+    base: BaseBuffer<()>,
+    view_mode: ViewMode,
 
     /// The info bar content.
     info: Document,
@@ -49,24 +45,12 @@ impl FilesBuffer {
         y_off: usize,
         path: PathBuf,
     ) -> Result<Self, Error> {
-        use OtherViewAction::*;
-
         let mut entries = Vec::new();
         let contents = Self::load_dir(&path, &mut entries)?;
 
-        let mut base = BaseBuffer::new(w, h, x_off, y_off, Some(contents))?;
-        base.view_state_machine.command_map = base
-            .view_state_machine
-            .command_map
-            .simple(Key::Char('t'), ViewAction::Other(ChangeToTextBuffer))
-            .simple(Key::Char('?'), ViewAction::Other(ChangeToInfoBuffer))
-            .simple(Key::Char('r'), ViewAction::Other(Refresh))
-            .simple(Key::Char('\n'), ViewAction::Other(SelectItem))
-            .simple(Key::Char('d'), ViewAction::Other(Remove))
-            .simple(Key::Char('D'), ViewAction::Other(RecursiveRemove));
-
         Ok(Self {
-            base,
+            base: BaseBuffer::new(w, h, x_off, y_off, Some(contents))?,
+            view_mode: ViewMode::Normal,
             info: Document::new(0, 0, None),
             path,
             entries,
@@ -158,30 +142,121 @@ impl FilesBuffer {
     }
 
     /// Handles self defined view actions.
-    fn view_action(&mut self, action: OtherViewAction) -> CommandResult {
-        use OtherViewAction::*;
+    fn view_tick(&mut self, key: Option<Key>) -> CommandResult {
+        let Some(key) = key else {
+            return CommandResult::Ok;
+        };
 
-        match action {
-            Refresh => self.refresh(),
-            SelectItem => self
-                .select_item()
-                .or_else(|err| Ok::<CommandResult, Error>(CommandResult::Info(err.to_string())))
-                .unwrap(),
-            Remove => self.selected_remove_command("rm"),
-            RecursiveRemove => self.selected_remove_command("rm!"),
-            ChangeToTextBuffer => CommandResult::Change(TXT_BUFF_IDX),
-            ChangeToInfoBuffer => CommandResult::Change(INFO_BUFF_IDX),
+        match self.view_mode {
+            ViewMode::Normal => match key {
+                Key::Char('h') | Key::Left => movement!(self, left),
+                Key::Char('H') => movement!(self, shift_left),
+                Key::Char('j') | Key::Down => movement!(self, down),
+                Key::Char('J') => movement!(self, shift_down),
+                Key::Char('k') | Key::Up => movement!(self, up),
+                Key::Char('K') => movement!(self, shift_up),
+                Key::Char('l') | Key::Right => movement!(self, right),
+                Key::Char('L') => movement!(self, shift_right),
+                Key::Char('w') => movement!(self, next_word),
+                Key::Char('W') => movement!(self, next_word_end),
+                Key::Char('b') => movement!(self, prev_word),
+                Key::Char('B') => movement!(self, prev_word_end),
+                Key::Char('s') => movement!(self, next_whitespace),
+                Key::Char('S') => movement!(self, prev_whitespace),
+                Key::Char('}') => movement!(self, next_empty_line),
+                Key::Char('{') => movement!(self, prev_empty_line),
+                Key::Char('<') => jump!(self, jump_to_beginning_of_line),
+                Key::Char('>') => jump!(self, jump_to_end_of_line),
+                Key::Char('.') => jump!(self, jump_to_matching_opposite),
+                Key::Char('g') => jump!(self, jump_to_end_of_file),
+                Key::Char('G') => jump!(self, jump_to_beginning_of_file),
+                Key::Char('v') => self.base.sel = Some(self.base.doc.cur),
+                Key::Esc => self.base.sel = None,
+                Key::Char('y') => self.view_mode = ViewMode::Yank,
+                Key::Char(' ') => self.base.change_mode(Mode::Command),
+                Key::Char('n') => self.base.next_match(),
+                Key::Char('N') => self.base.prev_match(),
+                Key::Char('t') => return CommandResult::Change(TXT_BUFF_IDX),
+                Key::Char('?') => return CommandResult::Change(INFO_BUFF_IDX),
+                Key::Char('r') => return self.refresh(),
+                Key::Char('\n') => {
+                    return self
+                        .select_item()
+                        .or_else(|err| {
+                            Ok::<CommandResult, Error>(CommandResult::Info(err.to_string()))
+                        })
+                        .unwrap();
+                }
+                Key::Char('d') => return self.selected_remove_command("rm"),
+                Key::Char('D') => return self.selected_remove_command("rm!"),
+                _ => {}
+            },
+            ViewMode::Yank => {
+                match key {
+                    Key::Char('v') => yank!(self, selection, SELECTION),
+                    Key::Char('y') => yank!(self, line),
+                    Key::Char('h') => yank!(self, left, REPEAT),
+                    Key::Char('l') => yank!(self, right, REPEAT),
+                    Key::Char('w') => yank!(self, next_word, REPEAT),
+                    Key::Char('W') => yank!(self, next_word_end, REPEAT),
+                    Key::Char('b') => yank!(self, prev_word, REPEAT),
+                    Key::Char('B') => yank!(self, prev_word_end, REPEAT),
+                    Key::Char('s') => yank!(self, next_whitespace, REPEAT),
+                    Key::Char('S') => yank!(self, prev_whitespace, REPEAT),
+                    Key::Char('}') => yank!(self, next_empty_line, REPEAT),
+                    Key::Char('{') => yank!(self, prev_empty_line, REPEAT),
+                    Key::Char('<') => yank!(self, beginning_of_line),
+                    Key::Char('>') => yank!(self, end_of_line),
+                    Key::Char('.') => yank!(self, matching_opposite),
+                    Key::Char('g') => yank!(self, end_of_file),
+                    Key::Char('G') => yank!(self, beginning_of_file),
+                    _ => {}
+                }
+                self.view_mode = ViewMode::Normal;
+            }
         }
+
+        CommandResult::Ok
     }
 
     /// Handles self apply and self defined command ticks.
-    fn command_tick(&mut self, tick: CommandTick<()>) -> CommandResult {
-        use CommandTick::*;
+    fn command_tick(&mut self, key: Option<Key>) -> CommandResult {
+        let Some(key) = key else {
+            return CommandResult::Ok;
+        };
 
-        match tick {
-            Apply(cmd) => self.apply_command(&cmd),
-            Other(()) => unreachable!(),
+        match key {
+            Key::Esc => self.base.change_mode(Mode::View),
+            Key::Left => cursor::left(&mut self.base.cmd, &mut self.base.cmd_view, 1),
+            Key::Right => cursor::right(&mut self.base.cmd, &mut self.base.cmd_view, 1),
+            Key::Up => self.base.prev_command_history(),
+            Key::Down => self.base.next_command_history(),
+            Key::AltRight => cursor::next_word(&mut self.base.cmd, &mut self.base.cmd_view, 1),
+            Key::AltLeft => cursor::prev_word(&mut self.base.cmd, &mut self.base.cmd_view, 1),
+            Key::Char('\n') => {
+                // Commands have only one line.
+                let cmd = self.base.cmd.line(0).unwrap().to_string();
+                if !cmd.is_empty() {
+                    self.base.cmd_history.push(cmd.clone());
+                }
+                self.base.change_mode(Mode::View);
+
+                match self.base.apply_command(cmd) {
+                    Ok(res) => return res,
+                    Err(cmd) => return self.apply_command(&cmd),
+                }
+            }
+            Key::Char('\t') => {
+                edit::write_tab(&mut self.base.cmd, &mut self.base.cmd_view, None, false);
+            }
+            Key::Backspace => edit::delete_char(&mut self.base.cmd, &mut self.base.cmd_view, None),
+            Key::Char(ch) => {
+                edit::write_char(&mut self.base.cmd, &mut self.base.cmd_view, None, ch);
+            }
+            _ => {}
         }
+
+        CommandResult::Ok
     }
 }
 
@@ -238,14 +313,8 @@ impl Buffer for FilesBuffer {
         // Only rerender if input was received.
         self.base.rerender |= key.is_some();
         match self.base.mode {
-            Mode::View => match self.base.view_tick(key) {
-                Ok(res) => res,
-                Err(action) => self.view_action(action),
-            },
-            Mode::Command => match self.base.command_tick(key) {
-                Ok(res) => res,
-                Err(tick) => self.command_tick(tick),
-            },
+            Mode::View => self.view_tick(key),
+            Mode::Command => self.command_tick(key),
             Mode::Other(()) => unreachable!(),
         }
     }

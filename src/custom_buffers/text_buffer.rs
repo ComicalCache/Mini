@@ -6,157 +6,43 @@ use crate::{
     FILES_BUFF_IDX, INFO_BUFF_IDX, TXT_BUFF_IDX,
     buffer::{
         Buffer,
-        base::{BaseBuffer, CommandTick, Mode, ViewAction},
+        base::{BaseBuffer, Mode},
         delete, edit,
     },
+    change,
     cursor::{self, Cursor, CursorStyle},
+    delete,
     display::Display,
     document::Document,
     history::History,
-    state_machine::{ChainResult, CommandMap, StateMachine},
+    jump, movement,
     util::{CommandResult, open_file},
+    yank,
 };
 use std::{
     fs::File,
     io::{Error, Read},
     path::PathBuf,
-    time::Duration,
 };
 use termion::event::Key;
-
-macro_rules! delete {
-    ($self:ident, $func:ident) => {{
-        delete::$func(
-            &mut $self.base.doc,
-            &mut $self.base.doc_view,
-            Some(&mut $self.history),
-        );
-        $self.base.clear_matches();
-    }};
-    ($self:ident, $func:ident, REPEAT) => {{
-        delete::$func(
-            &mut $self.base.doc,
-            &mut $self.base.doc_view,
-            Some(&mut $self.history),
-            1,
-        );
-        $self.base.clear_matches();
-    }};
-    ($self:ident, $func:ident, SELECTION) => {{
-        delete::$func(
-            &mut $self.base.doc,
-            &mut $self.base.doc_view,
-            &mut $self.base.sel,
-            Some(&mut $self.history),
-        );
-        $self.base.clear_matches();
-    }};
-}
-
-macro_rules! change {
-    ($self:ident, $func:ident) => {{
-        delete::$func(
-            &mut $self.base.doc,
-            &mut $self.base.doc_view,
-            Some(&mut $self.history),
-        );
-        $self.base.change_mode(Mode::Other(Write));
-    }};
-    ($self:ident, $func:ident, REPEAT) => {{
-        delete::$func(
-            &mut $self.base.doc,
-            &mut $self.base.doc_view,
-            Some(&mut $self.history),
-            1,
-        );
-        $self.base.change_mode(Mode::Other(Write));
-    }};
-}
-
-#[derive(Clone, Copy)]
-enum OtherViewAction {
-    // Insert
-    Insert,
-    Append,
-    AppendEndOfLine,
-    InsertBellow,
-    InsertAbove,
-
-    // Buffers
-    ChangeToTextBuffer,
-    ChangeToInfoBuffer,
-    ChangeToFilesBuffer,
-
-    // Delete
-    DeleteChar,
-    DeleteSelection,
-    DeleteLine,
-    DeleteLeft,
-    DeleteRight,
-    DeleteNextWord,
-    DeletePrevWord,
-    DeleteNextWordEnd,
-    DeletePrevWordEnd,
-    DeleteNextWhitespace,
-    DeletePrevWhitespace,
-    DeleteNextEmptyLine,
-    DeletePrevEmptyLine,
-    DeleteToBeginningOfLine,
-    DeleteToEndOfLine,
-    DeleteToMatchingOpposite,
-    DeleteToBeginningOfFile,
-    DeleteToEndOfFile,
-
-    // Change
-    ChangeSelection,
-    ChangeLine,
-    ChangeLeft,
-    ChangeRight,
-    ChangeNextWord,
-    ChangePrevWord,
-    ChangeNextWordEnd,
-    ChangePrevWordEnd,
-    ChangeNextWhitespace,
-    ChangePrevWhitespace,
-    ChangeNextEmptyLine,
-    ChangePrevEmptyLine,
-    ChangeToBeginningOfLine,
-    ChangeToEndOfLine,
-    ChangeToMatchingOpposite,
-    ChangeToBeginningOfFile,
-    ChangeToEndOfFile,
-    ReplaceChar(char),
-
-    // Paste
-    Paste,
-    PasteAbove,
-
-    // History
-    Undo,
-    Redo,
-}
-
-#[derive(Clone, Copy)]
-enum WriteAction {
-    ViewMode,
-    Left,
-    Down,
-    Up,
-    Right,
-    NextWord,
-    PrevWord,
-    Tab,
-    DeleteChar,
-}
 
 #[derive(Clone, Copy)]
 enum OtherMode {
     Write,
 }
 
+enum ViewMode {
+    Normal,
+    Yank,
+    Delete,
+    Change,
+    Replace,
+}
+
 /// A text buffer.
 pub struct TextBuffer {
-    base: BaseBuffer<OtherMode, OtherViewAction, ()>,
+    base: BaseBuffer<OtherMode>,
+    view_mode: ViewMode,
 
     /// The info bar content.
     info: Document,
@@ -168,9 +54,6 @@ pub struct TextBuffer {
 
     /// A history of edits to undo and redo.
     history: History,
-
-    /// The state machine handling input in write mode.
-    write_state_machine: StateMachine<WriteAction>,
 }
 
 impl TextBuffer {
@@ -191,97 +74,13 @@ impl TextBuffer {
             None
         };
 
-        let mut base = BaseBuffer::new(w, h, x_off, y_off, contents)?;
-        {
-            use OtherViewAction::*;
-            use ViewAction::Other;
-
-            base.view_state_machine.command_map = base
-                .view_state_machine
-                .command_map
-                .simple(Key::Char('i'), Other(Insert))
-                .simple(Key::Char('a'), Other(Append))
-                .simple(Key::Char('A'), Other(AppendEndOfLine))
-                .simple(Key::Char('o'), Other(InsertBellow))
-                .simple(Key::Char('O'), Other(InsertAbove))
-                .simple(Key::Char('t'), Other(ChangeToTextBuffer))
-                .simple(Key::Char('?'), Other(ChangeToInfoBuffer))
-                .simple(Key::Char('e'), Other(ChangeToFilesBuffer))
-                .operator(Key::Char('d'), |key| match key {
-                    Key::Char('v') => Some(ChainResult::Action(Other(DeleteSelection))),
-                    Key::Char('d') => Some(ChainResult::Action(Other(DeleteLine))),
-                    Key::Char('h') => Some(ChainResult::Action(Other(DeleteLeft))),
-                    Key::Char('l') => Some(ChainResult::Action(Other(DeleteRight))),
-                    Key::Char('w') => Some(ChainResult::Action(Other(DeleteNextWord))),
-                    Key::Char('W') => Some(ChainResult::Action(Other(DeleteNextWordEnd))),
-                    Key::Char('b') => Some(ChainResult::Action(Other(DeletePrevWord))),
-                    Key::Char('B') => Some(ChainResult::Action(Other(DeletePrevWordEnd))),
-                    Key::Char('s') => Some(ChainResult::Action(Other(DeleteNextWhitespace))),
-                    Key::Char('S') => Some(ChainResult::Action(Other(DeletePrevWhitespace))),
-                    Key::Char('}') => Some(ChainResult::Action(Other(DeleteNextEmptyLine))),
-                    Key::Char('{') => Some(ChainResult::Action(Other(DeletePrevEmptyLine))),
-                    Key::Char('<') => Some(ChainResult::Action(Other(DeleteToBeginningOfLine))),
-                    Key::Char('>') => Some(ChainResult::Action(Other(DeleteToEndOfLine))),
-                    Key::Char('.') => Some(ChainResult::Action(Other(DeleteToMatchingOpposite))),
-                    Key::Char('g') => Some(ChainResult::Action(Other(DeleteToEndOfFile))),
-                    Key::Char('G') => Some(ChainResult::Action(Other(DeleteToBeginningOfFile))),
-                    _ => None,
-                })
-                .simple(Key::Char('x'), Other(DeleteChar))
-                .operator(Key::Char('c'), |key| match key {
-                    Key::Char('v') => Some(ChainResult::Action(Other(ChangeSelection))),
-                    Key::Char('c') => Some(ChainResult::Action(Other(ChangeLine))),
-                    Key::Char('h') => Some(ChainResult::Action(Other(ChangeLeft))),
-                    Key::Char('l') => Some(ChainResult::Action(Other(ChangeRight))),
-                    Key::Char('w') => Some(ChainResult::Action(Other(ChangeNextWord))),
-                    Key::Char('W') => Some(ChainResult::Action(Other(ChangeNextWordEnd))),
-                    Key::Char('b') => Some(ChainResult::Action(Other(ChangePrevWord))),
-                    Key::Char('B') => Some(ChainResult::Action(Other(ChangePrevWordEnd))),
-                    Key::Char('s') => Some(ChainResult::Action(Other(ChangeNextWhitespace))),
-                    Key::Char('S') => Some(ChainResult::Action(Other(ChangePrevWhitespace))),
-                    Key::Char('}') => Some(ChainResult::Action(Other(ChangeNextEmptyLine))),
-                    Key::Char('{') => Some(ChainResult::Action(Other(ChangePrevEmptyLine))),
-                    Key::Char('<') => Some(ChainResult::Action(Other(ChangeToBeginningOfLine))),
-                    Key::Char('>') => Some(ChainResult::Action(Other(ChangeToEndOfLine))),
-                    Key::Char('.') => Some(ChainResult::Action(Other(ChangeToMatchingOpposite))),
-                    Key::Char('g') => Some(ChainResult::Action(Other(ChangeToEndOfFile))),
-                    Key::Char('G') => Some(ChainResult::Action(Other(ChangeToBeginningOfFile))),
-                    _ => None,
-                })
-                .simple(Key::Char('p'), Other(Paste))
-                .simple(Key::Char('P'), Other(PasteAbove))
-                .prefix(Key::Char('r'), |key| match key {
-                    Key::Char(ch) => Some(ChainResult::Action(Other(ReplaceChar(ch)))),
-                    _ => None,
-                })
-                .simple(Key::Char('u'), Other(Undo))
-                .simple(Key::Char('U'), Other(Redo));
-        }
-
-        let write_state_machine = {
-            #[allow(clippy::enum_glob_use)]
-            use WriteAction::*;
-
-            let command_map = CommandMap::new()
-                .simple(Key::Esc, ViewMode)
-                .simple(Key::Left, Left)
-                .simple(Key::Down, Down)
-                .simple(Key::Up, Up)
-                .simple(Key::Right, Right)
-                .simple(Key::AltRight, NextWord)
-                .simple(Key::AltLeft, PrevWord)
-                .simple(Key::Char('\t'), Tab)
-                .simple(Key::Backspace, DeleteChar);
-            StateMachine::new(command_map, Duration::from_secs(1))
-        };
-
         Ok(Self {
-            base,
+            base: BaseBuffer::new(w, h, x_off, y_off, contents)?,
+            view_mode: ViewMode::Normal,
             info: Document::new(0, 0, None),
             file,
             file_name,
             history: History::new(),
-            write_state_machine,
         })
     }
 
@@ -339,100 +138,178 @@ impl TextBuffer {
     }
 
     /// Handles self defined view actions.
-    fn view_action(&mut self, action: OtherViewAction) -> CommandResult {
+    fn view_tick(&mut self, key: Option<Key>) -> CommandResult {
         use OtherMode::Write;
-        use OtherViewAction::*;
 
-        match action {
-            Insert => self.base.change_mode(Mode::Other(Write)),
-            Append => {
-                cursor::right(&mut self.base.doc, &mut self.base.doc_view, 1);
-                self.base.change_mode(Mode::Other(Write));
-            }
-            AppendEndOfLine => {
-                cursor::jump_to_end_of_line(&mut self.base.doc, &mut self.base.doc_view);
-                self.base.change_mode(Mode::Other(Write));
-            }
-            InsertBellow => {
-                self.insert_move_new_line_bellow();
-                self.base.change_mode(Mode::Other(Write));
-            }
-            InsertAbove => {
-                self.insert_move_new_line_above();
-                self.base.change_mode(Mode::Other(Write));
-            }
-            ChangeToTextBuffer => return CommandResult::Change(TXT_BUFF_IDX),
-            ChangeToInfoBuffer => return CommandResult::Change(INFO_BUFF_IDX),
-            ChangeToFilesBuffer => return CommandResult::Change(FILES_BUFF_IDX),
-            DeleteChar | DeleteRight => delete!(self, right, REPEAT),
-            DeleteSelection => delete!(self, selection, SELECTION),
-            DeleteLine => delete!(self, line, REPEAT),
-            DeleteLeft => delete!(self, left, REPEAT),
-            DeleteNextWord => delete!(self, next_word, REPEAT),
-            DeletePrevWord => delete!(self, prev_word, REPEAT),
-            DeleteNextWordEnd => delete!(self, next_word_end, REPEAT),
-            DeletePrevWordEnd => delete!(self, prev_word_end, REPEAT),
-            DeleteNextWhitespace => delete!(self, next_whitespace, REPEAT),
-            DeletePrevWhitespace => delete!(self, prev_whitespace, REPEAT),
-            DeleteNextEmptyLine => delete!(self, next_empty_line, REPEAT),
-            DeletePrevEmptyLine => delete!(self, prev_empty_line, REPEAT),
-            DeleteToBeginningOfLine => delete!(self, beginning_of_line),
-            DeleteToEndOfLine => delete!(self, end_of_line),
-            DeleteToMatchingOpposite => delete!(self, matching_opposite),
-            DeleteToEndOfFile => delete!(self, end_of_file),
-            DeleteToBeginningOfFile => delete!(self, beginning_of_file),
-            ChangeSelection => {
-                delete::selection(
-                    &mut self.base.doc,
-                    &mut self.base.doc_view,
-                    &mut self.base.sel,
-                    Some(&mut self.history),
-                );
-                self.base.change_mode(Mode::Other(Write));
-            }
-            ChangeLine => {
-                cursor::jump_to_beginning_of_line(&mut self.base.doc, &mut self.base.doc_view);
-                delete::end_of_line(
-                    &mut self.base.doc,
-                    &mut self.base.doc_view,
-                    Some(&mut self.history),
-                );
-                self.base.change_mode(Mode::Other(Write));
-            }
-            ChangeLeft => change!(self, left, REPEAT),
-            ChangeRight => change!(self, right, REPEAT),
-            ChangeNextWord => change!(self, next_word, REPEAT),
-            ChangePrevWord => change!(self, prev_word, REPEAT),
-            ChangeNextWordEnd => change!(self, next_word_end, REPEAT),
-            ChangePrevWordEnd => change!(self, prev_word_end, REPEAT),
-            ChangeNextWhitespace => change!(self, next_whitespace, REPEAT),
-            ChangePrevWhitespace => change!(self, prev_whitespace, REPEAT),
-            ChangeNextEmptyLine => change!(self, next_empty_line, REPEAT),
-            ChangePrevEmptyLine => change!(self, prev_empty_line, REPEAT),
-            ChangeToBeginningOfLine => change!(self, beginning_of_line),
-            ChangeToEndOfLine => change!(self, end_of_line),
-            ChangeToMatchingOpposite => change!(self, matching_opposite),
-            ChangeToEndOfFile => change!(self, end_of_file),
-            ChangeToBeginningOfFile => change!(self, beginning_of_file),
-            Paste => {
-                if let Some(res) = self.paste(false, false) {
-                    return res;
+        let Some(key) = key else {
+            return CommandResult::Ok;
+        };
+
+        match self.view_mode {
+            ViewMode::Normal => match key {
+                Key::Char('h') | Key::Left => movement!(self, left),
+                Key::Char('H') => movement!(self, shift_left),
+                Key::Char('j') | Key::Down => movement!(self, down),
+                Key::Char('J') => movement!(self, shift_down),
+                Key::Char('k') | Key::Up => movement!(self, up),
+                Key::Char('K') => movement!(self, shift_up),
+                Key::Char('l') | Key::Right => movement!(self, right),
+                Key::Char('L') => movement!(self, shift_right),
+                Key::Char('w') => movement!(self, next_word),
+                Key::Char('W') => movement!(self, next_word_end),
+                Key::Char('b') => movement!(self, prev_word),
+                Key::Char('B') => movement!(self, prev_word_end),
+                Key::Char('s') => movement!(self, next_whitespace),
+                Key::Char('S') => movement!(self, prev_whitespace),
+                Key::Char('}') => movement!(self, next_empty_line),
+                Key::Char('{') => movement!(self, prev_empty_line),
+                Key::Char('<') => jump!(self, jump_to_beginning_of_line),
+                Key::Char('>') => jump!(self, jump_to_end_of_line),
+                Key::Char('.') => jump!(self, jump_to_matching_opposite),
+                Key::Char('g') => jump!(self, jump_to_end_of_file),
+                Key::Char('G') => jump!(self, jump_to_beginning_of_file),
+                Key::Char('v') => self.base.sel = Some(self.base.doc.cur),
+                Key::Esc => self.base.sel = None,
+                Key::Char('y') => self.view_mode = ViewMode::Yank,
+                Key::Char(' ') => self.base.change_mode(Mode::Command),
+                Key::Char('n') => self.base.next_match(),
+                Key::Char('N') => self.base.prev_match(),
+                Key::Char('i') => self.base.change_mode(Mode::Other(Write)),
+                Key::Char('a') => {
+                    cursor::right(&mut self.base.doc, &mut self.base.doc_view, 1);
+                    self.base.change_mode(Mode::Other(Write));
                 }
-                self.base.clear_matches();
-            }
-            PasteAbove => {
-                self.insert_move_new_line_above();
-                if let Some(res) = self.paste(true, false) {
-                    return res;
+                Key::Char('A') => {
+                    cursor::jump_to_end_of_line(&mut self.base.doc, &mut self.base.doc_view);
+                    self.base.change_mode(Mode::Other(Write));
                 }
-                self.base.clear_matches();
+                Key::Char('o') => {
+                    self.insert_move_new_line_bellow();
+                    self.base.change_mode(Mode::Other(Write));
+                }
+                Key::Char('O') => {
+                    self.insert_move_new_line_above();
+                    self.base.change_mode(Mode::Other(Write));
+                }
+                Key::Char('t') => return CommandResult::Change(TXT_BUFF_IDX),
+                Key::Char('?') => return CommandResult::Change(INFO_BUFF_IDX),
+                Key::Char('e') => return CommandResult::Change(FILES_BUFF_IDX),
+                Key::Char('d') => self.view_mode = ViewMode::Delete,
+                Key::Char('x') => delete!(self, right, REPEAT),
+                Key::Char('c') => self.view_mode = ViewMode::Change,
+                Key::Char('p') => {
+                    if let Some(res) = self.paste(false, false) {
+                        return res;
+                    }
+                    self.base.clear_matches();
+                }
+                Key::Char('P') => {
+                    self.insert_move_new_line_above();
+                    if let Some(res) = self.paste(true, false) {
+                        return res;
+                    }
+                    self.base.clear_matches();
+                }
+                Key::Char('r') => self.view_mode = ViewMode::Replace,
+                Key::Char('u') => self.undo(),
+                Key::Char('U') => self.redo(),
+                _ => {}
+            },
+            ViewMode::Yank => {
+                match key {
+                    Key::Char('v') => yank!(self, selection, SELECTION),
+                    Key::Char('y') => yank!(self, line),
+                    Key::Char('h') => yank!(self, left, REPEAT),
+                    Key::Char('l') => yank!(self, right, REPEAT),
+                    Key::Char('w') => yank!(self, next_word, REPEAT),
+                    Key::Char('W') => yank!(self, next_word_end, REPEAT),
+                    Key::Char('b') => yank!(self, prev_word, REPEAT),
+                    Key::Char('B') => yank!(self, prev_word_end, REPEAT),
+                    Key::Char('s') => yank!(self, next_whitespace, REPEAT),
+                    Key::Char('S') => yank!(self, prev_whitespace, REPEAT),
+                    Key::Char('}') => yank!(self, next_empty_line, REPEAT),
+                    Key::Char('{') => yank!(self, prev_empty_line, REPEAT),
+                    Key::Char('<') => yank!(self, beginning_of_line),
+                    Key::Char('>') => yank!(self, end_of_line),
+                    Key::Char('.') => yank!(self, matching_opposite),
+                    Key::Char('g') => yank!(self, end_of_file),
+                    Key::Char('G') => yank!(self, beginning_of_file),
+                    _ => {}
+                }
+                self.view_mode = ViewMode::Normal;
             }
-            ReplaceChar(ch) => {
-                self.replace(ch);
-                self.base.clear_matches();
+            ViewMode::Delete => {
+                match key {
+                    Key::Char('l') => delete!(self, right, REPEAT),
+                    Key::Char('v') => delete!(self, selection, SELECTION),
+                    Key::Char('d') => delete!(self, line, REPEAT),
+                    Key::Char('h') => delete!(self, left, REPEAT),
+                    Key::Char('w') => delete!(self, next_word, REPEAT),
+                    Key::Char('b') => delete!(self, prev_word, REPEAT),
+                    Key::Char('W') => delete!(self, next_word_end, REPEAT),
+                    Key::Char('B') => delete!(self, prev_word_end, REPEAT),
+                    Key::Char('s') => delete!(self, next_whitespace, REPEAT),
+                    Key::Char('S') => delete!(self, prev_whitespace, REPEAT),
+                    Key::Char('}') => delete!(self, next_empty_line, REPEAT),
+                    Key::Char('{') => delete!(self, prev_empty_line, REPEAT),
+                    Key::Char('<') => delete!(self, beginning_of_line),
+                    Key::Char('>') => delete!(self, end_of_line),
+                    Key::Char('.') => delete!(self, matching_opposite),
+                    Key::Char('g') => delete!(self, end_of_file),
+                    Key::Char('G') => delete!(self, beginning_of_file),
+                    _ => {}
+                }
+                self.view_mode = ViewMode::Normal;
             }
-            Undo => self.undo(),
-            Redo => self.redo(),
+            ViewMode::Change => {
+                match key {
+                    Key::Char('v') => {
+                        delete::selection(
+                            &mut self.base.doc,
+                            &mut self.base.doc_view,
+                            &mut self.base.sel,
+                            Some(&mut self.history),
+                        );
+                        self.base.change_mode(Mode::Other(Write));
+                    }
+                    Key::Char('c') => {
+                        cursor::jump_to_beginning_of_line(
+                            &mut self.base.doc,
+                            &mut self.base.doc_view,
+                        );
+                        delete::end_of_line(
+                            &mut self.base.doc,
+                            &mut self.base.doc_view,
+                            Some(&mut self.history),
+                        );
+                        self.base.change_mode(Mode::Other(Write));
+                    }
+                    Key::Char('h') => change!(self, left, REPEAT),
+                    Key::Char('l') => change!(self, right, REPEAT),
+                    Key::Char('w') => change!(self, next_word, REPEAT),
+                    Key::Char('b') => change!(self, prev_word, REPEAT),
+                    Key::Char('W') => change!(self, next_word_end, REPEAT),
+                    Key::Char('B') => change!(self, prev_word_end, REPEAT),
+                    Key::Char('s') => change!(self, next_whitespace, REPEAT),
+                    Key::Char('S') => change!(self, prev_whitespace, REPEAT),
+                    Key::Char('}') => change!(self, next_empty_line, REPEAT),
+                    Key::Char('{') => change!(self, prev_empty_line, REPEAT),
+                    Key::Char('<') => change!(self, beginning_of_line),
+                    Key::Char('>') => change!(self, end_of_line),
+                    Key::Char('.') => change!(self, matching_opposite),
+                    Key::Char('g') => change!(self, end_of_file),
+                    Key::Char('G') => change!(self, beginning_of_file),
+                    _ => {}
+                }
+                self.view_mode = ViewMode::Normal;
+            }
+            ViewMode::Replace => {
+                if let Key::Char(ch) = key {
+                    self.replace(ch);
+                    self.base.clear_matches();
+                }
+                self.view_mode = ViewMode::Normal;
+            }
         }
 
         CommandResult::Ok
@@ -440,53 +317,79 @@ impl TextBuffer {
 
     /// Handles write mode ticks.
     fn write_tick(&mut self, key: Option<Key>) -> CommandResult {
-        use crate::state_machine::StateMachineResult::{Action as A, Incomplete, Invalid};
-        #[allow(clippy::enum_glob_use)]
-        use WriteAction::*;
+        let Some(key) = key else {
+            return CommandResult::Ok;
+        };
 
-        match self.write_state_machine.tick(key.into()) {
-            A(ViewMode) => self.base.change_mode(Mode::View),
-            A(Left) => cursor::left(&mut self.base.doc, &mut self.base.doc_view, 1),
-            A(Down) => cursor::down(&mut self.base.doc, &mut self.base.doc_view, 1),
-            A(Up) => cursor::up(&mut self.base.doc, &mut self.base.doc_view, 1),
-            A(Right) => cursor::right(&mut self.base.doc, &mut self.base.doc_view, 1),
-            A(NextWord) => cursor::next_word(&mut self.base.doc, &mut self.base.doc_view, 1),
-            A(PrevWord) => cursor::prev_word(&mut self.base.doc, &mut self.base.doc_view, 1),
-            A(Tab) => edit::write_tab(
+        match key {
+            Key::Esc => self.base.change_mode(Mode::View),
+            Key::Left => cursor::left(&mut self.base.doc, &mut self.base.doc_view, 1),
+            Key::Down => cursor::down(&mut self.base.doc, &mut self.base.doc_view, 1),
+            Key::Up => cursor::up(&mut self.base.doc, &mut self.base.doc_view, 1),
+            Key::Right => cursor::right(&mut self.base.doc, &mut self.base.doc_view, 1),
+            Key::AltRight => cursor::next_word(&mut self.base.doc, &mut self.base.doc_view, 1),
+            Key::AltLeft => cursor::prev_word(&mut self.base.doc, &mut self.base.doc_view, 1),
+            Key::Char('\t') => edit::write_tab(
                 &mut self.base.doc,
                 &mut self.base.doc_view,
                 Some(&mut self.history),
                 true,
             ),
-            A(DeleteChar) => edit::delete_char(
+            Key::Backspace => edit::delete_char(
                 &mut self.base.doc,
                 &mut self.base.doc_view,
                 Some(&mut self.history),
             ),
-            Invalid => {
-                if let Some(Key::Char(ch)) = key {
-                    edit::write_char(
-                        &mut self.base.doc,
-                        &mut self.base.doc_view,
-                        Some(&mut self.history),
-                        ch,
-                    );
-                }
-            }
-            Incomplete => {}
+            Key::Char(ch) => edit::write_char(
+                &mut self.base.doc,
+                &mut self.base.doc_view,
+                Some(&mut self.history),
+                ch,
+            ),
+            _ => {}
         }
 
         CommandResult::Ok
     }
 
     /// Handles self apply and self defined command ticks.
-    fn command_tick(&mut self, tick: CommandTick<()>) -> CommandResult {
-        use CommandTick::*;
+    fn command_tick(&mut self, key: Option<Key>) -> CommandResult {
+        let Some(key) = key else {
+            return CommandResult::Ok;
+        };
 
-        match tick {
-            Apply(cmd) => self.apply_command(&cmd),
-            Other(()) => unreachable!(),
+        match key {
+            Key::Esc => self.base.change_mode(Mode::View),
+            Key::Left => cursor::left(&mut self.base.cmd, &mut self.base.cmd_view, 1),
+            Key::Right => cursor::right(&mut self.base.cmd, &mut self.base.cmd_view, 1),
+            Key::Up => self.base.prev_command_history(),
+            Key::Down => self.base.next_command_history(),
+            Key::AltRight => cursor::next_word(&mut self.base.cmd, &mut self.base.cmd_view, 1),
+            Key::AltLeft => cursor::prev_word(&mut self.base.cmd, &mut self.base.cmd_view, 1),
+            Key::Char('\n') => {
+                // Commands have only one line.
+                let cmd = self.base.cmd.line(0).unwrap().to_string();
+                if !cmd.is_empty() {
+                    self.base.cmd_history.push(cmd.clone());
+                }
+                self.base.change_mode(Mode::View);
+
+                match self.base.apply_command(cmd) {
+                    Ok(res) => return res,
+                    Err(cmd) => return self.apply_command(&cmd),
+                }
+            }
+            Key::Char('\t') => {
+                edit::write_tab(&mut self.base.cmd, &mut self.base.cmd_view, None, false);
+            }
+            Key::Backspace => edit::delete_char(&mut self.base.cmd, &mut self.base.cmd_view, None),
+            Key::Char(ch) => {
+                edit::write_char(&mut self.base.cmd, &mut self.base.cmd_view, None, ch);
+            }
+            _ => {}
         }
+
+        CommandResult::Ok
     }
 }
 
@@ -544,14 +447,8 @@ impl Buffer for TextBuffer {
         // Only rerender if input was received.
         self.base.rerender |= key.is_some();
         match self.base.mode {
-            Mode::View => match self.base.view_tick(key) {
-                Ok(res) => res,
-                Err(action) => self.view_action(action),
-            },
-            Mode::Command => match self.base.command_tick(key) {
-                Ok(res) => res,
-                Err(tick) => self.command_tick(tick),
-            },
+            Mode::View => self.view_tick(key),
+            Mode::Command => self.command_tick(key),
             Mode::Other(OtherMode::Write) => self.write_tick(key),
         }
     }

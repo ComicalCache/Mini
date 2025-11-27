@@ -1,141 +1,12 @@
 mod apply_command;
 
 use crate::{
-    buffer::{edit, yank},
     cursor::{self, Cursor},
     document::Document,
-    state_machine::{ChainResult, CommandMap, StateMachine},
-    util::CommandResult,
     viewport::Viewport,
 };
 use arboard::Clipboard;
-use std::{io::Error, time::Duration};
-use termion::event::Key;
-
-macro_rules! movement {
-    ($self:ident, $func:ident) => {
-        cursor::$func(&mut $self.doc, &mut $self.doc_view, 1)
-    };
-}
-
-macro_rules! jump {
-    ($self:ident, $func:ident) => {
-        cursor::$func(&mut $self.doc, &mut $self.doc_view)
-    };
-}
-
-macro_rules! yank {
-    ($self:ident, $func:ident) => {
-        match yank::$func(&mut $self.doc, &mut $self.doc_view, &mut $self.clipboard) {
-            Ok(()) => {}
-            Err(err) => return Ok(err),
-        }
-    };
-    ($self:ident, $func:ident, REPEAT) => {{
-        if let Err(err) = yank::$func(&mut $self.doc, &mut $self.doc_view, &mut $self.clipboard, 1)
-        {
-            return Ok(err);
-        }
-    }};
-    ($self:ident, $func:ident, SELECTION) => {
-        if let Err(err) = yank::$func(&mut $self.doc, &mut $self.sel, &mut $self.clipboard) {
-            return Ok(err);
-        }
-    };
-}
-
-#[derive(Clone, Copy)]
-/// A base set of actions in the view mode.
-pub enum ViewAction<T> {
-    // Movement.
-    Left,
-    ShiftLeft,
-    Down,
-    ShiftDown,
-    Up,
-    ShiftUp,
-    Right,
-    ShiftRight,
-    NextWord,
-    NextWordEnd,
-    PrevWord,
-    PrevWordEnd,
-    NextWhitespace,
-    PrevWhitespace,
-    NextEmptyLine,
-    PrevEmptyLine,
-    JumpToBeginningOfLine,
-    JumpToEndOfLine,
-    JumpToMatchingOpposite,
-    JumpToBeginningOfFile,
-    JumpToEndOfFile,
-
-    // Modes.
-    SelectMode,
-    ExitSelectMode,
-    CommandMode,
-    YankToEndOfFile,
-
-    // Yank.
-    YankSelection,
-    YankLine,
-    YankLeft,
-    YankRight,
-    YankNextWord,
-    YankPrevWord,
-    YankNextWordEnd,
-    YankPrevWordEnd,
-    YankNextWhitespace,
-    YankPrevWhitespace,
-    YankNextEmptyLine,
-    YankPrevEmptyLine,
-    YankToBeginningOfLine,
-    YankToEndOfLine,
-    YankToMatchingOpposite,
-    YankToBeginningOfFile,
-
-    // Regex.
-    NextMatch,
-    PrevMatch,
-
-    /// Other actions defined by specialized buffers.
-    Other(T),
-}
-
-#[derive(Clone, Copy)]
-/// A base set of actions in the command mode.
-pub enum CommandAction<T> {
-    // Movement.
-    Left,
-    Right,
-    NextWord,
-    PrevWord,
-
-    // Modes.
-    ViewMode,
-
-    // Input.
-    Tab,
-    Newline,
-    DeleteChar,
-
-    // History.
-    HistoryUp,
-    HistoryDown,
-
-    /// Other actions defined by specialized buffers.
-    Other(T),
-}
-
-#[derive(Clone)]
-/// Command mode encountered a non-standard event or can be applied.
-pub enum CommandTick<T> {
-    /// The command can be applied to the buffer.
-    Apply(String),
-
-    /// Other actions defined by specialized buffers.
-    Other(T),
-}
+use std::io::Error;
 
 #[derive(Clone, Copy)]
 /// A base set of buffer mode.
@@ -151,7 +22,7 @@ pub enum Mode<T> {
 /// A struct defining the base functionality of a buffer. Specialized buffers can keep
 /// it as a field to "inherit" this base. Buffers with completely separate functionality
 /// can use it as a blueprint and define their own functionality from scratch.
-pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
+pub struct BaseBuffer<ModeEnum: Clone> {
     /// The main content of the buffer.
     pub doc: Document,
     /// The command content.
@@ -177,22 +48,15 @@ pub struct BaseBuffer<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone> {
     matches_idx: Option<usize>,
 
     /// The history of entered commands.
-    cmd_history: Vec<String>,
+    pub cmd_history: Vec<String>,
     /// The current index in the command history.
-    cmd_history_idx: usize,
-
-    /// The state machine handling input in view mode.
-    pub view_state_machine: StateMachine<ViewAction<ViewEnum>>,
-    /// The state machine handling input in command mode.
-    pub cmd_state_machine: StateMachine<CommandAction<CommandEnum>>,
+    pub cmd_history_idx: usize,
 
     /// Flag if the buffer needs re-rendering.
     pub rerender: bool,
 }
 
-impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
-    BaseBuffer<ModeEnum, ViewEnum, CommandEnum>
-{
+impl<ModeEnum: Clone> BaseBuffer<ModeEnum> {
     pub fn new(
         w: usize,
         h: usize,
@@ -200,82 +64,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         y_off: usize,
         contents: Option<String>,
     ) -> Result<Self, Error> {
-        let view_state_machine = {
-            #[allow(clippy::enum_glob_use)]
-            use ViewAction::*;
-
-            let command_map = CommandMap::new()
-                .simple(Key::Char('h'), Left)
-                .simple(Key::Char('H'), ShiftLeft)
-                .simple(Key::Char('j'), Down)
-                .simple(Key::Char('J'), ShiftDown)
-                .simple(Key::Char('k'), Up)
-                .simple(Key::Char('K'), ShiftUp)
-                .simple(Key::Char('l'), Right)
-                .simple(Key::Char('L'), ShiftRight)
-                .simple(Key::Left, Left)
-                .simple(Key::Down, Down)
-                .simple(Key::Up, Up)
-                .simple(Key::Right, Right)
-                .simple(Key::Char('w'), NextWord)
-                .simple(Key::Char('W'), NextWordEnd)
-                .simple(Key::Char('b'), PrevWord)
-                .simple(Key::Char('B'), PrevWordEnd)
-                .simple(Key::Char('s'), NextWhitespace)
-                .simple(Key::Char('S'), PrevWhitespace)
-                .simple(Key::Char('}'), NextEmptyLine)
-                .simple(Key::Char('{'), PrevEmptyLine)
-                .simple(Key::Char('<'), JumpToBeginningOfLine)
-                .simple(Key::Char('>'), JumpToEndOfLine)
-                .simple(Key::Char('.'), JumpToMatchingOpposite)
-                .simple(Key::Char('g'), JumpToEndOfFile)
-                .simple(Key::Char('G'), JumpToBeginningOfFile)
-                .simple(Key::Char(' '), CommandMode)
-                .simple(Key::Esc, ExitSelectMode)
-                .simple(Key::Char('v'), SelectMode)
-                .operator(Key::Char('y'), |key| match key {
-                    Key::Char('v') => Some(ChainResult::Action(YankSelection)),
-                    Key::Char('y') => Some(ChainResult::Action(YankLine)),
-                    Key::Char('h') => Some(ChainResult::Action(YankLeft)),
-                    Key::Char('l') => Some(ChainResult::Action(YankRight)),
-                    Key::Char('w') => Some(ChainResult::Action(YankNextWord)),
-                    Key::Char('W') => Some(ChainResult::Action(YankNextWordEnd)),
-                    Key::Char('b') => Some(ChainResult::Action(YankPrevWord)),
-                    Key::Char('B') => Some(ChainResult::Action(YankPrevWordEnd)),
-                    Key::Char('s') => Some(ChainResult::Action(YankNextWhitespace)),
-                    Key::Char('S') => Some(ChainResult::Action(YankPrevWhitespace)),
-                    Key::Char('}') => Some(ChainResult::Action(YankNextEmptyLine)),
-                    Key::Char('{') => Some(ChainResult::Action(YankPrevEmptyLine)),
-                    Key::Char('<') => Some(ChainResult::Action(YankToBeginningOfLine)),
-                    Key::Char('>') => Some(ChainResult::Action(YankToEndOfLine)),
-                    Key::Char('.') => Some(ChainResult::Action(YankToMatchingOpposite)),
-                    Key::Char('g') => Some(ChainResult::Action(YankToEndOfFile)),
-                    Key::Char('G') => Some(ChainResult::Action(YankToBeginningOfFile)),
-                    _ => None,
-                })
-                .simple(Key::Char('n'), NextMatch)
-                .simple(Key::Char('N'), PrevMatch);
-            StateMachine::new(command_map, Duration::from_secs(1))
-        };
-
-        let cmd_state_machine = {
-            #[allow(clippy::enum_glob_use)]
-            use CommandAction::*;
-
-            let command_map = CommandMap::new()
-                .simple(Key::Esc, ViewMode)
-                .simple(Key::Left, Left)
-                .simple(Key::Right, Right)
-                .simple(Key::Up, HistoryUp)
-                .simple(Key::Down, HistoryDown)
-                .simple(Key::AltRight, NextWord)
-                .simple(Key::AltLeft, PrevWord)
-                .simple(Key::Char('\n'), Newline)
-                .simple(Key::Char('\t'), Tab)
-                .simple(Key::Backspace, DeleteChar);
-            StateMachine::new(command_map, Duration::from_secs(1))
-        };
-
         // Set the command view number width manually.
         // FIXME: this limits the bar to always be exactly one in height.
         let cmd_view = Viewport::new(w, 1, 0, 0, x_off, y_off, None);
@@ -297,8 +85,6 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             matches_idx: None,
             cmd_history: Vec::new(),
             cmd_history_idx: 0,
-            view_state_machine,
-            cmd_state_machine,
             rerender: true,
         })
     }
@@ -318,7 +104,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     }
 
     /// Jumps to the next search match if any.
-    fn next_match(&mut self) {
+    pub fn next_match(&mut self) {
         if self.matches.is_empty() {
             return;
         }
@@ -331,7 +117,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     }
 
     // Jumps to the previous search match if any.
-    fn prev_match(&mut self) {
+    pub fn prev_match(&mut self) {
         if self.matches.is_empty() {
             return;
         }
@@ -354,7 +140,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     }
 
     /// Loads the next command history item.
-    fn next_command_history(&mut self) {
+    pub fn next_command_history(&mut self) {
         if self.cmd_history_idx == self.cmd_history.len() {
             return;
         }
@@ -371,7 +157,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     }
 
     /// Loads the previous command history item.
-    fn prev_command_history(&mut self) {
+    pub fn prev_command_history(&mut self) {
         if self.cmd_history_idx == 0 {
             return;
         }
@@ -407,109 +193,5 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
         }
 
         self.mode = mode;
-    }
-
-    /// Handles the tick event in view mode. If a non-standard view action is invoked Err(Other(_)) is returned.
-    pub fn view_tick(&mut self, key: Option<Key>) -> Result<CommandResult, ViewEnum> {
-        use crate::state_machine::StateMachineResult::{Action as A, Incomplete, Invalid};
-        #[allow(clippy::enum_glob_use)]
-        use ViewAction::*;
-
-        // Only rerender if input was received.
-        self.rerender |= key.is_some();
-        match self.view_state_machine.tick(key.into()) {
-            A(Left) => movement!(self, left),
-            A(ShiftLeft) => movement!(self, shift_left),
-            A(Down) => movement!(self, down),
-            A(ShiftDown) => movement!(self, shift_down),
-            A(Up) => movement!(self, up),
-            A(ShiftUp) => movement!(self, shift_up),
-            A(Right) => movement!(self, right),
-            A(ShiftRight) => movement!(self, shift_right),
-            A(NextWord) => movement!(self, next_word),
-            A(NextWordEnd) => movement!(self, next_word_end),
-            A(PrevWord) => movement!(self, prev_word),
-            A(PrevWordEnd) => movement!(self, prev_word_end),
-            A(NextWhitespace) => movement!(self, next_whitespace),
-            A(PrevWhitespace) => movement!(self, prev_whitespace),
-            A(NextEmptyLine) => movement!(self, next_empty_line),
-            A(PrevEmptyLine) => movement!(self, prev_empty_line),
-            A(JumpToBeginningOfLine) => jump!(self, jump_to_beginning_of_line),
-            A(JumpToEndOfLine) => jump!(self, jump_to_end_of_line),
-            A(JumpToMatchingOpposite) => jump!(self, jump_to_matching_opposite),
-            A(JumpToEndOfFile) => jump!(self, jump_to_end_of_file),
-            A(JumpToBeginningOfFile) => jump!(self, jump_to_beginning_of_file),
-            A(SelectMode) => self.sel = Some(self.doc.cur),
-            A(ExitSelectMode) => self.sel = None,
-            A(YankSelection) => yank!(self, selection, SELECTION),
-            A(YankLine) => yank!(self, line),
-            A(YankLeft) => yank!(self, left, REPEAT),
-            A(YankRight) => yank!(self, right, REPEAT),
-            A(YankNextWord) => yank!(self, next_word, REPEAT),
-            A(YankPrevWord) => yank!(self, prev_word, REPEAT),
-            A(YankNextWordEnd) => yank!(self, next_word_end, REPEAT),
-            A(YankPrevWordEnd) => yank!(self, prev_word_end, REPEAT),
-            A(YankNextWhitespace) => yank!(self, next_whitespace, REPEAT),
-            A(YankPrevWhitespace) => yank!(self, prev_whitespace, REPEAT),
-            A(YankNextEmptyLine) => yank!(self, next_empty_line, REPEAT),
-            A(YankPrevEmptyLine) => yank!(self, prev_empty_line, REPEAT),
-            A(YankToBeginningOfLine) => yank!(self, beginning_of_line),
-            A(YankToEndOfLine) => yank!(self, end_of_line),
-            A(YankToMatchingOpposite) => yank!(self, matching_opposite),
-            A(YankToEndOfFile) => yank!(self, end_of_file),
-            A(YankToBeginningOfFile) => yank!(self, beginning_of_file),
-            A(CommandMode) => self.change_mode(Mode::Command),
-            A(NextMatch) => self.next_match(),
-            A(PrevMatch) => self.prev_match(),
-            // Don't clear motion repeat buffer since the Other(_) handler might need to use it.
-            // The Other(_) handler must clear it if it needs clearing.
-            A(Other(action)) => return Err(action),
-            Incomplete => return Ok(CommandResult::Ok),
-            Invalid => {}
-        }
-
-        Ok(CommandResult::Ok)
-    }
-
-    /// Handles the tick event in command mode. If the apply command is invoked, Err(Apply) is returned, if a
-    /// non-standard command action is invoked Err(Other(_)) is returned.
-    pub fn command_tick(
-        &mut self,
-        key: Option<Key>,
-    ) -> Result<CommandResult, CommandTick<CommandEnum>> {
-        use crate::state_machine::StateMachineResult::{Action as A, Incomplete, Invalid};
-        #[allow(clippy::enum_glob_use)]
-        use CommandAction::*;
-
-        match self.cmd_state_machine.tick(key.into()) {
-            A(ViewMode) => self.change_mode(Mode::View),
-            A(Left) => cursor::left(&mut self.cmd, &mut self.cmd_view, 1),
-            A(Right) => cursor::right(&mut self.cmd, &mut self.cmd_view, 1),
-            A(HistoryUp) => self.prev_command_history(),
-            A(HistoryDown) => self.next_command_history(),
-            A(NextWord) => cursor::next_word(&mut self.cmd, &mut self.cmd_view, 1),
-            A(PrevWord) => cursor::prev_word(&mut self.cmd, &mut self.cmd_view, 1),
-            A(Newline) => {
-                // Commands have only one line.
-                let cmd = self.cmd.line(0).unwrap().to_string();
-                if !cmd.is_empty() {
-                    self.cmd_history.push(cmd.clone());
-                }
-                self.change_mode(Mode::View);
-
-                return self.apply_command(cmd);
-            }
-            A(Tab) => edit::write_tab(&mut self.cmd, &mut self.cmd_view, None, false),
-            A(DeleteChar) => edit::delete_char(&mut self.cmd, &mut self.cmd_view, None),
-            A(Other(tick)) => return Err(CommandTick::Other(tick)),
-            Invalid => {
-                if let Some(Key::Char(ch)) = key {
-                    edit::write_char(&mut self.cmd, &mut self.cmd_view, None, ch);
-                }
-            }
-            Incomplete => {}
-        }
-
-        Ok(CommandResult::Ok)
     }
 }

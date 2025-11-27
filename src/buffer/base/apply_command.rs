@@ -1,14 +1,12 @@
 use crate::{
     INFO_MSG,
-    buffer::base::{BaseBuffer, CommandTick},
+    buffer::base::BaseBuffer,
     cursor::{self, Cursor},
     util::{CommandResult, line_column},
 };
 use regex::Regex;
 
-impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
-    BaseBuffer<ModeEnum, ViewEnum, CommandEnum>
-{
+impl<ModeEnum: Clone> BaseBuffer<ModeEnum> {
     fn search(&mut self, args: &str) -> CommandResult {
         if args.len() == 2 || !args.starts_with('/') || !args.ends_with('/') {
             return CommandResult::Info(
@@ -94,10 +92,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
     }
 
     /// Applies the command entered during command mode.
-    pub(super) fn apply_command(
-        &mut self,
-        input: String,
-    ) -> Result<CommandResult, CommandTick<CommandEnum>> {
+    pub fn apply_command(&mut self, input: String) -> Result<CommandResult, String> {
         if input.is_empty() {
             return Ok(CommandResult::Ok);
         }
@@ -114,7 +109,7 @@ impl<ModeEnum: Clone, ViewEnum: Clone, CommandEnum: Clone>
             ))),
             "goto" => Ok(self.goto(args)),
             "s" => Ok(self.search(args)),
-            _ => Err(CommandTick::Apply(input)),
+            _ => Err(input),
         }
     }
 }
