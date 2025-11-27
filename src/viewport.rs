@@ -1,7 +1,7 @@
 use crate::{
     cursor::{Cursor, CursorStyle},
     display::{Cell, Display},
-    document::{Document, highlight_event::HighlightEvent},
+    document::Document,
 };
 use termion::color::{self, Bg, Fg};
 
@@ -112,69 +112,58 @@ impl Viewport {
         let x_off = doc.cur.x - self.cur.x;
         let x_max = x_off + self.buff_w;
 
-        let mut color_stack: Vec<Fg<color::Rgb>> = Vec::new();
         let mut y = 0;
         let mut x = 0;
 
-        'event_loop: for event in &doc.highlighter.highlights {
-            match event {
-                HighlightEvent::HighlightStart { .. } => {}
-                HighlightEvent::HighlightEnd => {
-                    color_stack.pop();
-                }
-                HighlightEvent::Source { start, end } => {
-                    for ch in doc.get_byte_range(*start, *end).chars() {
-                        if y >= y_off && y < y_max && x >= x_off && x < x_max {
-                            let mut display_ch = ch;
-                            let mut fg = *color_stack.last().unwrap_or(&TXT);
-                            let mut bg = if y == doc.cur.y { HIGHLIGHT } else { BG };
+        for ch in doc.get_contents().flat_map(|c| c.chars()) {
+            if y >= y_off && y < y_max && x >= x_off && x < x_max {
+                let mut display_ch = ch;
+                let mut fg = TXT;
+                let mut bg = if y == doc.cur.y { HIGHLIGHT } else { BG };
 
-                            let screen_y = y - y_off + self.y_off;
-                            let screen_x = self.gutter_w + x - x_off + self.x_off;
+                let screen_y = y - y_off + self.y_off;
+                let screen_x = self.gutter_w + x - x_off + self.x_off;
 
-                            // Layer 1: Selection.
-                            if let Some((start, end)) = sel {
-                                let pos = Cursor::new(x, y);
-                                if pos >= start && pos < end {
-                                    bg = SEL;
-                                }
-                            }
-
-                            // Layer 2: Character replacement.
-                            if display_ch == ' ' {
-                                display_ch = '·';
-                                fg = WHITESPACE;
-                            }
-                            if display_ch == '\n' {
-                                display_ch = '⏎';
-                                fg = WHITESPACE;
-                            }
-                            if display_ch == '\r' {
-                                display_ch = '↤';
-                                fg = TXT;
-                                bg = CHAR_WARN;
-                            }
-                            if display_ch == '\t' {
-                                display_ch = '↦';
-                                fg = TXT;
-                                bg = CHAR_WARN;
-                            }
-
-                            display.update(Cell::new(display_ch, fg, bg), screen_x, screen_y);
-                        }
-
-                        if ch == '\n' {
-                            y += 1;
-                            x = 0;
-                        } else {
-                            x += 1;
-                        }
-
-                        if y >= y_max {
-                            break 'event_loop;
-                        }
+                // Layer 1: Selection.
+                if let Some((start, end)) = sel {
+                    let pos = Cursor::new(x, y);
+                    if pos >= start && pos < end {
+                        bg = SEL;
                     }
                 }
+
+                // Layer 2: Character replacement.
+                if display_ch == ' ' {
+                    display_ch = '·';
+                    fg = WHITESPACE;
+                }
+                if display_ch == '\n' {
+                    display_ch = '⏎';
+                    fg = WHITESPACE;
+                }
+                if display_ch == '\r' {
+                    display_ch = '↤';
+                    fg = TXT;
+                    bg = CHAR_WARN;
+                }
+                if display_ch == '\t' {
+                    display_ch = '↦';
+                    fg = TXT;
+                    bg = CHAR_WARN;
+                }
+
+                display.update(Cell::new(display_ch, fg, bg), screen_x, screen_y);
+            }
+
+            if ch == '\n' {
+                y += 1;
+                x = 0;
+            } else {
+                x += 1;
+            }
+
+            if y >= y_max {
+                break;
             }
         }
 

@@ -47,13 +47,7 @@ impl TextBuffer {
 
         let mut buff = String::new();
         match self.file.as_mut().unwrap().read_to_string(&mut buff) {
-            Ok(_) => {
-                self.base.doc.from(buff.as_str());
-                self.base
-                    .doc
-                    .highlighter
-                    .set_lang_filename(self.file_name.as_ref().unwrap());
-            }
+            Ok(_) => self.base.doc.from(buff.as_str()),
             Err(err) => {
                 return CommandResult::Info(err.to_string());
             }
@@ -180,14 +174,6 @@ impl TextBuffer {
         CommandResult::Ok
     }
 
-    fn syntax_command(&mut self, args: &str) -> CommandResult {
-        if !self.base.doc.highlighter.set_lang(args) {
-            return CommandResult::Info("Invalid language selected".to_string());
-        }
-
-        CommandResult::Ok
-    }
-
     /// Applies the command entered during command mode.
     pub fn apply_command(&mut self, cmd: &str) -> CommandResult {
         if cmd.is_empty() {
@@ -214,7 +200,6 @@ impl TextBuffer {
             "o" => self.open_command(args, false),
             "oo" => self.open_command(args, true),
             "r" => self.replace_command(args),
-            "syntax" => self.syntax_command(args),
             _ => CommandResult::Info(format!("Unrecognized command: '{cmd}'")),
         }
     }

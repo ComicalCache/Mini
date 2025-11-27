@@ -1,9 +1,8 @@
-pub mod highlight_event;
-mod highlighter;
-
 use crate::cursor::Cursor;
-use highlighter::Highlighter;
-use ropey::{Rope, RopeSlice, iter::Lines};
+use ropey::{
+    Rope, RopeSlice,
+    iter::{Chunks, Lines},
+};
 use std::{
     fs::File,
     io::{BufWriter, Error, Seek, SeekFrom, Write},
@@ -17,9 +16,6 @@ pub struct Document {
     pub cur: Cursor,
     // Flag if the buffer was modified.
     pub edited: bool,
-
-    // The highlighter component responsible for syntax highlighting.
-    pub highlighter: Highlighter,
 }
 
 impl Document {
@@ -28,7 +24,6 @@ impl Document {
             rope: Rope::from_str(contents.unwrap_or_default().as_str()),
             cur: Cursor::new(x, y),
             edited: false,
-            highlighter: Highlighter::new(),
         }
     }
 
@@ -37,7 +32,6 @@ impl Document {
         self.rope = Rope::from_str(buff);
         self.cur = Cursor::new(0, 0);
         self.edited = false;
-        self.highlighter.highlights.clear();
     }
 
     /// Returns the number of lines.
@@ -140,8 +134,8 @@ impl Document {
     }
 
     /// Gets a range of text from the document using absolute byte indices.
-    pub fn get_byte_range(&self, start: usize, end: usize) -> RopeSlice<'_> {
-        self.rope.byte_slice(start..end)
+    pub fn get_contents(&self) -> Chunks<'_> {
+        self.rope.chunks()
     }
 
     /// Removes a range of text from the document.
@@ -156,10 +150,6 @@ impl Document {
         let end_idx = self.xy_to_idx(end.x, end.y);
         self.rope.remove(start_idx..end_idx);
         self.edited = true;
-    }
-
-    pub fn highlight(&mut self) {
-        self.highlighter.highlight(self.rope.chunks());
     }
 
     /// Converts (x, y) coordinates to a rope index.

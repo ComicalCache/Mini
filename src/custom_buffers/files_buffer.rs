@@ -190,12 +190,6 @@ impl Buffer for FilesBuffer {
         self.base.rerender
     }
 
-    fn highlight(&mut self) {
-        if self.need_rerender() {
-            self.base.doc.highlight();
-        }
-    }
-
     fn render(&mut self, display: &mut Display) {
         self.base.rerender = false;
 
