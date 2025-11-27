@@ -1,5 +1,4 @@
 use crate::{
-    TXT_BUFF_IDX,
     custom_buffers::files_buffer::FilesBuffer,
     util::{CommandResult, open_file},
 };
@@ -57,7 +56,8 @@ impl FilesBuffer {
         };
 
         match cmd {
-            "q" | "qq" => CommandResult::Change(TXT_BUFF_IDX),
+            "q" => CommandResult::Quit,
+            "qq" => CommandResult::ForceQuit,
             "mk" => self.create_command(args),
             "rm" => self.remove_command(args),
             "rm!" => self.recursive_remove_command(args),
