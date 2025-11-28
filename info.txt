@@ -37,9 +37,9 @@ command history. Both buffers support following commands:
 
 If the entered command results in an error, an error message is shown. To dismiss the message press any button besides
 the following that have special meaning:
-- 'j' to scroll the error message down
-- 'k' to scroll the error message up
-- 'y' to yank the error message to the clipboard
+- 'J' to scroll the error message down
+- 'K' to scroll the error message up
+- 'Y' to yank the error message to the clipboard
 
 Text Buffer:
 This is probably the most important buffer. It contains the editor window where you can edit your files and is the

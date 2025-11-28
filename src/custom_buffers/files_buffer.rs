@@ -324,19 +324,19 @@ impl Buffer for FilesBuffer {
             && let Some(key) = key
         {
             match key {
-                Key::Char('j') => {
+                Key::Char('J') => {
                     if message.scroll + 1 < message.lines {
                         message.scroll += 1;
                         self.base.rerender = true;
                     }
                     return CommandResult::Ok;
                 }
-                Key::Char('k') => {
+                Key::Char('K') => {
                     message.scroll = message.scroll.saturating_sub(1);
                     self.base.rerender = true;
                     return CommandResult::Ok;
                 }
-                Key::Char('y') => {
+                Key::Char('Y') => {
                     if let Err(err) = self.base.clipboard.set_text(message.text.clone()) {
                         return CommandResult::Info(err.to_string());
                     }
