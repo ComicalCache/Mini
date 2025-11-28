@@ -3,26 +3,26 @@ mod history;
 mod insert;
 
 use crate::{
-    FILES_BUFF_IDX, TXT_BUFF_IDX,
     buffer::{
-        Buffer,
+        Buffer, BufferKind,
         base::{BaseBuffer, Mode},
         delete, edit,
     },
     change,
-    cursor::{self, Cursor, CursorStyle},
+    cursor::{self, CursorStyle},
     delete,
     display::Display,
     document::Document,
     history::History,
-    jump, movement,
-    util::{CommandResult, open_file},
+    jump,
+    message::{Message, MessageKind},
+    movement,
+    util::Command,
     yank,
 };
 use std::{
     fs::File,
     io::{Error, Read},
-    path::PathBuf,
 };
 use termion::event::Key;
 
@@ -90,9 +90,16 @@ impl TextBuffer {
         let mut info_line = String::new();
 
         let mode = match self.base.mode {
-            Mode::View => "V",
-            Mode::Command => "C",
-            Mode::Other(OtherMode::Write) => "W",
+            Mode::View => "[V] ",
+            Mode::Command => "[C] ",
+            Mode::Other(OtherMode::Write) => "[W] ",
+        };
+        let view_mode = match self.view_mode {
+            ViewMode::Normal => "",
+            ViewMode::Yank => " [yank]",
+            ViewMode::Delete => " [delete]",
+            ViewMode::Change => " [change]",
+            ViewMode::Replace => " [replace]",
         };
         // Plus 1 since text coordinates are 0 indexed.
         let line = self.base.doc.cur.y + 1;
@@ -101,13 +108,13 @@ impl TextBuffer {
         let percentage = 100 * line / total;
         let size: usize = self.base.doc.lines().map(|l| l.bytes().len()).sum();
 
-        match &self.file {
-            Some(_) => write!(&mut info_line, "[{}] ", self.file_name.as_ref().unwrap()).unwrap(),
-            None => {}
+        if self.file.is_some() {
+            write!(&mut info_line, "[{}] ", self.file_name.as_ref().unwrap()).unwrap();
         }
+
         write!(
             &mut info_line,
-            "[{mode}] [{line}:{col}] [{line}/{total} {percentage}%] [{size}B]",
+            "{mode}[{line}:{col}] [{line}/{total} {percentage}%] [{size}B]{view_mode}",
         )
         .unwrap();
 
@@ -137,11 +144,11 @@ impl TextBuffer {
     }
 
     /// Handles self defined view actions.
-    fn view_tick(&mut self, key: Option<Key>) -> CommandResult {
+    fn view_tick(&mut self, key: Option<Key>) -> Command {
         use OtherMode::Write;
 
         let Some(key) = key else {
-            return CommandResult::Ok;
+            return Command::Ok;
         };
 
         match self.view_mode {
@@ -190,8 +197,6 @@ impl TextBuffer {
                     self.insert_move_new_line_above();
                     self.base.change_mode(Mode::Other(Write));
                 }
-                Key::Char('t') => return CommandResult::Change(TXT_BUFF_IDX),
-                Key::Char('e') => return CommandResult::Change(FILES_BUFF_IDX),
                 Key::Char('d') => self.view_mode = ViewMode::Delete,
                 Key::Char('x') => delete!(self, right, REPEAT),
                 Key::Char('c') => self.view_mode = ViewMode::Change,
@@ -310,13 +315,13 @@ impl TextBuffer {
             }
         }
 
-        CommandResult::Ok
+        Command::Ok
     }
 
     /// Handles write mode ticks.
-    fn write_tick(&mut self, key: Option<Key>) -> CommandResult {
+    fn write_tick(&mut self, key: Option<Key>) -> Command {
         let Some(key) = key else {
-            return CommandResult::Ok;
+            return Command::Ok;
         };
 
         match key {
@@ -347,13 +352,13 @@ impl TextBuffer {
             _ => {}
         }
 
-        CommandResult::Ok
+        Command::Ok
     }
 
     /// Handles self apply and self defined command ticks.
-    fn command_tick(&mut self, key: Option<Key>) -> CommandResult {
+    fn command_tick(&mut self, key: Option<Key>) -> Command {
         let Some(key) = key else {
-            return CommandResult::Ok;
+            return Command::Ok;
         };
 
         match key {
@@ -387,11 +392,21 @@ impl TextBuffer {
             _ => {}
         }
 
-        CommandResult::Ok
+        Command::Ok
     }
 }
 
 impl Buffer for TextBuffer {
+    fn kind(&self) -> BufferKind {
+        BufferKind::Text
+    }
+
+    fn name(&self) -> String {
+        self.file_name
+            .as_ref()
+            .map_or_else(|| "Scratchpad".to_string(), Clone::clone)
+    }
+
     fn need_rerender(&self) -> bool {
         self.base.rerender
     }
@@ -414,14 +429,14 @@ impl Buffer for TextBuffer {
 
         if cmd {
             self.base.cmd_view.render_bar(
-                self.base.cmd.line(0).unwrap().to_string().as_str(),
+                self.base.cmd.line(0).unwrap().to_string().trim_end(),
                 0,
                 display,
                 &self.base.cmd,
             );
         } else {
             self.base.info_view.render_bar(
-                self.info.line(0).unwrap().to_string().as_str(),
+                self.info.line(0).unwrap().to_string().trim_end(),
                 0,
                 display,
                 &self.info,
@@ -449,7 +464,7 @@ impl Buffer for TextBuffer {
         self.base.resize(w, h, x_off, y_off);
     }
 
-    fn tick(&mut self, key: Option<Key>) -> CommandResult {
+    fn tick(&mut self, key: Option<Key>) -> Command {
         // Only rerender if input was received.
         self.base.rerender |= key.is_some();
 
@@ -462,19 +477,19 @@ impl Buffer for TextBuffer {
                         message.scroll += 1;
                         self.base.rerender = true;
                     }
-                    return CommandResult::Ok;
+                    return Command::Ok;
                 }
                 Key::Char('K') => {
                     message.scroll = message.scroll.saturating_sub(1);
                     self.base.rerender = true;
-                    return CommandResult::Ok;
+                    return Command::Ok;
                 }
                 Key::Char('Y') => {
                     if let Err(err) = self.base.clipboard.set_text(message.text.clone()) {
-                        return CommandResult::Info(err.to_string());
+                        return Command::Error(err.to_string());
                     }
 
-                    return CommandResult::Info("Message yanked to clipboard".to_string());
+                    return Command::Info("Message yanked to clipboard".to_string());
                 }
                 // Clear the message on any other key press.
                 _ => self.base.clear_message(),
@@ -488,26 +503,12 @@ impl Buffer for TextBuffer {
         }
     }
 
-    fn set_contents(&mut self, contents: String, path: Option<PathBuf>, file_name: Option<String>) {
-        // Set contents moves the doc.cur to the beginning.
-        self.base.doc.from(contents.as_str());
-        self.base.doc_view.cur = Cursor::new(0, 0);
-        if let Some(path) = path {
-            self.file = open_file(path).ok();
-            self.file_name = file_name;
-        }
-
-        self.base.sel = None;
-        self.base.change_mode(Mode::View);
-        self.base.clear_matches();
-
-        self.history.clear();
-
-        self.base.rerender = true;
+    fn get_message(&self) -> Option<Message> {
+        self.base.message.clone()
     }
 
-    fn set_message(&mut self, text: String) {
-        self.base.set_message(text);
+    fn set_message(&mut self, kind: MessageKind, text: String) {
+        self.base.set_message(kind, text);
     }
 
     fn can_quit(&self) -> Result<(), String> {

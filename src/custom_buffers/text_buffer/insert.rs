@@ -3,7 +3,7 @@ use crate::{
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
     history::{Change, Replace},
-    util::CommandResult,
+    util::Command,
 };
 
 impl TextBuffer {
@@ -13,7 +13,7 @@ impl TextBuffer {
         cursor::jump_to_beginning_of_line(&mut self.base.doc, &mut self.base.doc_view);
         self.history.add_change(Change::Insert {
             pos: self.base.doc.cur,
-            data: String::from("\n"),
+            data: "\n".to_string(),
         });
 
         self.base.doc.insert_line(self.base.doc.cur.y);
@@ -25,7 +25,7 @@ impl TextBuffer {
         let y = self.base.doc.cur.y;
         self.history.add_change(Change::Insert {
             pos: Cursor::new(self.base.doc.line_count(y).unwrap(), y),
-            data: String::from("\n"),
+            data: "\n".to_string(),
         });
 
         self.base.doc.insert_line(self.base.doc.cur.y + 1);
@@ -72,11 +72,11 @@ impl TextBuffer {
     }
 
     /// Paste the system clipboard contents after the current cursor.
-    pub(super) fn paste(&mut self, trim_newline: bool, move_to: bool) -> Option<CommandResult> {
+    pub(super) fn paste(&mut self, trim_newline: bool, move_to: bool) -> Option<Command> {
         let mut data = match self.base.clipboard.get_text() {
             Ok(content) => content,
             Err(err) => {
-                return Some(CommandResult::Info(err.to_string()));
+                return Some(Command::Error(err.to_string()));
             }
         };
 

@@ -1,11 +1,10 @@
 use crate::{
-    TXT_BUFF_IDX,
-    custom_buffers::files_buffer::FilesBuffer,
-    util::{CommandResult, file_name, open_file},
+    custom_buffers::{files_buffer::FilesBuffer, text_buffer::TextBuffer},
+    util::{Command, file_name, open_file},
 };
 use std::{
     fs::read_dir,
-    io::{Error, Read},
+    io::Error,
     path::{Path, PathBuf},
 };
 
@@ -46,7 +45,7 @@ impl FilesBuffer {
     }
 
     /// Handles the user selection of an entry in the file buffer.
-    pub(super) fn select_item(&mut self) -> Result<CommandResult, Error> {
+    pub(super) fn select_item(&mut self) -> Result<Command, Error> {
         let idx = self.base.doc.cur.y;
 
         // Move directory up.
@@ -55,25 +54,26 @@ impl FilesBuffer {
                 return Ok(self.refresh());
             }
 
-            return Ok(CommandResult::Ok);
+            return Ok(Command::Ok);
         }
 
         let entry = &self.entries[idx.saturating_sub(1)].clone();
         if entry.is_file() {
-            let mut buff = String::new();
-            open_file(entry)?.read_to_string(&mut buff)?;
-
-            return Ok(CommandResult::Init(
-                TXT_BUFF_IDX,
-                buff,
-                Some(entry.clone()),
+            let text_buffer = TextBuffer::new(
+                self.base.w,
+                self.base.h,
+                self.base.x_off,
+                self.base.y_off,
+                Some(open_file(entry)?),
                 file_name(entry),
-            ));
+            )?;
+
+            return Ok(Command::Init(Box::new(text_buffer)));
         } else if entry.is_dir() {
             self.path.clone_from(entry);
             return Ok(self.refresh());
         }
 
-        Ok(CommandResult::Ok)
+        Ok(Command::Ok)
     }
 }

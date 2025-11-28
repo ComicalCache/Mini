@@ -3,7 +3,7 @@ mod apply_command;
 use crate::{
     cursor::{self, Cursor},
     document::Document,
-    message::Message,
+    message::{Message, MessageKind},
     viewport::Viewport,
 };
 use arboard::Clipboard;
@@ -23,6 +23,15 @@ pub enum Mode<T> {
 /// it as a field to "inherit" this base. Buffers with completely separate functionality
 /// can use it as a blueprint and define their own functionality from scratch.
 pub struct BaseBuffer<ModeEnum> {
+    /// Total width of the `Buffer`.
+    pub w: usize,
+    /// Total height of the `Buffer`.
+    pub h: usize,
+    /// Total x-axis offset of the `Buffer`.
+    pub x_off: usize,
+    /// Total y-axis offset of the `Buffer`.
+    pub y_off: usize,
+
     /// The main content of the buffer.
     pub doc: Document,
     /// The command content.
@@ -73,6 +82,10 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
 
         let count = contents.as_ref().map_or(1, |buff| buff.len().max(1));
         Ok(Self {
+            w,
+            h,
+            x_off,
+            y_off,
             doc: Document::new(0, 0, contents),
             cmd: Document::new(0, 0, None),
             // Shifted by one because of info/command line.
@@ -96,6 +109,11 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
     /// Resizes the viewports of the buffer.
     pub fn resize(&mut self, w: usize, h: usize, x_off: usize, y_off: usize) {
         let doc_count = self.doc.len();
+
+        self.w = w;
+        self.h = h;
+        self.x_off = x_off;
+        self.y_off = y_off;
 
         // Shifted by one because of info/command line.
         // FIXME: this limits the bar to always be exactly one in height.
@@ -204,8 +222,8 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
     }
 
     /// Set a message to display to the user.
-    pub fn set_message(&mut self, text: String) {
-        self.message = Some(Message::new(text, self.doc_view.w));
+    pub fn set_message(&mut self, kind: MessageKind, text: String) {
+        self.message = Some(Message::new(kind, text, self.doc_view.w));
         self.rerender = true;
     }
 

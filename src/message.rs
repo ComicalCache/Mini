@@ -1,5 +1,17 @@
+use std::fmt::Display;
+
+/// Kind of the message.
+#[derive(Clone)]
+pub enum MessageKind {
+    Info,
+    Error,
+}
+
 /// A message to be displayed to the user to convey information or show errors.
+#[derive(Clone)]
 pub struct Message {
+    pub kind: MessageKind,
+
     /// The text of the message.
     pub text: String,
     /// Amount of lines.
@@ -10,8 +22,9 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn new(text: String, width: usize) -> Self {
+    pub fn new(kind: MessageKind, text: String, width: usize) -> Self {
         let mut ret = Self {
+            kind,
             text,
             lines: 0,
             scroll: 0,
@@ -33,5 +46,15 @@ impl Message {
         }
 
         self.lines = lines;
+    }
+}
+
+impl Display for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind {
+            MessageKind::Info => writeln!(f, "Info:")?,
+            MessageKind::Error => writeln!(f, "Error:")?,
+        }
+        write!(f, "{}", self.text)
     }
 }

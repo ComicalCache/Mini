@@ -1,15 +1,15 @@
 use crate::{
     INFO_MSG,
-    buffer::base::BaseBuffer,
+    buffer::{BufferKind, base::BaseBuffer},
     cursor::{self, Cursor},
-    util::{CommandResult, line_column},
+    util::{Command, line_column},
 };
 use regex::Regex;
 
 impl<ModeEnum> BaseBuffer<ModeEnum> {
-    fn search(&mut self, args: &str) -> CommandResult {
+    fn search(&mut self, args: &str) -> Command {
         if args.len() == 2 || !args.starts_with('/') || !args.ends_with('/') {
-            return CommandResult::Info(
+            return Command::Error(
                 "Expected a valid regular expression like '/<regex>/'".to_string(),
             );
         }
@@ -17,7 +17,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         let regex = match Regex::new(&args[1..args.len() - 1]) {
             Ok(regex) => regex,
             Err(err) => {
-                return CommandResult::Info(format!(
+                return Command::Error(format!(
                     "'{args}' is not a valid regular expression:\n{err}"
                 ));
             }
@@ -58,7 +58,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         self.matches_idx = None;
 
         if self.matches.is_empty() {
-            return CommandResult::Info("No matches found".to_string());
+            return Command::Info("No matches found".to_string());
         }
 
         self.matches_idx = self
@@ -73,10 +73,10 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         self.sel = Some(self.matches[idx].1);
         cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[idx].0);
 
-        CommandResult::Ok
+        Command::Ok
     }
 
-    fn goto(&mut self, args: &str) -> CommandResult {
+    fn goto(&mut self, args: &str) -> Command {
         let (x, y) = line_column(args);
 
         let mut pos = self.doc.cur;
@@ -88,13 +88,13 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         }
         cursor::move_to(&mut self.doc, &mut self.doc_view, pos);
 
-        CommandResult::Ok
+        Command::Ok
     }
 
     /// Applies the command entered during command mode.
-    pub fn apply_command(&mut self, input: String) -> Result<CommandResult, String> {
+    pub fn apply_command(&mut self, input: String) -> Result<Command, String> {
         if input.is_empty() {
-            return Ok(CommandResult::Ok);
+            return Ok(Command::Ok);
         }
 
         let (cmd, args) = match input.split_once(char::is_whitespace) {
@@ -103,12 +103,26 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         };
 
         match cmd {
-            "?" => Ok(CommandResult::Info(format!(
+            "?" => Ok(Command::Info(format!(
                 "Mini - A terminal text-editor (v{})\n\n{INFO_MSG}",
                 option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap()
             ))),
             "goto" => Ok(self.goto(args)),
             "s" => Ok(self.search(args)),
+            "cb" => match args.parse::<usize>() {
+                Ok(idx) => Ok(Command::Change(idx)),
+                Err(err) => Err(err.to_string()),
+            },
+            "lb" => Ok(Command::ListBuffers),
+            #[allow(clippy::option_if_let_else)]
+            "nb" => match BufferKind::from(args) {
+                Some(kind) => Ok(Command::NewBuffer(kind)),
+                None => Ok(Command::Error(format!(
+                    "'{args}' is not a valid buffer kind. Try one of these:\n{}",
+                    BufferKind::list()
+                ))),
+            },
+            "log" => Ok(Command::Log),
             _ => Err(input),
         }
     }

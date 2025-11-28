@@ -1,6 +1,7 @@
 Run Mini with a file(path) argument to open or create a file or a directory to open it in the file browser. Omit the
 file(path) to create a "scratchpad" buffer with no backing file. A few things that make Mini interesting: it has
-line-numbers, diffed-rendering, undo and redo and contains a file browser.
+line-numbers, diffed-rendering, undo and redo, contains a file browser and allows for multiple buffers to be opened
+simultaneously.
 
 Mini should feel familiar to those who have used VIm before. It features two kinds of buffers: a text buffer and a file
 browser buffer. You can switch between the text buffer and files buffer by hitting 't' or 'e' respectively. You can
@@ -34,6 +35,11 @@ command history. Both buffers support following commands:
     nothing.
 - 's /<regex>/' to search text. If text was selected, it will only search in that selection. See
     https://docs.rs/regex/latest/regex/index.html for information about the regex syntax.
+- 'lb' lists all opened buffers
+- 'cb <idx>' changes buffer to the buffer at index <idx>
+- 'nb <kind>' creates a new buffer of kind <kind>. Available kinds are 'Text'/'T' and 'Files'/'F'.
+- 'log' writes a log of all error messages since last log to 'mini.log'. The file houses in the directory where Mini was
+    initially opened.
 
 If the entered command results in an error, an error message is shown. To dismiss the message press any button besides
 the following that have special meaning:

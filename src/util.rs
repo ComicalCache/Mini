@@ -1,16 +1,21 @@
 use std::{
     fs::{File, OpenOptions},
     io::Error,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
-#[derive(PartialEq, Eq)]
+use crate::buffer::{Buffer, BufferKind};
+
 /// The result of a command entered by the user.
-pub enum CommandResult {
+pub enum Command {
     Ok,
     Change(usize),
     Info(String),
-    Init(usize, String, Option<PathBuf>, Option<String>),
+    Error(String),
+    ListBuffers,
+    NewBuffer(BufferKind),
+    Init(Box<dyn Buffer>),
+    Log,
     Quit,
     ForceQuit,
 }

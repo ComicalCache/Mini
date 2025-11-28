@@ -2,7 +2,7 @@ use crate::{
     cursor::{Cursor, CursorStyle},
     display::{Cell, Display},
     document::Document,
-    message::Message,
+    message::{Message, MessageKind},
 };
 use termion::color::{self, Bg, Fg};
 
@@ -22,8 +22,10 @@ const REL_NUMS: Fg<color::Rgb> = Fg(color::Rgb(101, 103, 105));
 const WHITESPACE: Fg<color::Rgb> = Fg(color::Rgb(68, 71, 79));
 /// Background to warn of tab characters.
 const CHAR_WARN: Bg<color::Rgb> = Bg(color::Rgb(181, 59, 59));
+/// Info message text color.
+const INFO_TXT: Fg<color::Rgb> = Fg(color::Rgb(55, 131, 181));
 /// Error message text color.
-const ERROR: Fg<color::Rgb> = Fg(color::Rgb(181, 59, 59));
+const ERROR_TXT: Fg<color::Rgb> = Fg(color::Rgb(181, 59, 59));
 
 /// The viewport of a (section of a) `Display`.
 pub struct Viewport {
@@ -119,15 +121,26 @@ impl Viewport {
             for x in 0..self.w {
                 if newline {
                     // Fill the remaining line.
-                    display.update(Cell::new(' ', ERROR, INFO), self.x_off + x, self.y_off + y);
+                    display.update(
+                        Cell::new(' ', ERROR_TXT, INFO),
+                        self.x_off + x,
+                        self.y_off + y,
+                    );
                 } else {
                     let mut display_ch = chars.next().unwrap_or(' ');
 
                     if display_ch == '\n' {
                         newline = true;
-                        display.update(Cell::new(' ', ERROR, INFO), self.x_off + x, self.y_off + y);
+                        display.update(
+                            Cell::new(' ', ERROR_TXT, INFO),
+                            self.x_off + x,
+                            self.y_off + y,
+                        );
                     } else {
-                        let mut fg = ERROR;
+                        let mut fg = match message.kind {
+                            MessageKind::Info => INFO_TXT,
+                            MessageKind::Error => ERROR_TXT,
+                        };
                         let mut bg = INFO;
 
                         // Layer 1: Character replacement.
@@ -171,13 +184,11 @@ impl Viewport {
         let x_max = x_off + self.buff_w;
 
         for y in y_off..y_max {
-            let mut x = 0;
-
             let Some(line) = doc.line(y) else {
                 break;
             };
 
-            for ch in line.chars() {
+            for (x, ch) in line.chars().enumerate() {
                 if x >= x_off && x < x_max {
                     let mut display_ch = ch;
                     let mut fg = TXT;
@@ -213,8 +224,6 @@ impl Viewport {
 
                     display.update(Cell::new(display_ch, fg, bg), screen_x, screen_y);
                 }
-
-                x += 1;
             }
         }
 

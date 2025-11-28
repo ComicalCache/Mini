@@ -2,7 +2,7 @@ use crate::{
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
     history::{Change, Replace},
-    util::{CommandResult, file_name, open_file},
+    util::{Command, file_name, open_file},
 };
 use regex::Regex;
 use std::io::{Error, Read};
@@ -17,9 +17,9 @@ impl TextBuffer {
         Ok(true)
     }
 
-    fn open_command(&mut self, args: &str, force: bool) -> CommandResult {
+    fn open_command(&mut self, args: &str, force: bool) -> Command {
         if !force && self.base.doc.edited {
-            return CommandResult::Info(
+            return Command::Error(
                 "There are unsaved changes, save or oo to force open a new document".to_string(),
             );
         }
@@ -34,13 +34,13 @@ impl TextBuffer {
 
         // Open blank buffer if no path is specified.
         if args.is_empty() {
-            return CommandResult::Ok;
+            return Command::Ok;
         }
 
         self.file = match open_file(args) {
             Ok(file) => Some(file),
             Err(err) => {
-                return CommandResult::Info(err.to_string());
+                return Command::Error(err.to_string());
             }
         };
         self.file_name = file_name(args);
@@ -49,19 +49,19 @@ impl TextBuffer {
         match self.file.as_mut().unwrap().read_to_string(&mut buff) {
             Ok(_) => self.base.doc.from(buff.as_str()),
             Err(err) => {
-                return CommandResult::Info(err.to_string());
+                return Command::Error(err.to_string());
             }
         }
 
-        CommandResult::Ok
+        Command::Ok
     }
 
-    fn write_command(&mut self, args: &str) -> CommandResult {
+    fn write_command(&mut self, args: &str) -> Command {
         if !args.is_empty() {
             self.file = match open_file(args) {
                 Ok(file) => Some(file),
                 Err(err) => {
-                    return CommandResult::Info(err.to_string());
+                    return Command::Error(err.to_string());
                 }
             };
             self.file_name = file_name(args);
@@ -70,22 +70,21 @@ impl TextBuffer {
         let res = match self.write_to_file() {
             Ok(res) => res,
             Err(err) => {
-                return CommandResult::Info(err.to_string());
+                return Command::Error(err.to_string());
             }
         };
         // Failed to write file because no path exists.
         if !res {
-            return CommandResult::Info(
+            return Command::Error(
                 "Please specify a file location using 'w <path>' to write the file to".to_string(),
             );
         }
 
-        CommandResult::Ok
+        Command::Ok
     }
 
-    fn replace_command(&mut self, args: &str) -> CommandResult {
-        let err =
-            CommandResult::Info("Invalid format. Expected: r /<regex>/<replace>/".to_string());
+    fn replace_command(&mut self, args: &str) -> Command {
+        let err = Command::Error("Invalid format. Expected: r /<regex>/<replace>/".to_string());
         let Some(args) = args.strip_prefix('/') else {
             return err;
         };
@@ -102,7 +101,7 @@ impl TextBuffer {
         let regex = match Regex::new(regex_str) {
             Ok(regex) => regex,
             Err(err) => {
-                return CommandResult::Info(format!(
+                return Command::Error(format!(
                     "'{regex_str}' is not a valid regular expression:\n{err}"
                 ));
             }
@@ -171,13 +170,13 @@ impl TextBuffer {
             self.history.add_change(Change::Replace(changes));
         }
 
-        CommandResult::Ok
+        Command::Ok
     }
 
     /// Applies the command entered during command mode.
-    pub fn apply_command(&mut self, cmd: &str) -> CommandResult {
+    pub fn apply_command(&mut self, cmd: &str) -> Command {
         if cmd.is_empty() {
-            return CommandResult::Ok;
+            return Command::Ok;
         }
 
         let (cmd, args) = match cmd.split_once(char::is_whitespace) {
@@ -186,21 +185,21 @@ impl TextBuffer {
         };
 
         match cmd {
-            "q" => CommandResult::Quit,
-            "qq" => CommandResult::ForceQuit,
+            "q" => Command::Quit,
+            "qq" => Command::ForceQuit,
             "wq" => match self.write_to_file() {
-                Ok(res) if !res => CommandResult::Info(
+                Ok(res) if !res => Command::Error(
                     "Please specify a file location using 'w <path>' to write the file to"
                         .to_string(),
                 ),
-                Err(err) => CommandResult::Info(err.to_string()),
-                _ => CommandResult::Quit,
+                Err(err) => Command::Error(err.to_string()),
+                _ => Command::Quit,
             },
             "w" => self.write_command(args),
             "o" => self.open_command(args, false),
             "oo" => self.open_command(args, true),
             "r" => self.replace_command(args),
-            _ => CommandResult::Info(format!("Unrecognized command: '{cmd}'")),
+            _ => Command::Error(format!("Unrecognized command: '{cmd}'")),
         }
     }
 }

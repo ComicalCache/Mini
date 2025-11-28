@@ -38,11 +38,6 @@ impl History {
         }
     }
 
-    pub fn clear(&mut self) {
-        self.undo.clear();
-        self.redo.clear();
-    }
-
     /// Adds a new change to the history.
     pub fn add_change(&mut self, change: Change) {
         self.undo.push(change);

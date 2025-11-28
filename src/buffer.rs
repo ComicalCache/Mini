@@ -3,12 +3,44 @@ pub mod delete;
 pub mod edit;
 pub mod yank;
 
-use crate::{display::Display, util::CommandResult};
-use std::path::PathBuf;
+use crate::{
+    display::Display,
+    message::{Message, MessageKind},
+    util::Command,
+};
 use termion::event::Key;
+
+/// Enum of all available `Buffer` kinds.
+#[derive(Clone, Copy)]
+pub enum BufferKind {
+    Text,
+    Files,
+}
+
+impl BufferKind {
+    /// Converts a `String` to a kind.
+    pub fn from(value: &str) -> Option<Self> {
+        match value.to_lowercase().as_str() {
+            "files" | "f" => Some(Self::Files),
+            "text" | "t" => Some(Self::Text),
+            _ => None,
+        }
+    }
+
+    /// Lists all available kinds.
+    pub fn list() -> String {
+        "Text\nList".to_string()
+    }
+}
 
 /// The buffer trait defines the basic primitives a buffer needs.
 pub trait Buffer {
+    /// Returns the kind of the buffer.
+    fn kind(&self) -> BufferKind;
+
+    /// Returns the "name" of a buffer.
+    fn name(&self) -> String;
+
     /// Checks if the buffer needs to be rerendered.
     fn need_rerender(&self) -> bool;
 
@@ -23,13 +55,13 @@ pub trait Buffer {
     /// - a periodic empty tick on no input
     ///
     /// Thus it should not be assuemed that a tick is always of periodic nature.
-    fn tick(&mut self, key: Option<Key>) -> CommandResult;
+    fn tick(&mut self, key: Option<Key>) -> Command;
 
-    /// Sets the contents of a buffer.
-    fn set_contents(&mut self, contents: String, path: Option<PathBuf>, file_name: Option<String>);
+    /// Gets the buffer's message.
+    fn get_message(&self) -> Option<Message>;
 
-    /// Set the buffer message.
-    fn set_message(&mut self, text: String);
+    /// Set the buffer's message.
+    fn set_message(&mut self, kind: MessageKind, text: String);
 
     /// Asks if the buffer is ready to quit/has pending changes.
     fn can_quit(&self) -> Result<(), String>;
