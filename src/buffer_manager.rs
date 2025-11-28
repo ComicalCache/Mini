@@ -73,14 +73,8 @@ impl BufferManager {
             }
         } else {
             // Open the file if no error.
-            Box::new(TextBuffer::new(
-                w,
-                h,
-                0,
-                0,
-                file.and_then(Result::ok),
-                file_name,
-            )?)
+            let file = file.and_then(Result::ok);
+            Box::new(TextBuffer::new(w, h, 0, 0, file, file_name)?)
         };
 
         Ok(Self {
@@ -134,24 +128,7 @@ impl BufferManager {
                     .push(self.buffs[self.active].get_message().unwrap());
             }
             Command::ListBuffers => {
-                let mut message = String::new();
-                for (idx, buff) in self.buffs.iter().enumerate() {
-                    let mut tmp = if idx == self.active {
-                        "[*] ".to_string()
-                    } else {
-                        format!("[{idx}] ")
-                    };
-                    match buff.kind() {
-                        BufferKind::Text => {
-                            tmp.push_str(format!("Text ({})\n", buff.name()).as_str());
-                        }
-                        BufferKind::Files => tmp.push_str("Files\n"),
-                    }
-
-                    message.push_str(tmp.as_str());
-                }
-                message.push_str("Use `cb <idx>` to switch to a buffer.");
-
+                let message = self.buffer_list();
                 self.buffs[self.active].set_message(MessageKind::Info, message);
                 self.log
                     .push(self.buffs[self.active].get_message().unwrap());
@@ -169,9 +146,7 @@ impl BufferManager {
                     )),
                 }
             }
-            Command::Init(buff) => {
-                self.buffs[self.active] = buff;
-            }
+            Command::Init(buff) => self.buffs[self.active] = buff,
             Command::Log => {
                 // Create log file in the base directory.
                 let mut log_file_path = self.base.clone();
@@ -189,8 +164,6 @@ impl BufferManager {
                     MessageKind::Info,
                     format!("Log written to '{}'", log_file_path.to_string_lossy()),
                 );
-                self.log
-                    .push(self.buffs[self.active].get_message().unwrap());
             }
             Command::Quit => {
                 if let Err(err) = self.buffs[self.active].can_quit() {
@@ -207,7 +180,6 @@ impl BufferManager {
                     return false;
                 }
 
-                // Previous must exist if the list of buffers isn't empty.
                 self.active = self.prev.unwrap_or(0).min(self.buffs.len() - 1);
                 self.prev = None;
                 self.force_rerender = true;
@@ -220,7 +192,6 @@ impl BufferManager {
                     return false;
                 }
 
-                // Previous must exist if the list of buffers isn't empty.
                 self.active = self.prev.unwrap_or(0).min(self.buffs.len() - 1);
                 self.prev = None;
                 self.force_rerender = true;
@@ -237,6 +208,28 @@ impl BufferManager {
         }
 
         self.force_rerender = false;
+    }
+
+    fn buffer_list(&self) -> String {
+        let mut message = String::new();
+        for (idx, buff) in self.buffs.iter().enumerate() {
+            let mut tmp = if idx == self.active {
+                "[*] ".to_string()
+            } else {
+                format!("[{idx}] ")
+            };
+            match buff.kind() {
+                BufferKind::Text => {
+                    tmp.push_str(format!("Text ({})\n", buff.name()).as_str());
+                }
+                BufferKind::Files => tmp.push_str("Files\n"),
+            }
+
+            message.push_str(tmp.as_str());
+        }
+        message.push_str("Use `cb <idx>` to switch to a buffer.");
+
+        message
     }
 
     fn write_log(&mut self, log_file_path: &PathBuf) -> bool {

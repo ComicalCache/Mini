@@ -196,16 +196,16 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
     }
 
     /// Changes the base buffers mode.
-    pub fn change_mode(&mut self, mode: Mode<ModeEnum>) {
+    pub fn change_mode(&mut self, new_mode: Mode<ModeEnum>) {
         match self.mode {
             Mode::Command => {
                 // Clear command line so its ready for next entry. Don't save contents here since they are only
                 // saved when hitting enter.
                 self.cmd.from("");
-                self.cmd.cur = Cursor::new(0, 0);
                 self.cmd_view.cur = Cursor::new(0, 0);
             }
             Mode::View => {
+                // Since search matches could have been overwritten we discard all matches.
                 if self.doc.edited {
                     self.clear_matches();
                 }
@@ -213,12 +213,12 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             Mode::Other(_) => {}
         }
 
-        match mode {
+        match new_mode {
             Mode::Command => self.cmd_history_idx = self.cmd_history.len(),
             Mode::View | Mode::Other(_) => {}
         }
 
-        self.mode = mode;
+        self.mode = new_mode;
     }
 
     /// Set a message to display to the user.

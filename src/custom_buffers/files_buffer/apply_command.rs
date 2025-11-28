@@ -10,7 +10,7 @@ impl FilesBuffer {
             if let Err(err) = std::fs::create_dir_all(args) {
                 return Command::Error(err.to_string());
             }
-        // open_file creates the directory hierarchy and file.
+        // `open_file` creates the directory hierarchy and file.
         } else if let Err(err) = open_file(args) {
             return Command::Error(err.to_string());
         }
@@ -56,8 +56,6 @@ impl FilesBuffer {
         };
 
         match cmd {
-            "q" => Command::Quit,
-            "qq" => Command::ForceQuit,
             "mk" => self.create_command(args),
             "rm" => self.remove_command(args),
             "rm!" => self.recursive_remove_command(args),

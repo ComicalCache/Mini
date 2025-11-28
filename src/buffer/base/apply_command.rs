@@ -103,6 +103,8 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         };
 
         match cmd {
+            "q" => Ok(Command::Quit),
+            "qq" => Ok(Command::ForceQuit),
             "?" => Ok(Command::Info(format!(
                 "Mini - A terminal text-editor (v{})\n\n{INFO_MSG}",
                 option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap()

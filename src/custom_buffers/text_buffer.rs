@@ -468,6 +468,7 @@ impl Buffer for TextBuffer {
         // Only rerender if input was received.
         self.base.rerender |= key.is_some();
 
+        // Intercept inputs if a message is shown.
         if let Some(message) = &mut self.base.message
             && let Some(key) = key
         {
@@ -477,6 +478,7 @@ impl Buffer for TextBuffer {
                         message.scroll += 1;
                         self.base.rerender = true;
                     }
+
                     return Command::Ok;
                 }
                 Key::Char('K') => {

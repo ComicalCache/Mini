@@ -68,6 +68,7 @@ impl FilesBuffer {
                 file_name(entry),
             )?;
 
+            // Replace this `FilesBuffer` instance with a `TextBuffer` instance containing the file content.
             return Ok(Command::Init(Box::new(text_buffer)));
         } else if entry.is_dir() {
             self.path.clone_from(entry);

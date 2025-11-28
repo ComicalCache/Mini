@@ -185,8 +185,6 @@ impl TextBuffer {
         };
 
         match cmd {
-            "q" => Command::Quit,
-            "qq" => Command::ForceQuit,
             "wq" => match self.write_to_file() {
                 Ok(res) if !res => Command::Error(
                     "Please specify a file location using 'w <path>' to write the file to"
