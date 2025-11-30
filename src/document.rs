@@ -104,15 +104,19 @@ impl Document {
     }
 
     /// Writes a str at the current cursor position.
-    /// Creates new lines if the content contains new lines.
     pub fn write_str(&mut self, str: &str) {
         self.write_str_at(self.cur.x, self.cur.y, str);
     }
 
     /// Writes a str at a specified position.
-    /// Creates new lines if the content contains new lines.
     pub fn write_str_at(&mut self, x: usize, y: usize, str: &str) {
         self.rope.insert(self.xy_to_idx(x, y), str);
+        self.edited = true;
+    }
+
+    /// Appends a str at the end of the document.
+    pub fn append_str(&mut self, str: &str) {
+        self.rope.insert(self.rope.len_chars(), str);
         self.edited = true;
     }
 

@@ -6,9 +6,22 @@ pub mod yank;
 use crate::{
     display::Display,
     message::{Message, MessageKind},
-    util::Command,
 };
 use termion::event::Key;
+
+/// The result of a command entered by the user.
+pub enum BufferResult {
+    Ok,
+    Change(usize),
+    Info(String),
+    Error(String),
+    ListBuffers,
+    NewBuffer(BufferKind),
+    Init(Box<dyn Buffer>),
+    Log,
+    Quit,
+    ForceQuit,
+}
 
 /// Enum of all available `Buffer` kinds.
 #[derive(Clone, Copy)]
@@ -55,7 +68,7 @@ pub trait Buffer {
     /// - a periodic empty tick on no input
     ///
     /// Thus it should not be assuemed that a tick is always of periodic nature.
-    fn tick(&mut self, key: Option<Key>) -> Command;
+    fn tick(&mut self, key: Option<Key>) -> BufferResult;
 
     /// Gets the buffer's message.
     fn get_message(&self) -> Option<Message>;

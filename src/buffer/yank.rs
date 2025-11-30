@@ -1,7 +1,7 @@
 use crate::{
+    buffer::BufferResult,
     cursor::{self, Cursor},
     document::Document,
-    util::Command,
     viewport::Viewport,
 };
 use arboard::Clipboard;
@@ -14,7 +14,7 @@ macro_rules! yank_fn {
             view: &mut Viewport,
             clipboard: &mut Clipboard,
             $($n: usize,)?
-        ) -> Result<(), Command> {
+        ) -> Result<(), BufferResult> {
             let tmp_view_cur = view.cur;
             let tmp_doc_cur = doc.cur;
 
@@ -68,7 +68,7 @@ pub fn selection(
     doc: &Document,
     sel: &mut Option<Cursor>,
     clipboard: &mut Clipboard,
-) -> Result<(), Command> {
+) -> Result<(), BufferResult> {
     let Some(pos) = sel else {
         return Ok(());
     };
@@ -78,7 +78,7 @@ pub fn selection(
     *sel = None;
     match res {
         Ok(()) => Ok(()),
-        Err(err) => Err(Command::Error(err.to_string())),
+        Err(err) => Err(BufferResult::Error(err.to_string())),
     }
 }
 
@@ -87,7 +87,7 @@ pub fn line(
     doc: &mut Document,
     view: &mut Viewport,
     clipboard: &mut Clipboard,
-) -> Result<(), Command> {
+) -> Result<(), BufferResult> {
     let tmp_view_cur = view.cur;
     let tmp_doc_cur = doc.cur;
 
@@ -102,7 +102,7 @@ pub fn line(
 
     match res {
         Ok(()) => Ok(()),
-        Err(err) => Err(Command::Error(err.to_string())),
+        Err(err) => Err(BufferResult::Error(err.to_string())),
     }
 }
 

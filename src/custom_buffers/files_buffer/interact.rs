@@ -1,6 +1,7 @@
 use crate::{
+    buffer::BufferResult,
     custom_buffers::{files_buffer::FilesBuffer, text_buffer::TextBuffer},
-    util::{Command, file_name, open_file},
+    util::{file_name, open_file},
 };
 use std::{
     fs::read_dir,
@@ -45,7 +46,7 @@ impl FilesBuffer {
     }
 
     /// Handles the user selection of an entry in the file buffer.
-    pub(super) fn select_item(&mut self) -> Result<Command, Error> {
+    pub(super) fn select_item(&mut self) -> Result<BufferResult, Error> {
         let idx = self.base.doc.cur.y;
 
         // Move directory up.
@@ -54,7 +55,7 @@ impl FilesBuffer {
                 return Ok(self.refresh());
             }
 
-            return Ok(Command::Ok);
+            return Ok(BufferResult::Ok);
         }
 
         let entry = &self.entries[idx.saturating_sub(1)].clone();
@@ -69,12 +70,12 @@ impl FilesBuffer {
             )?;
 
             // Replace this `FilesBuffer` instance with a `TextBuffer` instance containing the file content.
-            return Ok(Command::Init(Box::new(text_buffer)));
+            return Ok(BufferResult::Init(Box::new(text_buffer)));
         } else if entry.is_dir() {
             self.path.clone_from(entry);
             return Ok(self.refresh());
         }
 
-        Ok(Command::Ok)
+        Ok(BufferResult::Ok)
     }
 }

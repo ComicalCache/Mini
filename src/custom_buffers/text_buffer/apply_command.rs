@@ -1,8 +1,10 @@
 use crate::{
+    buffer::BufferResult,
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
     history::{Change, Replace},
-    util::{Command, file_name, open_file},
+    shell_command::ShellCommand,
+    util::{file_name, open_file},
 };
 use regex::Regex;
 use std::io::{Error, Read};
@@ -17,9 +19,9 @@ impl TextBuffer {
         Ok(true)
     }
 
-    fn open_command(&mut self, args: &str, force: bool) -> Command {
+    fn open_command(&mut self, args: &str, force: bool) -> BufferResult {
         if !force && self.base.doc.edited {
-            return Command::Error(
+            return BufferResult::Error(
                 "There are unsaved changes, save or oo to force open a new document".to_string(),
             );
         }
@@ -34,13 +36,13 @@ impl TextBuffer {
 
         // Open blank buffer if no path is specified.
         if args.is_empty() {
-            return Command::Ok;
+            return BufferResult::Ok;
         }
 
         self.file = match open_file(args) {
             Ok(file) => Some(file),
             Err(err) => {
-                return Command::Error(err.to_string());
+                return BufferResult::Error(err.to_string());
             }
         };
         self.file_name = file_name(args);
@@ -49,19 +51,19 @@ impl TextBuffer {
         match self.file.as_mut().unwrap().read_to_string(&mut buff) {
             Ok(_) => self.base.doc.from(buff.as_str()),
             Err(err) => {
-                return Command::Error(err.to_string());
+                return BufferResult::Error(err.to_string());
             }
         }
 
-        Command::Ok
+        BufferResult::Ok
     }
 
-    fn write_command(&mut self, args: &str) -> Command {
+    fn write_command(&mut self, args: &str) -> BufferResult {
         if !args.is_empty() {
             self.file = match open_file(args) {
                 Ok(file) => Some(file),
                 Err(err) => {
-                    return Command::Error(err.to_string());
+                    return BufferResult::Error(err.to_string());
                 }
             };
             self.file_name = file_name(args);
@@ -70,21 +72,22 @@ impl TextBuffer {
         let res = match self.write_to_file() {
             Ok(res) => res,
             Err(err) => {
-                return Command::Error(err.to_string());
+                return BufferResult::Error(err.to_string());
             }
         };
         // Failed to write file because no path exists.
         if !res {
-            return Command::Error(
+            return BufferResult::Error(
                 "Please specify a file location using 'w <path>' to write the file to".to_string(),
             );
         }
 
-        Command::Ok
+        BufferResult::Ok
     }
 
-    fn replace_command(&mut self, args: &str) -> Command {
-        let err = Command::Error("Invalid format. Expected: r /<regex>/<replace>/".to_string());
+    fn replace_command(&mut self, args: &str) -> BufferResult {
+        let err =
+            BufferResult::Error("Invalid format. Expected: r /<regex>/<replace>/".to_string());
         let Some(args) = args.strip_prefix('/') else {
             return err;
         };
@@ -101,7 +104,7 @@ impl TextBuffer {
         let regex = match Regex::new(regex_str) {
             Ok(regex) => regex,
             Err(err) => {
-                return Command::Error(format!(
+                return BufferResult::Error(format!(
                     "'{regex_str}' is not a valid regular expression:\n{err}"
                 ));
             }
@@ -170,13 +173,18 @@ impl TextBuffer {
             self.history.add_change(Change::Replace(changes));
         }
 
-        Command::Ok
+        BufferResult::Ok
+    }
+
+    fn execute_shell_command(&mut self, args: &str) -> BufferResult {
+        self.shell_command = Some(ShellCommand::new(args.to_string()));
+        BufferResult::Ok
     }
 
     /// Applies the command entered during command mode.
-    pub fn apply_command(&mut self, cmd: &str) -> Command {
+    pub fn apply_command(&mut self, cmd: &str) -> BufferResult {
         if cmd.is_empty() {
-            return Command::Ok;
+            return BufferResult::Ok;
         }
 
         let (cmd, args) = match cmd.split_once(char::is_whitespace) {
@@ -186,18 +194,19 @@ impl TextBuffer {
 
         match cmd {
             "wq" => match self.write_to_file() {
-                Ok(res) if !res => Command::Error(
+                Ok(res) if !res => BufferResult::Error(
                     "Please specify a file location using 'w <path>' to write the file to"
                         .to_string(),
                 ),
-                Err(err) => Command::Error(err.to_string()),
-                _ => Command::Quit,
+                Err(err) => BufferResult::Error(err.to_string()),
+                _ => BufferResult::Quit,
             },
             "w" => self.write_command(args),
             "o" => self.open_command(args, false),
             "oo" => self.open_command(args, true),
             "r" => self.replace_command(args),
-            _ => Command::Error(format!("Unrecognized command: '{cmd}'")),
+            "cmd" => self.execute_shell_command(args),
+            _ => BufferResult::Error(format!("Unrecognized command: '{cmd}'")),
         }
     }
 }

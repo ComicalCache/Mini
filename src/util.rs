@@ -4,22 +4,6 @@ use std::{
     path::Path,
 };
 
-use crate::buffer::{Buffer, BufferKind};
-
-/// The result of a command entered by the user.
-pub enum Command {
-    Ok,
-    Change(usize),
-    Info(String),
-    Error(String),
-    ListBuffers,
-    NewBuffer(BufferKind),
-    Init(Box<dyn Buffer>),
-    Log,
-    Quit,
-    ForceQuit,
-}
-
 /// Retreives the filename of a given path.
 pub fn file_name<P: AsRef<Path>>(path: P) -> Option<String> {
     path.as_ref()

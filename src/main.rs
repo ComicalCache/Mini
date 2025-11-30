@@ -10,6 +10,7 @@ mod display;
 mod document;
 mod history;
 mod message;
+mod shell_command;
 mod util;
 mod viewport;
 
@@ -85,7 +86,7 @@ fn main() -> Result<(), std::io::Error> {
 
         // Clear previous iterations events and fetch new ones.
         events.clear();
-        poller.wait(&mut events, Some(Duration::from_millis(100)))?;
+        poller.wait(&mut events, Some(Duration::from_millis(20)))?;
 
         let key = if events.iter().any(|e| e.key == STDIN_EVENT_KEY) {
             // If a new event exists, send a tick with the key immediately.

@@ -3,7 +3,7 @@ mod interact;
 
 use crate::{
     buffer::{
-        Buffer, BufferKind,
+        Buffer, BufferKind, BufferResult,
         base::{BaseBuffer, Mode},
         edit,
     },
@@ -12,9 +12,7 @@ use crate::{
     document::Document,
     jump,
     message::{Message, MessageKind},
-    movement,
-    util::Command,
-    yank,
+    movement, yank,
 };
 use std::{io::Error, path::PathBuf};
 use termion::event::Key;
@@ -58,7 +56,7 @@ impl FilesBuffer {
         })
     }
 
-    fn refresh(&mut self) -> Command {
+    fn refresh(&mut self) -> BufferResult {
         match Self::load_dir(&self.path, &mut self.entries) {
             Ok(contents) => {
                 // Set contents moves the doc.cur to the beginning.
@@ -66,15 +64,15 @@ impl FilesBuffer {
                 self.base.doc_view.cur = Cursor::new(0, 0);
                 self.base.sel = None;
 
-                Command::Ok
+                BufferResult::Ok
             }
-            Err(err) => Command::Error(err.to_string()),
+            Err(err) => BufferResult::Error(err.to_string()),
         }
     }
 
-    fn selected_remove_command<S: AsRef<str>>(&mut self, cmd: S) -> Command {
+    fn selected_remove_command<S: AsRef<str>>(&mut self, cmd: S) -> BufferResult {
         if self.base.doc.cur.y == 0 {
-            return Command::Ok;
+            return BufferResult::Ok;
         }
 
         // Set the command and move the cursor to be at the end of the input.
@@ -89,7 +87,7 @@ impl FilesBuffer {
         cursor::jump_to_end_of_line(&mut self.base.cmd, &mut self.base.cmd_view);
         self.base.change_mode(Mode::Command);
 
-        Command::Ok
+        BufferResult::Ok
     }
 
     /// Creates an info line
@@ -147,9 +145,9 @@ impl FilesBuffer {
     }
 
     /// Handles self defined view actions.
-    fn view_tick(&mut self, key: Option<Key>) -> Command {
+    fn view_tick(&mut self, key: Option<Key>) -> BufferResult {
         let Some(key) = key else {
-            return Command::Ok;
+            return BufferResult::Ok;
         };
 
         match self.view_mode {
@@ -185,7 +183,9 @@ impl FilesBuffer {
                 Key::Char('\n') => {
                     return self
                         .select_item()
-                        .or_else(|err| Ok::<Command, Error>(Command::Error(err.to_string())))
+                        .or_else(|err| {
+                            Ok::<BufferResult, Error>(BufferResult::Error(err.to_string()))
+                        })
                         .unwrap();
                 }
                 Key::Char('d') => return self.selected_remove_command("rm"),
@@ -217,13 +217,13 @@ impl FilesBuffer {
             }
         }
 
-        Command::Ok
+        BufferResult::Ok
     }
 
     /// Handles self apply and self defined command ticks.
-    fn command_tick(&mut self, key: Option<Key>) -> Command {
+    fn command_tick(&mut self, key: Option<Key>) -> BufferResult {
         let Some(key) = key else {
-            return Command::Ok;
+            return BufferResult::Ok;
         };
 
         match key {
@@ -257,7 +257,7 @@ impl FilesBuffer {
             _ => {}
         }
 
-        Command::Ok
+        BufferResult::Ok
     }
 }
 
@@ -326,7 +326,7 @@ impl Buffer for FilesBuffer {
         self.base.resize(w, h, x_off, y_off);
     }
 
-    fn tick(&mut self, key: Option<Key>) -> Command {
+    fn tick(&mut self, key: Option<Key>) -> BufferResult {
         // Only rerender if input was received.
         self.base.rerender |= key.is_some();
 
@@ -341,19 +341,19 @@ impl Buffer for FilesBuffer {
                         self.base.rerender = true;
                     }
 
-                    return Command::Ok;
+                    return BufferResult::Ok;
                 }
                 Key::Char('K') => {
                     message.scroll = message.scroll.saturating_sub(1);
                     self.base.rerender = true;
-                    return Command::Ok;
+                    return BufferResult::Ok;
                 }
                 Key::Char('Y') => {
                     if let Err(err) = self.base.clipboard.set_text(message.text.clone()) {
-                        return Command::Error(err.to_string());
+                        return BufferResult::Error(err.to_string());
                     }
 
-                    return Command::Info("Message yanked to clipboard".to_string());
+                    return BufferResult::Info("Message yanked to clipboard".to_string());
                 }
                 // Clear the message on any other key press.
                 _ => self.base.clear_message(),

@@ -4,7 +4,7 @@ mod insert;
 
 use crate::{
     buffer::{
-        Buffer, BufferKind,
+        Buffer, BufferKind, BufferResult,
         base::{BaseBuffer, Mode},
         delete, edit,
     },
@@ -17,12 +17,13 @@ use crate::{
     jump,
     message::{Message, MessageKind},
     movement,
-    util::Command,
+    shell_command::{ShellCommand, ShellCommandResult},
     yank,
 };
 use std::{
     fs::File,
     io::{Error, Read},
+    sync::mpsc::TryRecvError,
 };
 use termion::event::Key;
 
@@ -50,6 +51,9 @@ pub struct TextBuffer {
     file: Option<File>,
     /// The name of the opened file.
     file_name: Option<String>,
+
+    /// A runner handling command execution.
+    shell_command: Option<ShellCommand>,
 
     /// A history of edits to undo and redo.
     history: History,
@@ -79,6 +83,7 @@ impl TextBuffer {
             info: Document::new(0, 0, None),
             file,
             file_name,
+            shell_command: None,
             history: History::new(),
         })
     }
@@ -137,6 +142,13 @@ impl TextBuffer {
             .unwrap();
         }
 
+        if let Some(shell_command) = &self.shell_command {
+            match shell_command.cmd.split_whitespace().next() {
+                Some(cmd) => write!(&mut info_line, " [Command '{cmd}' running]",).unwrap(),
+                None => write!(&mut info_line, " [Command running]",).unwrap(),
+            }
+        }
+
         let edited = if self.base.doc.edited { '*' } else { ' ' };
         write!(&mut info_line, " {edited}").unwrap();
 
@@ -144,11 +156,11 @@ impl TextBuffer {
     }
 
     /// Handles self defined view actions.
-    fn view_tick(&mut self, key: Option<Key>) -> Command {
+    fn view_tick(&mut self, key: Option<Key>) -> BufferResult {
         use OtherMode::Write;
 
         let Some(key) = key else {
-            return Command::Ok;
+            return BufferResult::Ok;
         };
 
         match self.view_mode {
@@ -315,13 +327,13 @@ impl TextBuffer {
             }
         }
 
-        Command::Ok
+        BufferResult::Ok
     }
 
     /// Handles write mode ticks.
-    fn write_tick(&mut self, key: Option<Key>) -> Command {
+    fn write_tick(&mut self, key: Option<Key>) -> BufferResult {
         let Some(key) = key else {
-            return Command::Ok;
+            return BufferResult::Ok;
         };
 
         match key {
@@ -352,13 +364,13 @@ impl TextBuffer {
             _ => {}
         }
 
-        Command::Ok
+        BufferResult::Ok
     }
 
     /// Handles self apply and self defined command ticks.
-    fn command_tick(&mut self, key: Option<Key>) -> Command {
+    fn command_tick(&mut self, key: Option<Key>) -> BufferResult {
         let Some(key) = key else {
-            return Command::Ok;
+            return BufferResult::Ok;
         };
 
         match key {
@@ -392,7 +404,7 @@ impl TextBuffer {
             _ => {}
         }
 
-        Command::Ok
+        BufferResult::Ok
     }
 }
 
@@ -464,7 +476,35 @@ impl Buffer for TextBuffer {
         self.base.resize(w, h, x_off, y_off);
     }
 
-    fn tick(&mut self, key: Option<Key>) -> Command {
+    fn tick(&mut self, key: Option<Key>) -> BufferResult {
+        // If an active shell command is running, check for updates and paste them at the end of the buffer.
+        if let Some(shell_command) = &self.shell_command {
+            // Greedily read as much as possible.
+            loop {
+                match shell_command.rx.try_recv() {
+                    Ok(res) => match res {
+                        ShellCommandResult::Data(data) => self.base.doc.append_str(data.as_str()),
+                        ShellCommandResult::Error(err) => {
+                            self.shell_command = None;
+                            return BufferResult::Error(err);
+                        }
+                        ShellCommandResult::Eof => {
+                            let res =
+                                BufferResult::Info(format!("'{}' finished", shell_command.cmd));
+                            self.shell_command = None;
+                            return res;
+                        }
+                    },
+                    // Ignore empty error since we're waiting on data.
+                    Err(TryRecvError::Empty) => {}
+                    Err(err) => {
+                        self.shell_command = None;
+                        return BufferResult::Error(err.to_string());
+                    }
+                }
+            }
+        }
+
         // Only rerender if input was received.
         self.base.rerender |= key.is_some();
 
@@ -479,19 +519,19 @@ impl Buffer for TextBuffer {
                         self.base.rerender = true;
                     }
 
-                    return Command::Ok;
+                    return BufferResult::Ok;
                 }
                 Key::Char('K') => {
                     message.scroll = message.scroll.saturating_sub(1);
                     self.base.rerender = true;
-                    return Command::Ok;
+                    return BufferResult::Ok;
                 }
                 Key::Char('Y') => {
                     if let Err(err) = self.base.clipboard.set_text(message.text.clone()) {
-                        return Command::Error(err.to_string());
+                        return BufferResult::Error(err.to_string());
                     }
 
-                    return Command::Info("Message yanked to clipboard".to_string());
+                    return BufferResult::Info("Message yanked to clipboard".to_string());
                 }
                 // Clear the message on any other key press.
                 _ => self.base.clear_message(),

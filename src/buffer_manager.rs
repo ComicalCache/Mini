@@ -7,11 +7,11 @@ use std::{
 use termion::event::Key;
 
 use crate::{
-    buffer::{Buffer, BufferKind},
+    buffer::{Buffer, BufferKind, BufferResult},
     custom_buffers::{files_buffer::FilesBuffer, text_buffer::TextBuffer},
     display::Display,
     message::{Message, MessageKind},
-    util::{Command, open_file},
+    util::open_file,
 };
 
 /// Manages open `Buffer`s and their interaction.
@@ -99,8 +99,8 @@ impl BufferManager {
     /// Forwards a tick to the active `Buffer`.
     pub fn tick(&mut self, key: Option<Key>) -> bool {
         match self.buffs[self.active].tick(key) {
-            Command::Ok => return true,
-            Command::Change(idx) => {
+            BufferResult::Ok => return true,
+            BufferResult::Change(idx) => {
                 if idx >= self.buffs.len() {
                     let message = format!(
                         "No buffer at index `{idx}`.\n\
@@ -117,23 +117,23 @@ impl BufferManager {
                 self.active = idx;
                 self.force_rerender = true;
             }
-            Command::Info(message) => {
+            BufferResult::Info(message) => {
                 self.buffs[self.active].set_message(MessageKind::Info, message);
                 self.log
                     .push(self.buffs[self.active].get_message().unwrap());
             }
-            Command::Error(message) => {
+            BufferResult::Error(message) => {
                 self.buffs[self.active].set_message(MessageKind::Error, message);
                 self.log
                     .push(self.buffs[self.active].get_message().unwrap());
             }
-            Command::ListBuffers => {
+            BufferResult::ListBuffers => {
                 let message = self.buffer_list();
                 self.buffs[self.active].set_message(MessageKind::Info, message);
                 self.log
                     .push(self.buffs[self.active].get_message().unwrap());
             }
-            Command::NewBuffer(kind) => {
+            BufferResult::NewBuffer(kind) => {
                 self.prev = Some(self.active);
                 self.active = self.buffs.len();
 
@@ -146,8 +146,8 @@ impl BufferManager {
                     )),
                 }
             }
-            Command::Init(buff) => self.buffs[self.active] = buff,
-            Command::Log => {
+            BufferResult::Init(buff) => self.buffs[self.active] = buff,
+            BufferResult::Log => {
                 // Create log file in the base directory.
                 let mut log_file_path = self.base.clone();
                 log_file_path.push("mini.log");
@@ -165,7 +165,7 @@ impl BufferManager {
                     format!("Log written to '{}'", log_file_path.to_string_lossy()),
                 );
             }
-            Command::Quit => {
+            BufferResult::Quit => {
                 if let Err(err) = self.buffs[self.active].can_quit() {
                     self.buffs[self.active].set_message(MessageKind::Error, err);
                     self.log
@@ -184,7 +184,7 @@ impl BufferManager {
                 self.prev = None;
                 self.force_rerender = true;
             }
-            Command::ForceQuit => {
+            BufferResult::ForceQuit => {
                 self.buffs.remove(self.active);
 
                 // Quit the app if all buffers were closed.

@@ -1,9 +1,11 @@
 use crate::{
-    buffer::edit::{self, TAB_WIDTH},
+    buffer::{
+        BufferResult,
+        edit::{self, TAB_WIDTH},
+    },
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
     history::{Change, Replace},
-    util::Command,
 };
 
 impl TextBuffer {
@@ -72,11 +74,11 @@ impl TextBuffer {
     }
 
     /// Paste the system clipboard contents after the current cursor.
-    pub(super) fn paste(&mut self, trim_newline: bool, move_to: bool) -> Option<Command> {
+    pub(super) fn paste(&mut self, trim_newline: bool, move_to: bool) -> Option<BufferResult> {
         let mut data = match self.base.clipboard.get_text() {
             Ok(content) => content,
             Err(err) => {
-                return Some(Command::Error(err.to_string()));
+                return Some(BufferResult::Error(err.to_string()));
             }
         };
 
