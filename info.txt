@@ -93,7 +93,8 @@ mode.
         "scratchpad" buffer with no backing file is created)
      - 'r /<regex>/<replace>/' to replace text. If text was selected it will only replace in that selection. See
         https://docs.rs/regex/latest/regex/index.html for information about the regex and replace syntax.
-    - 'cmd <cmd>' runs the shell command <cmd> and appends the output to the end of the buffer
+    - 'cmd <cmd>' runs the shell command <cmd> and appends the output to the end of the buffer. Input is passed through
+        to the running shell command. 'ctrl+q' can be used to force-quit a running shell command.
 
 Files Buffer:
 The files buffer is a small file browser to browse directories, starting initially at the current path, and open files.

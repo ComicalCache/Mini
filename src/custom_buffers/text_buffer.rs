@@ -478,12 +478,15 @@ impl Buffer for TextBuffer {
 
     fn tick(&mut self, key: Option<Key>) -> BufferResult {
         // If an active shell command is running, check for updates and paste them at the end of the buffer.
-        if let Some(shell_command) = &self.shell_command {
+        if let Some(shell_command) = &mut self.shell_command {
             // Greedily read as much as possible.
             loop {
                 match shell_command.rx.try_recv() {
                     Ok(res) => match res {
-                        ShellCommandResult::Data(data) => self.base.doc.append_str(data.as_str()),
+                        ShellCommandResult::Data(data) => {
+                            self.base.doc.append_str(data.as_str());
+                            jump!(self, jump_to_end_of_file);
+                        }
                         ShellCommandResult::Error(err) => {
                             self.shell_command = None;
                             return BufferResult::Error(err);
@@ -496,12 +499,28 @@ impl Buffer for TextBuffer {
                         }
                     },
                     // Ignore empty error since we're waiting on data.
-                    Err(TryRecvError::Empty) => {}
+                    Err(TryRecvError::Empty) => break,
                     Err(err) => {
                         self.shell_command = None;
                         return BufferResult::Error(err.to_string());
                     }
                 }
+            }
+
+            // Send key as input if available.
+            if let Some(key) = key {
+                // Always quit command on 'ctrl+q'.
+                if Key::Ctrl('q') == key {
+                    let ret = format!("Quit '{}'", shell_command.cmd);
+                    self.shell_command = None;
+                    return BufferResult::Info(ret);
+                } else if let Err(err) = shell_command.write(key) {
+                    self.shell_command = None;
+                    return BufferResult::Error(err.to_string());
+                }
+
+                // Do not pass the key through if a command is running.
+                return BufferResult::Ok;
             }
         }
 

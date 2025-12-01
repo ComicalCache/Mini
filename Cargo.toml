@@ -1,6 +1,6 @@
 [package]
 name = "mini"
-version = "7.2.0"
+version = "7.3.0"
 edition = "2024"
 
 [dependencies]
@@ -9,7 +9,8 @@ polling = "3.11.0"
 arboard = "3.6.1"
 regex = "1.11.3"
 ropey = "1.6.1"
-duct = "1.1.1"
+portable-pty = "0.9.0"
+vte = "0.15.0"
 
 [profile.release]
 strip = "symbols"

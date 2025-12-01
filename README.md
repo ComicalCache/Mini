@@ -26,3 +26,6 @@ Open multiple buffer and switch between them.
 
 The files in the current folder can be browsed and opened from within Mini too!
 ![Screenshot of the file browser](https://github.com/ComicalCache/Mini/blob/main/media/files.png?raw=true)
+
+### Thanks
+Thanks to [Ted Mielczarek](https://github.com/luser) who's [strip-ansi-escapes](https://github.com/luser/strip-ansi-escapes/tree/master) I slightly modified and is used in `src/shell_command`.

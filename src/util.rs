@@ -43,3 +43,33 @@ pub fn line_column(input: &str) -> (Option<usize>, Option<usize>) {
 
     (x, y)
 }
+
+use termion::event::Key;
+
+/// Converts a `Key` to a String.
+pub fn key_to_string(key: Key) -> Option<String> {
+    match key {
+        Key::Char(c) => Some(c.to_string()),
+
+        // Map 'ctrl+a' (97) to 1, 'ctrl+b' to 2, etc.
+        Key::Ctrl(c) => {
+            let byte = c as u8;
+            Some(((byte & 0x1f) as char).to_string())
+        }
+
+        // Map 'alt+_' to control-sequence with char.
+        Key::Alt(c) => Some(format!("\x1b{c}")),
+
+        // Common special keys mapped to standard ANSI escape sequences
+        Key::Backspace => Some("\x7f".to_string()),
+        Key::Left => Some("\x1b[D".to_string()),
+        Key::Right => Some("\x1b[C".to_string()),
+        Key::Up => Some("\x1b[A".to_string()),
+        Key::Down => Some("\x1b[B".to_string()),
+        Key::Delete => Some("\x1b[3~".to_string()),
+        Key::Esc => Some("\x1b".to_string()),
+
+        // Ignore the remainder.
+        _ => None,
+    }
+}
