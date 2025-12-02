@@ -35,6 +35,8 @@ impl ShellCommand {
 
         // Create a pseudo terminal.
         let pty = native_pty_system();
+        // The dimensions are reported by the terminal.
+        #[allow(clippy::cast_possible_truncation)]
         let pair = match pty.openpty(PtySize {
             rows: h as u16,
             cols: w as u16,
@@ -50,9 +52,8 @@ impl ShellCommand {
         let mut cb = CommandBuilder::new("fish");
         cb.arg("-c");
         cb.arg(cmd.clone());
-        match std::env::current_dir() {
-            Ok(cwd) => cb.cwd(cwd),
-            _ => {}
+        if let Ok(cwd) = std::env::current_dir() {
+            cb.cwd(cwd);
         }
         let mut child = match pair.slave.spawn_command(cb) {
             Ok(child) => child,
@@ -98,9 +99,7 @@ impl ShellCommand {
                 return;
             }
 
-            if tx.send(Eof).is_err() {
-                return;
-            }
+            let _ = tx.send(Eof);
         });
 
         Ok(Self { cmd, rx, writer })

@@ -8,8 +8,8 @@ pub(super) struct Writer<W: Write> {
 }
 
 impl<W: Write> Writer<W> {
-    pub fn new(inner: W) -> Writer<W> {
-        Writer {
+    pub fn new(inner: W) -> Self {
+        Self {
             performer: Performer {
                 writer: LineWriter::new(inner),
                 err: None,
@@ -26,10 +26,7 @@ impl<W: Write> Writer<W> {
 impl<W: Write> Write for Writer<W> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
         self.parser.advance(&mut self.performer, buf);
-        match self.performer.err.take() {
-            Some(e) => Err(e),
-            None => Ok(buf.len()),
-        }
+        self.performer.err.take().map_or(Ok(buf.len()), Err)
     }
 
     fn flush(&mut self) -> Result<(), Error> {

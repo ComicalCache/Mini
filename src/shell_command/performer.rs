@@ -18,7 +18,7 @@ impl<W: Write> Performer<W> {
 
 impl<W: Write> Perform for Performer<W> {
     fn print(&mut self, c: char) {
-        self.err = write!(self.writer, "{}", c).err();
+        self.err = write!(self.writer, "{c}").err();
     }
 
     fn execute(&mut self, byte: u8) {

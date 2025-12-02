@@ -113,7 +113,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             "s" => Ok(self.search(args)),
             "cb" => match args.parse::<usize>() {
                 Ok(idx) => Ok(BufferResult::Change(idx)),
-                Err(err) => Err(err.to_string()),
+                Err(err) => Ok(BufferResult::Error(err.to_string())),
             },
             "lb" => Ok(BufferResult::ListBuffers),
             #[allow(clippy::option_if_let_else)]
