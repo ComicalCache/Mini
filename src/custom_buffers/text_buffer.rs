@@ -486,6 +486,7 @@ impl Buffer for TextBuffer {
                         ShellCommandResult::Data(data) => {
                             self.base.doc.append_str(data.as_str());
                             jump!(self, jump_to_end_of_file);
+                            jump!(self, jump_to_beginning_of_line);
                         }
                         ShellCommandResult::Error(err) => {
                             self.shell_command = None;
