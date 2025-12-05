@@ -10,6 +10,7 @@ mod display;
 mod document;
 mod history;
 mod message;
+mod selection;
 mod shell_command;
 mod util;
 mod viewport;

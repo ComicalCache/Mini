@@ -4,6 +4,7 @@ use crate::{
     cursor::{self, Cursor},
     document::Document,
     message::{Message, MessageKind},
+    selection::{Selection, SelectionKind},
     viewport::Viewport,
 };
 use arboard::Clipboard;
@@ -44,8 +45,10 @@ pub struct BaseBuffer<ModeEnum> {
     /// The viewport of the command line.
     pub cmd_view: Viewport,
 
-    /// Marker of the start of the selection.
-    pub sel: Option<Cursor>,
+    /// Text selections in the document.
+    pub selections: Vec<Selection>,
+    active_selection: bool,
+
     /// The current buffer mode.
     pub mode: Mode<ModeEnum>,
     /// An instance of the system clipboard to yank to.
@@ -94,7 +97,8 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             // FIXME: this limits the bar to always be exactly one in height.
             info_view: Viewport::new(w, 1, 0, 0, x_off, y_off, None),
             cmd_view,
-            sel: None,
+            selections: Vec::new(),
+            active_selection: false,
             mode: Mode::View,
             clipboard: Clipboard::new().map_err(Error::other)?,
             matches: Vec::new(),
@@ -138,7 +142,13 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         let idx = self.matches_idx.as_mut().unwrap();
         *idx = (*idx + 1) % self.matches.len();
 
-        self.sel = Some(self.matches[*idx].1);
+        self.selections = vec![Selection::new(
+            self.matches[*idx].0,
+            self.matches[*idx].1,
+            SelectionKind::Normal,
+            None,
+            None,
+        )];
         cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[*idx].0);
     }
 
@@ -155,7 +165,13 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             *idx = self.matches.len() - 1;
         }
 
-        self.sel = Some(self.matches[*idx].1);
+        self.selections = vec![Selection::new(
+            self.matches[*idx].0,
+            self.matches[*idx].1,
+            SelectionKind::Normal,
+            None,
+            None,
+        )];
         cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[*idx].0);
     }
 
@@ -163,6 +179,86 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
     pub fn clear_matches(&mut self) {
         self.matches.clear();
         self.matches_idx = None;
+    }
+
+    /// Adds a new or reactivates an existing selection.
+    pub fn add_selection(&mut self, kind: SelectionKind) {
+        let cur = self.doc.cur;
+
+        if self.active_selection {
+            let sel = self.selections.last_mut().unwrap();
+
+            // Change the selection kind accordingly.
+            if sel.kind != kind {
+                *sel = Selection::new(
+                    sel.start,
+                    sel.head,
+                    kind,
+                    self.doc.line_count(sel.start.y),
+                    self.doc.line_count(sel.head.y),
+                );
+                return;
+            }
+
+            self.active_selection = false;
+            return;
+        }
+
+        // Check if we are on an existing selection and activate it if so.
+        let mut resume_idx = None;
+        for (i, sel) in self.selections.iter().enumerate() {
+            if sel.contains(cur) {
+                resume_idx = Some(i);
+                break;
+            }
+        }
+
+        if let Some(idx) = resume_idx {
+            let last_idx = self.selections.len().saturating_sub(1);
+            self.selections.swap(idx, last_idx);
+
+            let sel = self.selections.last_mut().unwrap();
+
+            // Change the selection kind accordingly.
+            if sel.kind != kind {
+                sel.kind = kind;
+                if kind == SelectionKind::Line {
+                    *sel = Selection::new(
+                        sel.start,
+                        sel.head,
+                        kind,
+                        self.doc.line_count(sel.start.y),
+                        self.doc.line_count(sel.head.y),
+                    );
+                }
+            }
+        } else {
+            let line_len = match kind {
+                SelectionKind::Normal => None,
+                SelectionKind::Line => self.doc.line_count(cur.y),
+            };
+            self.selections
+                .push(Selection::new(cur, cur, kind, line_len, line_len));
+        }
+
+        self.active_selection = true;
+    }
+
+    /// Updates the last selection to the new position.
+    pub fn update_selection(&mut self) {
+        if !self.active_selection {
+            return;
+        }
+
+        if let Some(selection) = self.selections.last_mut() {
+            selection.update(self.doc.cur, self.doc.line_count(self.doc.cur.y));
+        }
+    }
+
+    /// Clears all selections.
+    pub fn clear_selections(&mut self) {
+        self.selections.clear();
+        self.active_selection = false;
     }
 
     /// Loads the next command history item.

@@ -2,6 +2,7 @@ use crate::{
     INFO_MSG,
     buffer::{BufferKind, BufferResult, base::BaseBuffer},
     cursor::{self, Cursor},
+    selection::{Selection, SelectionKind},
     util::line_column,
 };
 use regex::Regex;
@@ -23,14 +24,9 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             }
         };
 
-        // Use selection or search entire buffer.
-        let (start, end) = if let Some(end) = self.sel {
-            if self.doc.cur < end {
-                (self.doc.cur, end)
-            } else {
-                (end, self.doc.cur)
-            }
-        } else {
+        // Use selections or search entire buffer.
+        self.selections.sort_unstable();
+        let selections = if self.selections.is_empty() {
             // Save previous cursor position.
             let tmp_view_cur = self.doc_view.cur;
             let tmp_doc_cur = self.doc.cur;
@@ -43,24 +39,40 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             self.doc.cur = tmp_doc_cur;
             self.doc_view.cur = tmp_view_cur;
 
-            (start, end)
+            &vec![Selection::new(
+                start,
+                end,
+                SelectionKind::Normal,
+                None,
+                None,
+            )]
+        } else {
+            &self.selections
         };
 
-        let hay = self.doc.get_range(start, end).unwrap().to_string();
-        self.matches = regex
-            .find_iter(&hay)
-            .map(|mat| {
-                let start_pos = cursor::end_pos(&start, &hay[..mat.start()]);
-                let end_pos = cursor::end_pos(&start, &hay[..mat.end()]);
-                (start_pos, end_pos)
-            })
-            .collect();
+        self.matches.clear();
         self.matches_idx = None;
+        for selection in selections {
+            let (start, end) = selection.range();
+            let hay = self.doc.get_range(start, end).unwrap().to_string();
+            self.matches = regex
+                .find_iter(&hay)
+                .map(|mat| {
+                    let start_pos = cursor::end_pos(&start, &hay[..mat.start()]);
+                    let end_pos = cursor::end_pos(&start, &hay[..mat.end()]);
+                    (start_pos, end_pos)
+                })
+                .collect();
+        }
 
         if self.matches.is_empty() {
             return BufferResult::Info("No matches found".to_string());
         }
 
+        // Clear existing selections and select result.
+        self.clear_selections();
+
+        // Find closest match to cursor.
         self.matches_idx = self
             .matches
             .iter()
@@ -69,8 +81,15 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             // Or use last match if before current cursor position.
             .or(Some(self.matches.len() - 1));
 
+        // Select the closest match to cursor and jump there.
         let idx = self.matches_idx.unwrap();
-        self.sel = Some(self.matches[idx].1);
+        self.selections.push(Selection::new(
+            self.matches[idx].0,
+            self.matches[idx].1,
+            SelectionKind::Normal,
+            None,
+            None,
+        ));
         cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[idx].0);
 
         BufferResult::Ok

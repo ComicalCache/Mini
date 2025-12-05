@@ -9,7 +9,7 @@ pub enum CursorStyle {
     SteadyBlock,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq)]
 /// A cursor position in a document or viewport.
 pub struct Cursor {
     /// X position.
@@ -70,17 +70,19 @@ impl PartialOrd for Cursor {
 #[macro_export]
 /// Convenience macro for calling movement functions. Expects a `BaseBuffer` as member `base`.
 macro_rules! movement {
-    ($self:ident, $func:ident) => {
-        $crate::cursor::$func(&mut $self.base.doc, &mut $self.base.doc_view, 1)
-    };
+    ($self:ident, $func:ident) => {{
+        $crate::cursor::$func(&mut $self.base.doc, &mut $self.base.doc_view, 1);
+        $self.base.update_selection();
+    }};
 }
 
 #[macro_export]
 /// Convenience macro for calling jump functions. Expects a `BaseBuffer` as member `base`.
 macro_rules! jump {
-    ($self:ident, $func:ident) => {
-        $crate::cursor::$func(&mut $self.base.doc, &mut $self.base.doc_view)
-    };
+    ($self:ident, $func:ident) => {{
+        $crate::cursor::$func(&mut $self.base.doc, &mut $self.base.doc_view);
+        $self.base.update_selection();
+    }};
 }
 
 /// Calculates the position of a cursor after skipping the supplied text.
@@ -127,9 +129,7 @@ pub fn left(doc: &mut Document, view: &mut Viewport, n: usize) {
 }
 
 /// Shifts the viewport to the left.
-// Allow unused mut to aid macro usage in src/buffer/base.rs.
-#[allow(clippy::needless_pass_by_ref_mut)]
-pub fn shift_left(_: &mut Document, view: &mut Viewport, n: usize) {
+pub fn shift_left(_: &Document, view: &mut Viewport, n: usize) {
     view.cur.left(n, 0);
 }
 
@@ -145,9 +145,7 @@ pub fn right(doc: &mut Document, view: &mut Viewport, n: usize) {
 }
 
 /// Shifts the viewport to the right.
-// Allow unused mut to aid macro usage in src/buffer/base.rs.
-#[allow(clippy::needless_pass_by_ref_mut)]
-pub fn shift_right(doc: &mut Document, view: &mut Viewport, n: usize) {
+pub fn shift_right(doc: &Document, view: &mut Viewport, n: usize) {
     view.cur.right(n, doc.cur.x.min(view.buff_w - 1));
 }
 
@@ -167,8 +165,6 @@ pub fn up(doc: &mut Document, view: &mut Viewport, n: usize) {
 }
 
 /// Shifts the viewport up.
-// Allow unused mut to aid macro usage in src/buffer/base.rs.
-#[allow(clippy::needless_pass_by_ref_mut)]
 pub fn shift_up(_: &mut Document, view: &mut Viewport, n: usize) {
     view.cur.up(n, 0);
 }
@@ -191,9 +187,7 @@ pub fn down(doc: &mut Document, view: &mut Viewport, n: usize) {
 }
 
 /// Shifts the viewport up.
-// Allow unused mut to aid macro usage in src/buffer/base.rs.
-#[allow(clippy::needless_pass_by_ref_mut)]
-pub fn shift_down(doc: &mut Document, view: &mut Viewport, n: usize) {
+pub fn shift_down(doc: &Document, view: &mut Viewport, n: usize) {
     view.cur.down(n, doc.cur.y.min(view.h - 1));
 }
 

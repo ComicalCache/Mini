@@ -22,10 +22,16 @@ navigate and manipulate buffers using "motions". Both buffers support these basi
 - 'G' to go to the start of the file
 - 'v' to start a selection. A selection marks a character and selects the text "between" the selected character and the
     current cursor position. This is visualized through highlighting the selected area.
+- 'V' to start line selection
+- 'esc' remove all selections
 - 'y' + motion to yank characters that would be skipped by the motion to the clipboard
 - 'yy' to yank a line to the clipboard
 - 'n' to jump to the next search match
 - 'N' to jump to the previous search match
+
+> Selections can be "paused" by pressing 'v' or 'V' again. The selection will remain but the cursor can be moved freely
+> without modifying the selection. Pressing 'v' or 'V' will start a new separate selection, allowing for multiple
+> selections at the same time. 'Esc' will always remove all selections.
 
 Furthermore, you can enter command mode by pressing space. Using the up and down arrow you can cycle through the issued
 command history. Both buffers support following commands:

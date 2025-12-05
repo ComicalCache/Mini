@@ -3,6 +3,7 @@ use crate::{
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
     history::{Change, Replace},
+    selection::{Selection, SelectionKind},
     shell_command::ShellCommand,
     util::{file_name, open_file},
 };
@@ -110,14 +111,9 @@ impl TextBuffer {
             }
         };
 
-        // Use selection or replace in entire buffer.
-        let (start, end) = if let Some(end) = self.base.sel {
-            if self.base.doc.cur < end {
-                (self.base.doc.cur, end)
-            } else {
-                (end, self.base.doc.cur)
-            }
-        } else {
+        // Use selections or replace in entire buffer.
+        self.base.selections.sort_unstable();
+        let selections = if self.base.selections.is_empty() {
             // Save previous cursor position.
             let tmp_view_cur = self.base.doc_view.cur;
             let tmp_doc_cur = self.base.doc.cur;
@@ -130,44 +126,57 @@ impl TextBuffer {
             self.base.doc.cur = tmp_doc_cur;
             self.base.doc_view.cur = tmp_view_cur;
 
-            (start, end)
+            &[Selection::new(
+                start,
+                end,
+                SelectionKind::Normal,
+                None,
+                None,
+            )]
+        } else {
+            &self.base.selections[..]
         };
 
-        let hay = self.base.doc.get_range(start, end).unwrap().to_string();
-
-        let mut new = String::new();
-        let mut last_match = 0;
         let mut changes = Vec::new();
-        for captures in regex.captures_iter(&hay) {
-            // Fetch text between matches.
-            let mat = captures.get(0).unwrap();
-            new.push_str(&hay[last_match..mat.start()]);
+        for selection in selections {
+            let (start, end) = selection.range();
 
-            // Save pos of replacement in new string.
-            let pos = cursor::end_pos(&start, &new);
+            let hay = self.base.doc.get_range(start, end).unwrap().to_string();
 
-            // Replace match.
-            let mut replacement = String::new();
-            captures.expand(replace_str, &mut replacement);
-            new.push_str(&replacement);
+            let mut new = String::new();
+            let mut last_match = 0;
+            for captures in regex.captures_iter(&hay) {
+                // Fetch text between matches.
+                let mat = captures.get(0).unwrap();
+                new.push_str(&hay[last_match..mat.start()]);
 
-            // Add replace operation to history.
-            let delete_data = mat.as_str().to_string();
-            let insert_data = replacement;
-            changes.push(Replace {
-                pos,
-                delete_data,
-                insert_data,
-            });
+                // Save pos of replacement in new string.
+                let pos = cursor::end_pos(&start, &new);
 
-            last_match = mat.end();
+                // Replace match.
+                let mut replacement = String::new();
+                captures.expand(replace_str, &mut replacement);
+                new.push_str(&replacement);
+
+                // Add replace operation to history.
+                let delete_data = mat.as_str().to_string();
+                let insert_data = replacement;
+                changes.push(Replace {
+                    pos,
+                    delete_data,
+                    insert_data,
+                });
+
+                last_match = mat.end();
+            }
+            new.push_str(&hay[last_match..]);
+
+            // Replace buffer content.
+            self.base.doc.remove_range(start, end);
+            self.base.doc.write_str_at(start.x, start.y, &new);
         }
-        new.push_str(&hay[last_match..]);
 
-        // Replace buffer content.
-        self.base.doc.remove_range(start, end);
-        self.base.doc.write_str_at(start.x, start.y, &new);
-        self.base.sel = None;
+        self.base.clear_selections();
 
         if !changes.is_empty() {
             self.history.add_change(Change::Replace(changes));

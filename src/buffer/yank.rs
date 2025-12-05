@@ -1,7 +1,8 @@
 use crate::{
     buffer::BufferResult,
-    cursor::{self, Cursor},
+    cursor::{self},
     document::Document,
+    selection::{Selection, SelectionKind},
     viewport::Viewport,
 };
 use arboard::Clipboard;
@@ -19,7 +20,17 @@ macro_rules! yank_fn {
             let tmp_doc_cur = doc.cur;
 
             cursor::$func_call(doc, view $(,$n)?);
-            let res = selection(doc, &mut Some(tmp_doc_cur), clipboard);
+            let res = selection(
+                doc,
+                &mut [Selection::new(
+                    tmp_doc_cur,
+                    doc.cur,
+                    SelectionKind::Normal,
+                    None,
+                    None
+                )],
+                clipboard
+            );
 
             view.cur = tmp_view_cur;
             doc.cur = tmp_doc_cur;
@@ -52,58 +63,57 @@ macro_rules! yank {
             return err;
         }
     }};
-    ($self:ident, $func:ident, SELECTION) => {
+    ($self:ident, $func:ident, SELECTION) => {{
         if let Err(err) = $crate::buffer::yank::$func(
             &mut $self.base.doc,
-            &mut $self.base.sel,
+            &mut $self.base.selections,
             &mut $self.base.clipboard,
         ) {
             return err;
         }
-    };
+
+        $self.base.clear_selections();
+    }};
 }
 
 /// Yanks the selected area.
 pub fn selection(
     doc: &Document,
-    sel: &mut Option<Cursor>,
+    selections: &mut [Selection],
     clipboard: &mut Clipboard,
 ) -> Result<(), BufferResult> {
-    let Some(pos) = sel else {
-        return Ok(());
-    };
+    let mut buff = Vec::new();
 
-    let res = clipboard.set_text(doc.get_range(doc.cur, *pos).unwrap());
-
-    *sel = None;
-    match res {
-        Ok(()) => Ok(()),
-        Err(err) => Err(BufferResult::Error(err.to_string())),
+    selections.sort_unstable();
+    for selection in selections {
+        let (start, end) = selection.range();
+        buff.push(doc.get_range(start, end).unwrap().to_string());
     }
+
+    if !buff.is_empty() {
+        let res = clipboard.set_text(buff.join("\n"));
+        return match res {
+            Ok(()) => Ok(()),
+            Err(err) => Err(BufferResult::Error(err.to_string())),
+        };
+    }
+
+    Ok(())
 }
 
 /// Yanks a line.
-pub fn line(
-    doc: &mut Document,
-    view: &mut Viewport,
-    clipboard: &mut Clipboard,
-) -> Result<(), BufferResult> {
-    let tmp_view_cur = view.cur;
-    let tmp_doc_cur = doc.cur;
-
-    let start = Cursor::new(0, doc.cur.y);
-    cursor::jump_to_end_of_line(doc, view);
-    cursor::right(doc, view, 1);
-
-    let res = clipboard.set_text(doc.get_range(start, doc.cur).unwrap());
-
-    view.cur = tmp_view_cur;
-    doc.cur = tmp_doc_cur;
-
-    match res {
-        Ok(()) => Ok(()),
-        Err(err) => Err(BufferResult::Error(err.to_string())),
-    }
+pub fn line(doc: &Document, _: &Viewport, clipboard: &mut Clipboard) -> Result<(), BufferResult> {
+    selection(
+        doc,
+        &mut [Selection::new(
+            doc.cur,
+            doc.cur,
+            SelectionKind::Line,
+            doc.line_count(doc.cur.y),
+            doc.line_count(doc.cur.y),
+        )],
+        clipboard,
+    )
 }
 
 yank_fn!(left, left, doc = "Yanks left of the cursor.", n);

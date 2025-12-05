@@ -1,7 +1,8 @@
 use crate::{
-    cursor::{self, Cursor},
+    cursor::{self},
     document::Document,
-    history::{Change, History},
+    history::{Change, History, Replace},
+    selection::{Selection, SelectionKind},
     viewport::Viewport,
 };
 
@@ -16,7 +17,8 @@ macro_rules! delete_fn {
         ) {
             let tmp = doc.cur;
             cursor::$func_call(doc, view $(,$n)?);
-            selection(doc, view, &mut Some(tmp), history);
+            let mut selections = vec![Selection::new(tmp, doc.cur, SelectionKind::Normal, None, None)];
+            selection(doc, view, &mut selections, history);
         }
     };
 }
@@ -31,6 +33,7 @@ macro_rules! delete {
             Some(&mut $self.history),
         );
         $self.base.clear_matches();
+        $self.base.clear_selections();
     }};
     ($self:ident, $func:ident, REPEAT) => {{
         $crate::buffer::delete::$func(
@@ -40,15 +43,17 @@ macro_rules! delete {
             1,
         );
         $self.base.clear_matches();
+        $self.base.clear_selections();
     }};
     ($self:ident, $func:ident, SELECTION) => {{
         $crate::buffer::delete::$func(
             &mut $self.base.doc,
             &mut $self.base.doc_view,
-            &mut $self.base.sel,
+            &mut $self.base.selections,
             Some(&mut $self.history),
         );
         $self.base.clear_matches();
+        $self.base.clear_selections();
     }};
 }
 
@@ -78,31 +83,32 @@ macro_rules! change {
 pub fn selection(
     doc: &mut Document,
     view: &mut Viewport,
-    sel: &mut Option<Cursor>,
-    history: Option<&mut History>,
+    selections: &mut [Selection],
+    mut history: Option<&mut History>,
 ) {
-    let Some(pos) = *sel else {
-        return;
-    };
+    let mut changes = Vec::new();
 
-    let cur = doc.cur;
-    let (start, end) = if pos <= cur { (pos, cur) } else { (cur, pos) };
+    selections.sort_unstable();
+    for selection in selections.iter().rev() {
+        let (start, end) = selection.range();
 
-    if let Some(history) = history
-        && let Some(data) = doc.get_range(start, end)
-    {
-        history.add_change(Change::Delete {
-            pos: start,
-            data: data.to_string(),
-        });
+        if let Some(data) = doc.get_range(start, end) {
+            changes.push(Replace {
+                pos: start,
+                delete_data: data.to_string(),
+                insert_data: String::new(),
+            });
+        }
+
+        doc.remove_range(start, end);
+
+        // Place cursor at the beginning of the deleted area.
+        cursor::move_to(doc, view, start);
     }
 
-    doc.remove_range(start, end);
-
-    // Place cursor at the beginning of the deleted area.
-    cursor::move_to(doc, view, start);
-
-    *sel = None;
+    if let Some(history) = history.as_mut() {
+        history.add_change(Change::Replace(changes));
+    }
 }
 
 /// Deletes a line.
@@ -135,7 +141,18 @@ pub fn line(doc: &mut Document, view: &mut Viewport, history: Option<&mut Histor
         cursor::jump_to_beginning_of_line(doc, view);
     }
 
-    selection(doc, view, &mut Some(tmp2), history);
+    selection(
+        doc,
+        view,
+        &mut [Selection::new(
+            tmp2,
+            doc.cur,
+            SelectionKind::Normal,
+            None,
+            None,
+        )],
+        history,
+    );
 
     // Fix cursor moving up due to moving it one line up.
     if tmp1.y != 0 {

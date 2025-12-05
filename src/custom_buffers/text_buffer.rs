@@ -17,6 +17,7 @@ use crate::{
     jump,
     message::{Message, MessageKind},
     movement,
+    selection::SelectionKind,
     shell_command::{ShellCommand, ShellCommandResult},
     yank,
 };
@@ -123,23 +124,10 @@ impl TextBuffer {
         )
         .unwrap();
 
-        if let Some(pos) = self.base.sel {
-            let (start, end) = if pos < self.base.doc.cur {
-                (pos, self.base.doc.cur)
-            } else {
-                (self.base.doc.cur, pos)
-            };
-
-            // Plus 1 since text coordinates are 0 indexed.
-            write!(
-                &mut info_line,
-                " [Selected {}:{} - {}:{}]",
-                start.y + 1,
-                start.x + 1,
-                end.y + 1,
-                end.x + 1
-            )
-            .unwrap();
+        match self.base.selections.len() {
+            0 => {}
+            1 => write!(&mut info_line, " [1 selection]").unwrap(),
+            n => write!(&mut info_line, " [{n} selections]").unwrap(),
         }
 
         if let Some(shell_command) = &self.shell_command {
@@ -186,8 +174,15 @@ impl TextBuffer {
                 Key::Char('.') => jump!(self, jump_to_matching_opposite),
                 Key::Char('g') => jump!(self, jump_to_end_of_file),
                 Key::Char('G') => jump!(self, jump_to_beginning_of_file),
-                Key::Char('v') => self.base.sel = Some(self.base.doc.cur),
-                Key::Esc => self.base.sel = None,
+                Key::Char('v') => {
+                    self.base.add_selection(SelectionKind::Normal);
+                    self.base.update_selection();
+                }
+                Key::Char('V') => {
+                    self.base.add_selection(SelectionKind::Line);
+                    self.base.update_selection();
+                }
+                Key::Esc => self.base.selections.clear(),
                 Key::Char('y') => self.view_mode = ViewMode::Yank,
                 Key::Char(' ') => self.base.change_mode(Mode::Command),
                 Key::Char('n') => self.base.next_match(),
@@ -282,7 +277,7 @@ impl TextBuffer {
                         delete::selection(
                             &mut self.base.doc,
                             &mut self.base.doc_view,
-                            &mut self.base.sel,
+                            &mut self.base.selections,
                             Some(&mut self.history),
                         );
                         self.base.change_mode(Mode::Other(Write));
@@ -437,7 +432,7 @@ impl Buffer for TextBuffer {
         self.base.doc_view.render_gutter(display, &self.base.doc);
         self.base
             .doc_view
-            .render_document(display, &self.base.doc, self.base.sel);
+            .render_document(display, &self.base.doc, &self.base.selections);
 
         if cmd {
             self.base.cmd_view.render_bar(

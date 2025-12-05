@@ -3,6 +3,7 @@ use crate::{
     display::{Cell, Display},
     document::Document,
     message::{Message, MessageKind},
+    selection::Selection,
 };
 use termion::color::{self, Bg, Fg};
 
@@ -166,16 +167,12 @@ impl Viewport {
     }
 
     /// Renders a document to the `Display`.
-    pub fn render_document(&self, display: &mut Display, doc: &Document, sel: Option<Cursor>) {
-        // Prepre the selection to be in order if a selection state is active.
-        let sel = sel.map(|sel| {
-            if doc.cur < sel {
-                (doc.cur, sel)
-            } else {
-                (sel, doc.cur)
-            }
-        });
-
+    pub fn render_document(
+        &self,
+        display: &mut Display,
+        doc: &Document,
+        selections: &Vec<Selection>,
+    ) {
         // Calculate which line of text is visible at what line on the screen.
         let y_off = doc.cur.y - self.cur.y;
         let y_max = y_off + self.h;
@@ -198,10 +195,10 @@ impl Viewport {
                     let screen_x = self.gutter_w + x - x_off + self.x_off;
 
                     // Layer 1: Selection.
-                    if let Some((start, end)) = sel {
-                        let pos = Cursor::new(x, y);
-                        if pos >= start && pos < end {
+                    for selection in selections {
+                        if selection.contains(Cursor::new(x, y)) {
                             bg = SEL;
+                            break;
                         }
                     }
 
