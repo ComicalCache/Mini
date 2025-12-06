@@ -112,7 +112,12 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
 
     /// Resizes the viewports of the buffer.
     pub fn resize(&mut self, w: usize, h: usize, x_off: usize, y_off: usize) {
-        let doc_count = self.doc.len();
+        if self.w == w && self.h == h && self.x_off == x_off && self.y_off == y_off {
+            return;
+        }
+
+        // Rerender on size changes.
+        self.rerender = true;
 
         self.w = w;
         self.h = h;
@@ -122,7 +127,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         // Shifted by one because of info/command line.
         // FIXME: this limits the bar to always be exactly one in height.
         self.doc_view
-            .resize(w, h - 1, x_off, y_off + 1, Some(doc_count));
+            .resize(w, h - 1, x_off, y_off + 1, Some(self.doc.len()));
         // FIXME: this limits the bar to always be exactly one in height.
         self.info_view.resize(w, 1, x_off, y_off, None);
         // FIXME: this limits the bar to always be exactly one in height.

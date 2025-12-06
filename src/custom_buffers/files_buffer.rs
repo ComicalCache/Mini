@@ -318,7 +318,6 @@ impl Buffer for FilesBuffer {
     }
 
     fn resize(&mut self, w: usize, h: usize, x_off: usize, y_off: usize) {
-        self.base.rerender = true;
         self.base.resize(w, h, x_off, y_off);
     }
 
