@@ -9,11 +9,6 @@ buffer and more.
 `./mini --help` prints an exhaustiv documentation of all features. See `info.txt` for the command output or type space,
 `?` and hit enter to see it inside the editor.
 
-> The feature `syntax-highlighting` was removed since version `6.0.0` and is now the default.
-
-> Syntax highlighting was removed since version `7.0.0` to reduce code complexity and binary size. It was never meant
-to be implemented anyway...
-
 ### Installation
 Mini can simply be built with `cargo build --release` or installed via cargo with `cargo install --path .`.
 
