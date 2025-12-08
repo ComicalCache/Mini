@@ -3,6 +3,7 @@ use std::{
     io::Error,
     path::Path,
 };
+use termion::event::Key;
 
 /// Retreives the filename of a given path.
 pub fn file_name<P: AsRef<Path>>(path: P) -> Option<String> {
@@ -43,8 +44,6 @@ pub fn line_column(input: &str) -> (Option<usize>, Option<usize>) {
 
     (x, y)
 }
-
-use termion::event::Key;
 
 /// Converts a `Key` to a String.
 pub fn key_to_string(key: Key) -> Option<String> {

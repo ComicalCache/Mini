@@ -5,7 +5,7 @@ use crate::{
     },
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
-    history::{Change, Replace},
+    history::Replace,
 };
 
 impl TextBuffer {
@@ -13,10 +13,11 @@ impl TextBuffer {
     /// The cursor will be on the new line.
     pub(super) fn insert_move_new_line_above(&mut self) {
         cursor::jump_to_beginning_of_line(&mut self.base.doc, &mut self.base.doc_view);
-        self.history.add_change(Change::Insert {
+        self.history.add_change(vec![Replace {
             pos: self.base.doc.cur,
-            data: "\n".to_string(),
-        });
+            delete_data: String::new(),
+            insert_data: "\n".to_string(),
+        }]);
 
         self.base.doc.insert_line(self.base.doc.cur.y);
     }
@@ -25,10 +26,11 @@ impl TextBuffer {
     /// The cursor will be on the new line.
     pub(super) fn insert_move_new_line_bellow(&mut self) {
         let y = self.base.doc.cur.y;
-        self.history.add_change(Change::Insert {
+        self.history.add_change(vec![Replace {
             pos: Cursor::new(self.base.doc.line_count(y).unwrap(), y),
-            data: "\n".to_string(),
-        });
+            delete_data: String::new(),
+            insert_data: "\n".to_string(),
+        }]);
 
         self.base.doc.insert_line(self.base.doc.cur.y + 1);
         cursor::down(&mut self.base.doc, &mut self.base.doc_view, 1);
@@ -56,11 +58,11 @@ impl TextBuffer {
                 ch.to_string()
             };
 
-            self.history.add_change(Change::Replace(vec![Replace {
+            self.history.add_change(vec![Replace {
                 pos: self.base.doc.cur,
                 delete_data: old_ch.to_string(),
                 insert_data: ch,
-            }]));
+            }]);
         }
 
         // Pass a None as History to not save the edit again.
@@ -75,25 +77,29 @@ impl TextBuffer {
 
     /// Paste the system clipboard contents after the current cursor.
     pub(super) fn paste(&mut self, trim_newline: bool, move_to: bool) -> Option<BufferResult> {
-        let mut data = match self.base.clipboard.get_text() {
+        let mut insert_data = match self.base.clipboard.get_text() {
             Ok(content) => content,
             Err(err) => {
                 return Some(BufferResult::Error(err.to_string()));
             }
         };
 
-        if trim_newline && data.ends_with('\n') {
-            data.truncate(data.len() - 1);
+        if trim_newline && insert_data.ends_with('\n') {
+            insert_data.truncate(insert_data.len() - 1);
         }
 
-        self.base.doc.write_str(data.as_str());
+        self.base.doc.write_str(insert_data.as_str());
         let pos = self.base.doc.cur;
         if move_to {
-            let end_pos = cursor::end_pos(&pos, data.as_str());
+            let end_pos = cursor::end_pos(&pos, insert_data.as_str());
             cursor::move_to(&mut self.base.doc, &mut self.base.doc_view, end_pos);
         }
 
-        self.history.add_change(Change::Insert { pos, data });
+        self.history.add_change(vec![Replace {
+            pos,
+            delete_data: String::new(),
+            insert_data,
+        }]);
 
         None
     }

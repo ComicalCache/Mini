@@ -1,26 +1,13 @@
 use crate::cursor::Cursor;
 
-/// A reversible change to a document.
-pub enum Change {
-    /// Text insertion.
-    Insert {
-        pos: Cursor,
-        data: String,
-    },
-    /// Text deletion.
-    Delete {
-        pos: Cursor,
-        data: String,
-    },
-    Replace(Vec<Replace>),
-}
-
 /// A change replacing data.
 pub struct Replace {
     pub pos: Cursor,
     pub delete_data: String,
     pub insert_data: String,
 }
+
+type Change = Vec<Replace>;
 
 /// A history of changes to a document.
 pub struct History {

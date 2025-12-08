@@ -1,7 +1,7 @@
 use crate::{
     cursor,
     document::Document,
-    history::{Change, History},
+    history::{History, Replace},
     viewport::Viewport,
 };
 
@@ -16,10 +16,11 @@ pub fn write_char(
     ch: char,
 ) {
     if let Some(history) = history {
-        history.add_change(Change::Insert {
+        history.add_change(vec![Replace {
             pos: doc.cur,
-            data: ch.to_string(),
-        });
+            delete_data: String::new(),
+            insert_data: ch.to_string(),
+        }]);
     }
 
     doc.write_char(ch, doc.cur.x, doc.cur.y);
@@ -48,10 +49,11 @@ pub fn write_tab(
     let spaces = " ".repeat(n);
 
     if let Some(history) = history {
-        history.add_change(Change::Insert {
+        history.add_change(vec![Replace {
             pos: doc.cur,
-            data: spaces.clone(), // Use the calculated spaces
-        });
+            delete_data: String::new(),
+            insert_data: spaces.clone(), // Use the calculated spaces
+        }]);
     }
 
     doc.write_str(&spaces);
@@ -69,10 +71,11 @@ pub fn delete_char(doc: &mut Document, view: &mut Viewport, history: Option<&mut
         let ch = doc.delete_char(doc.cur.x, doc.cur.y);
 
         if let Some(history) = history {
-            history.add_change(Change::Delete {
+            history.add_change(vec![Replace {
                 pos: doc.cur,
-                data: ch.to_string(),
-            });
+                delete_data: ch.to_string(),
+                insert_data: String::new(),
+            }]);
         }
     } else if cur.y > 0 {
         // If deleting at the beginning of a line and it's not the first line.
@@ -81,10 +84,11 @@ pub fn delete_char(doc: &mut Document, view: &mut Viewport, history: Option<&mut
         let ch = doc.delete_char(doc.cur.x, doc.cur.y);
 
         if let Some(history) = history {
-            history.add_change(Change::Delete {
+            history.add_change(vec![Replace {
                 pos: doc.cur,
-                data: ch.to_string(),
-            });
+                delete_data: ch.to_string(),
+                insert_data: String::new(),
+            }]);
         }
     }
 }

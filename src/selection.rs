@@ -9,27 +9,27 @@ pub enum SelectionKind {
 /// Represents a selection of text.
 #[derive(PartialEq, Eq)]
 pub struct Selection {
-    pub start: Cursor,
+    pub anchor: Cursor,
     pub head: Cursor,
     pub kind: SelectionKind,
 
-    start_line_len: Option<usize>,
+    anchor_line_len: Option<usize>,
     head_line_len: Option<usize>,
 }
 
 impl Selection {
     pub const fn new(
-        start: Cursor,
+        anchor: Cursor,
         head: Cursor,
         kind: SelectionKind,
-        start_line_len: Option<usize>,
+        anchor_line_len: Option<usize>,
         head_line_len: Option<usize>,
     ) -> Self {
         Self {
-            start,
+            anchor,
             head,
             kind,
-            start_line_len,
+            anchor_line_len,
             head_line_len,
         }
     }
@@ -42,10 +42,10 @@ impl Selection {
 
     /// Returns the range of the selection.
     pub fn range(&self) -> (Cursor, Cursor) {
-        let (start, end) = if self.start <= self.head {
-            (self.start, self.head)
+        let (start, end) = if self.anchor <= self.head {
+            (self.anchor, self.head)
         } else {
-            (self.head, self.start)
+            (self.head, self.anchor)
         };
 
         match self.kind {
@@ -56,7 +56,7 @@ impl Selection {
                 let end_x = if end == self.head {
                     self.head_line_len.unwrap()
                 } else {
-                    self.start_line_len.unwrap()
+                    self.anchor_line_len.unwrap()
                 };
                 let end = Cursor::new(end_x, end.y);
 
@@ -84,8 +84,8 @@ impl PartialOrd for Selection {
 
 impl Ord for Selection {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // Compare y coordinates of start first.
-        match self.start.y.cmp(&other.start.y) {
+        // Compare y coordinates of the anchor first.
+        match self.anchor.y.cmp(&other.anchor.y) {
             std::cmp::Ordering::Equal => {}
             ord => return ord,
         }
@@ -94,12 +94,12 @@ impl Ord for Selection {
         let self_x = if self.kind == SelectionKind::Line {
             0
         } else {
-            self.start.x
+            self.anchor.x
         };
         let other_x = if other.kind == SelectionKind::Line {
             0
         } else {
-            other.start.x
+            other.anchor.x
         };
 
         self_x.cmp(&other_x)

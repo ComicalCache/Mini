@@ -196,10 +196,10 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             // Change the selection kind accordingly.
             if sel.kind != kind {
                 *sel = Selection::new(
-                    sel.start,
+                    sel.anchor,
                     sel.head,
                     kind,
-                    self.doc.line_count(sel.start.y),
+                    self.doc.line_count(sel.anchor.y),
                     self.doc.line_count(sel.head.y),
                 );
                 return;
@@ -229,10 +229,10 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
                 sel.kind = kind;
                 if kind == SelectionKind::Line {
                     *sel = Selection::new(
-                        sel.start,
+                        sel.anchor,
                         sel.head,
                         kind,
-                        self.doc.line_count(sel.start.y),
+                        self.doc.line_count(sel.anchor.y),
                         self.doc.line_count(sel.head.y),
                     );
                 }

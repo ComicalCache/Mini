@@ -2,7 +2,7 @@ use crate::{
     buffer::BufferResult,
     cursor::{self, Cursor},
     custom_buffers::text_buffer::TextBuffer,
-    history::{Change, Replace},
+    history::Replace,
     selection::{Selection, SelectionKind},
     shell_command::ShellCommand,
     util::{file_name, open_file},
@@ -83,7 +83,10 @@ impl TextBuffer {
             );
         }
 
-        BufferResult::Ok
+        BufferResult::Info(format!(
+            "File has been written to {}",
+            self.file_name.as_ref().unwrap()
+        ))
     }
 
     fn replace_command(&mut self, args: &str) -> BufferResult {
@@ -179,7 +182,7 @@ impl TextBuffer {
         self.base.clear_selections();
 
         if !changes.is_empty() {
-            self.history.add_change(Change::Replace(changes));
+            self.history.add_change(changes);
         }
 
         BufferResult::Ok

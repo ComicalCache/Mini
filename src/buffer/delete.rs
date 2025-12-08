@@ -1,7 +1,7 @@
 use crate::{
     cursor::{self},
     document::Document,
-    history::{Change, History, Replace},
+    history::{History, Replace},
     selection::{Selection, SelectionKind},
     viewport::Viewport,
 };
@@ -107,7 +107,7 @@ pub fn selection(
     }
 
     if let Some(history) = history.as_mut() {
-        history.add_change(Change::Replace(changes));
+        history.add_change(changes);
     }
 }
 
