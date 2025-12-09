@@ -4,8 +4,7 @@ use crate::{document::Document, viewport::Viewport};
 /// The displayed cursor style.
 pub enum CursorStyle {
     Hidden,
-    BlinkingBar,
-    BlinkingBlock,
+    SteadyBar,
     SteadyBlock,
 }
 

@@ -1,29 +1,40 @@
-use std::io::{Error, IntoInnerError, LineWriter, Write};
+use super::ShellCommandResult;
 use vte::Perform;
 
-pub(super) struct Performer<W: Write> {
-    pub(super) writer: LineWriter<W>,
-    pub(super) err: Option<Error>,
+pub(super) struct Performer {
+    pub(super) output: Vec<ShellCommandResult>,
 }
 
-impl<W: Write> Performer<W> {
-    pub fn flush(&mut self) -> Result<(), Error> {
-        self.writer.flush()
-    }
-
-    pub fn into_inner(self) -> Result<W, IntoInnerError<LineWriter<W>>> {
-        self.writer.into_inner()
+impl Performer {
+    pub fn new() -> Self {
+        Self { output: Vec::new() }
     }
 }
 
-impl<W: Write> Perform for Performer<W> {
+impl Perform for Performer {
     fn print(&mut self, c: char) {
-        self.err = write!(self.writer, "{c}").err();
+        use ShellCommandResult::Data;
+
+        if let Some(Data(s)) = self.output.last_mut() {
+            s.push(c);
+        } else {
+            self.output.push(Data(c.to_string()));
+        }
     }
 
     fn execute(&mut self, byte: u8) {
-        if byte == b'\n' || byte == b'\r' {
-            self.err = writeln!(self.writer).err();
+        use ShellCommandResult::{CarriageReturn, Data};
+
+        match byte {
+            b'\n' => {
+                if let Some(Data(s)) = self.output.last_mut() {
+                    s.push('\n');
+                } else {
+                    self.output.push(Data("\n".to_string()));
+                }
+            }
+            b'\r' => self.output.push(CarriageReturn),
+            _ => {}
         }
     }
 }

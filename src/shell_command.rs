@@ -1,18 +1,18 @@
 mod performer;
-mod strip;
-mod writer;
 
-use crate::{buffer::BufferResult, shell_command::strip::strip_str, util::key_to_string};
+use crate::{buffer::BufferResult, shell_command::performer::Performer, util::key_to_string};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use std::{
-    io::{Error, Write},
+    io::{Error, Read, Write},
     sync::mpsc::{self, Receiver},
     thread,
 };
 use termion::event::Key;
+use vte::Parser;
 
 pub enum ShellCommandResult {
     Data(String),
+    CarriageReturn,
     Error(String),
     Eof,
 }
@@ -31,7 +31,7 @@ pub struct ShellCommand {
 
 impl ShellCommand {
     pub fn new(w: usize, h: usize, cmd: String) -> Result<Self, BufferResult> {
-        use ShellCommandResult::{Data, Eof, Error};
+        use ShellCommandResult::{Eof, Error};
 
         // Create a pseudo terminal.
         let pty = native_pty_system();
@@ -77,14 +77,25 @@ impl ShellCommand {
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
             let mut buff = [0u8; 2048];
+            let mut parser = Parser::new();
+
             loop {
                 match reader.read(&mut buff) {
                     // EOF reached.
                     Ok(0) => break,
                     Ok(n) => {
-                        let data = strip_str(String::from_utf8_lossy(&buff[..n]));
-                        if tx.send(Data(data)).is_err() {
-                            return;
+                        let mut performer = Performer::new();
+                        parser.advance(
+                            &mut performer,
+                            String::from_utf8_lossy(&buff[..n])
+                                .replace("\r\n", "\n")
+                                .as_bytes(),
+                        );
+
+                        for item in performer.output {
+                            if tx.send(item).is_err() {
+                                return;
+                            }
                         }
                     }
                     Err(err) => {

@@ -99,9 +99,8 @@ impl FilesBuffer {
         let mut info_line = String::new();
 
         let mode = match self.base.mode {
-            Mode::View => " [V]",
-            Mode::Command => " [C]",
-            Mode::Other(()) => unreachable!(),
+            Mode::View => " [VIS]",
+            Mode::Command | Mode::Other(()) => unreachable!(),
         };
         let view_mode = match self.view_mode {
             ViewMode::Normal => "",
@@ -273,11 +272,9 @@ impl Buffer for FilesBuffer {
     fn render(&mut self, display: &mut Display) {
         self.base.rerender = false;
 
-        self.info_line();
-
         let (cursor_style, cmd) = match self.base.mode {
             Mode::View | Mode::Other(()) => (CursorStyle::SteadyBlock, false),
-            Mode::Command => (CursorStyle::BlinkingBar, true),
+            Mode::Command => (CursorStyle::SteadyBar, true),
         };
 
         self.base.doc_view.render_gutter(display, &self.base.doc);
@@ -293,6 +290,8 @@ impl Buffer for FilesBuffer {
                 &self.base.cmd,
             );
         } else {
+            self.info_line();
+
             self.base.info_view.render_bar(
                 self.info.line(0).unwrap().to_string().trim_end(),
                 0,

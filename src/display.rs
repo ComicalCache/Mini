@@ -1,7 +1,7 @@
 use std::io::{BufWriter, Error, Stdout, Write};
 use termion::{
     color::{self, Bg, Fg, Reset},
-    cursor::{BlinkingBar, BlinkingBlock, Goto, Hide, Show, SteadyBlock},
+    cursor::{Goto, Hide, Show, SteadyBar, SteadyBlock},
     raw::RawTerminal,
 };
 
@@ -32,7 +32,7 @@ impl Display {
         Self {
             buff: vec![vec![Cell::default(); w]; h],
             redraw: Vec::new(),
-            cursor: (Cursor::new(0, 0), CursorStyle::BlinkingBlock),
+            cursor: (Cursor::new(0, 0), CursorStyle::SteadyBlock),
             w,
             h,
         }
@@ -128,8 +128,7 @@ impl Display {
         let cur = Goto(self.cursor.0.x as u16 + 1, self.cursor.0.y as u16 + 1);
         match self.cursor.1 {
             CursorStyle::Hidden => {}
-            CursorStyle::BlinkingBar => write!(stdout, "{cur}{BlinkingBar}{Show}")?,
-            CursorStyle::BlinkingBlock => write!(stdout, "{cur}{BlinkingBlock}{Show}")?,
+            CursorStyle::SteadyBar => write!(stdout, "{cur}{SteadyBar}{Show}")?,
             CursorStyle::SteadyBlock => write!(stdout, "{cur}{SteadyBlock}{Show}")?,
         }
 

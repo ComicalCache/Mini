@@ -66,7 +66,7 @@ macro_rules! change {
             &mut $self.base.doc_view,
             Some(&mut $self.history),
         );
-        $self.base.change_mode(Mode::Other(Write));
+        $self.base.change_mode(Mode::Other(Insert));
     }};
     ($self:ident, $func:ident, REPEAT) => {{
         $crate::buffer::delete::$func(
@@ -75,7 +75,7 @@ macro_rules! change {
             Some(&mut $self.history),
             1,
         );
-        $self.base.change_mode(Mode::Other(Write));
+        $self.base.change_mode(Mode::Other(Insert));
     }};
 }
 

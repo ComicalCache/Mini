@@ -1,11 +1,12 @@
 Run Mini with a file(path) argument to open or create a file or a directory to open it in the file browser. Omit the
 file(path) to create a "scratchpad" buffer with no backing file. A few things that make Mini interesting: it has
-line-numbers, diffed-rendering, undo and redo, contains a file browser and allows for multiple buffers to be opened
-simultaneously.
+line-numbers, diffed-rendering, undo and redo, contains a file browser, allows for multiple buffers to be opened
+simultaneously and lets you run terminal commands.
+
+> If you're in Mini, press 'J'/'K' to scroll or 'Y' to yank the message into the clipboard.
 
 Mini should feel familiar to those who have used VIm before. It features two kinds of buffers: a text buffer and a file
-browser buffer. You can switch between the text buffer and files buffer by hitting 't' or 'e' respectively. You can
-navigate and manipulate buffers using "motions". Both buffers support these basic motions:
+browser buffer. You can navigate and manipulate buffers using "motions". Both buffers support these basic motions:
 - 'h' | 'j' | 'k' | 'l' to move the cursor
 - 'H' | 'J' | 'K' | 'L' to shift the viewport
 - 'w' to skip to the next word
@@ -74,14 +75,15 @@ mode.
 
     Additionally you can start a selection and press 'dv' or 'cv' to delete or yank the selection respectively.
 
-    Write Mode:
-    Write mode is the mode where you can input text and manipulate the buffer this way, analog to VIm's insertion mode.
-    You can enter write mode by pressing any of the following motions and exit it using the escape key:
-    - 'i' to enter write mode
-    - 'a' to enter write mode one character after the current
-    - 'A' to enter write mode at the end of the line
-    - 'o' to enter write mode one line under the current
-    - 'O' to enter write mode one line above the current
+    Insert Mode:
+    Insert mode is the mode where you can input text and manipulate the buffer this way, analog to VIm's insertion mode.
+    You can enter insert mode by pressing any of the following motions and exit it using the escape key:
+    - 'i' to enter insert mode
+    - 'a' to enter insert mode one character after the current
+    - 'A' to enter insert mode at the end of the line
+    - 'o' to enter insert mode one line under the current
+    - 'O' to enter insert mode one line above the current
+    - 'esc' to exit insert mode
 
     Additionally you can use the arrow keys to move the cursor, or alt + '←' or alt + '→' to skip words in the
     respective direction.
