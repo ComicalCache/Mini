@@ -478,6 +478,9 @@ impl Buffer for TextBuffer {
                 match shell_command.rx.try_recv() {
                     Ok(res) => match res {
                         ShellCommandResult::Data(data) => {
+                            // Rerender new received data.
+                            self.base.rerender = true;
+
                             self.base.doc.append_str(data.as_str());
                             jump!(self, jump_to_end_of_file);
                             jump!(self, jump_to_beginning_of_line);
