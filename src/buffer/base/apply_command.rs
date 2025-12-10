@@ -128,7 +128,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
                 "Mini - A terminal text-editor (v{})\n\n{INFO_MSG}",
                 option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap()
             ))),
-            "goto" => Ok(self.goto(args)),
+            "j" => Ok(self.goto(args)),
             "s" => Ok(self.search(args)),
             "cb" => match args.parse::<usize>() {
                 Ok(idx) => Ok(BufferResult::Change(idx)),

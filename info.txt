@@ -37,7 +37,7 @@ browser buffer. You can navigate and manipulate buffers using "motions". Both bu
 Furthermore, you can enter command mode by pressing space. Using the up and down arrow you can cycle through the issued
 command history. Both buffers support following commands:
 - '?' to see this message
-- 'goto <line>:<column>' to jump to an absolute line number and column. If the column is omitted it jumps to the
+- 'j <line>:<column>' to jump to an absolute line number and column. If the column is omitted it jumps to the
     beginning of the line. If the line is missing it jumps to the column in the current line. Particularly ':' does
     nothing.
 - 's /<regex>/' to search text. If text was selected, it will only search in that selection. See
@@ -101,7 +101,7 @@ mode.
         "scratchpad" buffer with no backing file is created)
      - 'r /<regex>/<replace>/' to replace text. If text was selected it will only replace in that selection. See
         https://docs.rs/regex/latest/regex/index.html for information about the regex and replace syntax.
-    - 'cmd <cmd>' runs the shell command <cmd> and appends the output to the end of the buffer. Input is passed through
+    - '! <cmd>' runs the shell command <cmd> and appends the output to the end of the buffer. Input is passed through
         to the running shell command. 'ctrl+q' can be used to force-quit a running shell command.
 
 Files Buffer:

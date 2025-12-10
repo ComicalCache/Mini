@@ -250,7 +250,7 @@ impl Viewport {
         }
     }
 
-    /// Renders a VT100 parser state to the `Display`.
+    /// Renders a vt100 parser state to the `Display`.
     pub fn render_terminal(&self, display: &mut Display, parser: &Parser) {
         let screen = parser.screen();
 

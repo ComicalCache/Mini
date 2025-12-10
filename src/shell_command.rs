@@ -160,30 +160,22 @@ impl ShellCommand {
     /// Get all data of the command.
     pub fn contents(&mut self) -> String {
         let screen = self.parser.screen_mut();
-        let rows = screen.size().0 as usize;
-        let mut contents = String::new();
+        let cols = screen.size().1;
 
         // Find the length of the scrollback.
         screen.set_scrollback(SCROLLBACK_LEN);
-        let mut curr = screen.scrollback();
+        let mut contents = String::new();
 
-        while curr > 0 {
-            screen.set_scrollback(curr);
-            let page = screen.contents();
-
-            // Append only lines not yet taken.
-            let next = curr.saturating_sub(rows);
-            for line in page.lines().take(curr - next) {
-                contents.push_str(line);
-                contents.push('\n');
-            }
-
-            curr = next;
+        // 1. Capture history.
+        for i in (1..=screen.scrollback()).rev() {
+            screen.set_scrollback(i);
+            contents.extend((0..cols).filter_map(|c| screen.cell(0, c).map(vt100::Cell::contents)));
+            contents.push('\n');
         }
 
-        // Append the latest terminal screen.
+        // 2. Capture visible screen.
         screen.set_scrollback(0);
-        contents.push_str(&screen.contents());
+        contents.push_str(screen.contents().as_str());
 
         contents
     }
