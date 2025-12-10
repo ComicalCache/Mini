@@ -4,11 +4,13 @@ use crate::{
     document::Document,
     message::{Message, MessageKind},
     selection::Selection,
+    util::vt100_color_to_rgb,
 };
 use termion::color::{self, Bg, Fg};
+use vt100::Parser;
 
 /// Background color.
-const BG: Bg<color::Rgb> = Bg(color::Rgb(41, 44, 51));
+pub const BG: Bg<color::Rgb> = Bg(color::Rgb(41, 44, 51));
 /// Line highlight background color.
 const HIGHLIGHT: Bg<color::Rgb> = Bg(color::Rgb(51, 53, 59));
 /// Info line background color.
@@ -244,6 +246,48 @@ impl Viewport {
             // Stretch current line to end to show highlight properly.
             for x in x..self.w {
                 display.update(Cell::new(' ', TXT, base_bg), x, y + self.y_off);
+            }
+        }
+    }
+
+    /// Renders a VT100 parser state to the `Display`.
+    pub fn render_terminal(&self, display: &mut Display, parser: &Parser) {
+        let screen = parser.screen();
+        let (rows, cols) = screen.size();
+
+        // Render cells from the terminal screen.
+        for y in 0..self.h.min(rows as usize) {
+            for x in 0..self.w.min(cols as usize) {
+                // The indices are bound by terminal dimensions.
+                #[allow(clippy::cast_possible_truncation)]
+                if let Some(cell) = screen.cell(y as u16, x as u16) {
+                    let ch = cell.contents().chars().next().unwrap_or(' ');
+                    let fg = vt100_color_to_rgb(cell.fgcolor(), true);
+                    let bg = vt100_color_to_rgb(cell.bgcolor(), false);
+
+                    display.update(
+                        Cell::new(ch, Fg(fg), Bg(bg)),
+                        x + self.x_off,
+                        y + self.y_off,
+                    );
+                } else {
+                    // Default background if the cell doesn't contain data.
+                    display.update(Cell::new(' ', TXT, BG), x + self.x_off, y + self.y_off);
+                }
+            }
+        }
+
+        if screen.hide_cursor() {
+            display.set_cursor(Cursor::new(0, 0), CursorStyle::Hidden);
+        } else {
+            let (row, col) = screen.cursor_position();
+            let (row, col) = (row as usize, col as usize);
+
+            if row < self.h && col < self.w {
+                display.set_cursor(
+                    Cursor::new(col + self.x_off, row + self.y_off),
+                    CursorStyle::SteadyBlock,
+                );
             }
         }
     }

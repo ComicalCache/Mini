@@ -401,6 +401,64 @@ impl TextBuffer {
 
         BufferResult::Ok
     }
+
+    fn shell_tick(&mut self, key: Option<Key>) -> BufferResult {
+        let shell_command = &mut *self.shell_command.as_mut().unwrap();
+
+        // Greedily read as much as possible.
+        loop {
+            match shell_command.rx.try_recv() {
+                Ok(res) => match res {
+                    ShellCommandResult::Data(data) => {
+                        self.base.rerender = true;
+                        shell_command.parser.process(&data);
+                    }
+                    ShellCommandResult::Error(err) => {
+                        self.base.rerender = true;
+                        self.base.doc.append_str(shell_command.contents().as_str());
+                        jump!(self, jump_to_end_of_file);
+
+                        self.shell_command = None;
+                        return BufferResult::Error(err);
+                    }
+                    ShellCommandResult::Eof => {
+                        self.base.rerender = true;
+                        self.base.doc.append_str(shell_command.contents().as_str());
+                        jump!(self, jump_to_end_of_file);
+
+                        let res = BufferResult::Info(format!("'{}' finished", shell_command.cmd));
+                        self.shell_command = None;
+                        return res;
+                    }
+                },
+                // Ignore empty error since we're waiting on data.
+                Err(TryRecvError::Empty) => break,
+                Err(err) => {
+                    self.shell_command = None;
+                    return BufferResult::Error(err.to_string());
+                }
+            }
+        }
+
+        // Send key as input if available.
+        if let Some(key) = key {
+            // Always quit command on 'ctrl+q'.
+            if Key::Ctrl('q') == key {
+                self.base.rerender = true;
+                self.base.doc.append_str(shell_command.contents().as_str());
+                jump!(self, jump_to_end_of_file);
+
+                let res = BufferResult::Info(format!("Quit '{}'", shell_command.cmd));
+                self.shell_command = None;
+                return res;
+            } else if let Err(err) = shell_command.write(key) {
+                self.shell_command = None;
+                return BufferResult::Error(err.to_string());
+            }
+        }
+
+        BufferResult::Ok
+    }
 }
 
 impl Buffer for TextBuffer {
@@ -427,10 +485,16 @@ impl Buffer for TextBuffer {
             Mode::Other(OtherMode::Insert) => (CursorStyle::SteadyBar, false),
         };
 
-        self.base.doc_view.render_gutter(display, &self.base.doc);
-        self.base
-            .doc_view
-            .render_document(display, &self.base.doc, &self.base.selections);
+        if let Some(shell_command) = &self.shell_command {
+            self.base
+                .doc_view
+                .render_terminal(display, &shell_command.parser);
+        } else {
+            self.base.doc_view.render_gutter(display, &self.base.doc);
+            self.base
+                .doc_view
+                .render_document(display, &self.base.doc, &self.base.selections);
+        }
 
         if cmd {
             self.base.cmd_view.render_bar(
@@ -458,12 +522,15 @@ impl Buffer for TextBuffer {
             return;
         }
 
-        let view = if cmd {
-            &self.base.cmd_view
-        } else {
-            &self.base.doc_view
-        };
-        view.render_cursor(display, cursor_style);
+        // The shell handles it's own cursor.
+        if self.shell_command.is_none() {
+            let view = if cmd {
+                &self.base.cmd_view
+            } else {
+                &self.base.doc_view
+            };
+            view.render_cursor(display, cursor_style);
+        }
     }
 
     fn resize(&mut self, w: usize, h: usize, x_off: usize, y_off: usize) {
@@ -472,62 +539,8 @@ impl Buffer for TextBuffer {
 
     fn tick(&mut self, key: Option<Key>) -> BufferResult {
         // If an active shell command is running, check for updates and paste them at the end of the buffer.
-        if let Some(shell_command) = &mut self.shell_command {
-            // Greedily read as much as possible.
-            loop {
-                match shell_command.rx.try_recv() {
-                    Ok(res) => match res {
-                        ShellCommandResult::Data(data) => {
-                            // Rerender new received data.
-                            self.base.rerender = true;
-
-                            self.base.doc.append_str(data.as_str());
-                            jump!(self, jump_to_end_of_file);
-                        }
-                        ShellCommandResult::CarriageReturn => {
-                            self.base.rerender = true;
-
-                            // Delete current line contents without removing the line.
-                            // FIXME: this is a hack and should be handle properly/replaced with proper terminal
-                            //        emulation.
-                            jump!(self, jump_to_beginning_of_line);
-                            delete!(self, end_of_line);
-                        }
-                        ShellCommandResult::Error(err) => {
-                            self.shell_command = None;
-                            return BufferResult::Error(err);
-                        }
-                        ShellCommandResult::Eof => {
-                            let res =
-                                BufferResult::Info(format!("'{}' finished", shell_command.cmd));
-                            self.shell_command = None;
-                            return res;
-                        }
-                    },
-                    // Ignore empty error since we're waiting on data.
-                    Err(TryRecvError::Empty) => break,
-                    Err(err) => {
-                        self.shell_command = None;
-                        return BufferResult::Error(err.to_string());
-                    }
-                }
-            }
-
-            // Send key as input if available.
-            if let Some(key) = key {
-                // Always quit command on 'ctrl+q'.
-                if Key::Ctrl('q') == key {
-                    let ret = format!("Quit '{}'", shell_command.cmd);
-                    self.shell_command = None;
-                    return BufferResult::Info(ret);
-                } else if let Err(err) = shell_command.write(key) {
-                    self.shell_command = None;
-                    return BufferResult::Error(err.to_string());
-                }
-
-                // Do not pass the key through if a command is running.
-                return BufferResult::Ok;
-            }
+        if self.shell_command.is_some() {
+            return self.shell_tick(key);
         }
 
         // Only rerender if input was received.
