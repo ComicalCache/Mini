@@ -452,6 +452,10 @@ impl TextBuffer {
                 self.shell_command = None;
                 return res;
             } else if let Err(err) = shell_command.write(key) {
+                self.base.rerender = true;
+                self.base.doc.append_str(shell_command.contents().as_str());
+                jump!(self, jump_to_end_of_file);
+
                 self.shell_command = None;
                 return BufferResult::Error(err.to_string());
             }

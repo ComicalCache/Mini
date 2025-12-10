@@ -46,6 +46,7 @@ pub fn line_column(input: &str) -> (Option<usize>, Option<usize>) {
     (x, y)
 }
 
+/// Converts `Color` from the vt100 crate to termion `Color`.
 pub const fn vt100_color_to_rgb(color: vt100::Color, is_fg: bool) -> color::Rgb {
     match color {
         vt100::Color::Default => {
