@@ -1,7 +1,7 @@
 use crate::{
     buffer::BufferResult,
+    buffer_impls::text_buffer::TextBuffer,
     cursor::{self, Cursor},
-    custom_buffers::text_buffer::TextBuffer,
     history::Replace,
     selection::{Selection, SelectionKind},
     shell_command::ShellCommand,

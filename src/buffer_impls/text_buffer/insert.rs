@@ -3,8 +3,8 @@ use crate::{
         BufferResult,
         edit::{self, TAB_WIDTH},
     },
+    buffer_impls::text_buffer::TextBuffer,
     cursor::{self, Cursor},
-    custom_buffers::text_buffer::TextBuffer,
     history::Replace,
 };
 

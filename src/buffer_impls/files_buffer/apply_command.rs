@@ -1,4 +1,4 @@
-use crate::{buffer::BufferResult, custom_buffers::files_buffer::FilesBuffer, util::open_file};
+use crate::{buffer::BufferResult, buffer_impls::files_buffer::FilesBuffer, util::open_file};
 
 impl FilesBuffer {
     fn create_command(&mut self, args: &str) -> BufferResult {

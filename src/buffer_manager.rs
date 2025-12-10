@@ -8,7 +8,7 @@ use termion::event::Key;
 
 use crate::{
     buffer::{Buffer, BufferKind, BufferResult},
-    custom_buffers::{files_buffer::FilesBuffer, text_buffer::TextBuffer},
+    buffer_impls::{files_buffer::FilesBuffer, text_buffer::TextBuffer},
     display::Display,
     message::{Message, MessageKind},
     util::open_file,

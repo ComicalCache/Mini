@@ -1,6 +1,6 @@
 use crate::{
     buffer::BufferResult,
-    custom_buffers::{files_buffer::FilesBuffer, text_buffer::TextBuffer},
+    buffer_impls::{files_buffer::FilesBuffer, text_buffer::TextBuffer},
     util::{file_name, open_file},
 };
 use std::{

@@ -3,9 +3,9 @@
 #![feature(trait_alias)]
 
 mod buffer;
+mod buffer_impls;
 mod buffer_manager;
 mod cursor;
-mod custom_buffers;
 mod display;
 mod document;
 mod history;
