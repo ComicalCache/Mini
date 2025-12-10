@@ -189,11 +189,14 @@ impl TextBuffer {
     }
 
     fn execute_shell_command(&mut self, args: &str) -> BufferResult {
-        self.shell_command =
-            match ShellCommand::new(self.base.doc_view.w, self.base.doc_view.h, args.to_string()) {
-                Ok(sc) => Some(sc),
-                Err(err) => return err,
-            };
+        self.shell_command = match ShellCommand::new(
+            self.base.doc_view.buff_w,
+            self.base.doc_view.h,
+            args.to_string(),
+        ) {
+            Ok(sc) => Some(sc),
+            Err(err) => return err,
+        };
         BufferResult::Ok
     }
 

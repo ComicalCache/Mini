@@ -535,6 +535,9 @@ impl Buffer for TextBuffer {
 
     fn resize(&mut self, w: usize, h: usize, x_off: usize, y_off: usize) {
         self.base.resize(w, h, x_off, y_off);
+        if let Some(shell_command) = &mut self.shell_command {
+            shell_command.resize(self.base.doc_view.buff_w, self.base.doc_view.h);
+        }
     }
 
     fn tick(&mut self, key: Option<Key>) -> BufferResult {

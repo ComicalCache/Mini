@@ -2,7 +2,7 @@ use crate::{
     buffer::BufferResult,
     util::{application_key_to_string, key_to_string},
 };
-use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use std::{
     io::{Error, Read, Write},
     sync::mpsc::{self, Receiver},
@@ -27,6 +27,8 @@ pub struct ShellCommand {
     /// The command output stream.
     pub rx: Receiver<ShellCommandResult>,
 
+    /// Master PTY handle.
+    master: Box<dyn MasterPty + Send>,
     /// Writer to the shell command.
     writer: Box<dyn Write + Send>,
 
@@ -117,9 +119,27 @@ impl ShellCommand {
         Ok(Self {
             cmd,
             rx,
+            master: pair.master,
             writer,
             parser,
         })
+    }
+
+    /// Resize the terminal.
+    pub fn resize(&mut self, w: usize, h: usize) {
+        // The indices are bound by terminal dimensions.
+        #[allow(clippy::cast_possible_truncation)]
+        self.parser.screen_mut().set_size(h as u16, w as u16);
+
+        // The indices are bound by terminal dimensions.
+        #[allow(clippy::cast_possible_truncation)]
+        self.master
+            .resize(PtySize {
+                rows: h as u16,
+                cols: w as u16,
+                ..Default::default()
+            })
+            .unwrap();
     }
 
     /// Write data to the command.

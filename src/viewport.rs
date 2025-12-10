@@ -253,11 +253,10 @@ impl Viewport {
     /// Renders a VT100 parser state to the `Display`.
     pub fn render_terminal(&self, display: &mut Display, parser: &Parser) {
         let screen = parser.screen();
-        let (rows, cols) = screen.size();
 
         // Render cells from the terminal screen.
-        for y in 0..self.h.min(rows as usize) {
-            for x in 0..self.w.min(cols as usize) {
+        for y in 0..self.h {
+            for x in 0..self.buff_w {
                 // The indices are bound by terminal dimensions.
                 #[allow(clippy::cast_possible_truncation)]
                 if let Some(cell) = screen.cell(y as u16, x as u16) {
@@ -267,12 +266,16 @@ impl Viewport {
 
                     display.update(
                         Cell::new(ch, Fg(fg), Bg(bg)),
-                        x + self.x_off,
+                        self.gutter_w + x + self.x_off,
                         y + self.y_off,
                     );
                 } else {
                     // Default background if the cell doesn't contain data.
-                    display.update(Cell::new(' ', TXT, BG), x + self.x_off, y + self.y_off);
+                    display.update(
+                        Cell::new(' ', TXT, BG),
+                        self.gutter_w + x + self.x_off,
+                        y + self.y_off,
+                    );
                 }
             }
         }
@@ -281,14 +284,12 @@ impl Viewport {
             display.set_cursor(Cursor::new(0, 0), CursorStyle::Hidden);
         } else {
             let (row, col) = screen.cursor_position();
-            let (row, col) = (row as usize, col as usize);
+            let (x, y) = (col as usize, row as usize);
 
-            if row < self.h && col < self.w {
-                display.set_cursor(
-                    Cursor::new(col + self.x_off, row + self.y_off),
-                    CursorStyle::SteadyBlock,
-                );
-            }
+            display.set_cursor(
+                Cursor::new(self.gutter_w + x + self.x_off, y + self.y_off),
+                CursorStyle::SteadyBlock,
+            );
         }
     }
 
