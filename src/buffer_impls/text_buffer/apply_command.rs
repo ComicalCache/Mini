@@ -224,7 +224,7 @@ impl TextBuffer {
             "o" => self.open_command(args, false),
             "oo" => self.open_command(args, true),
             "r" => self.replace_command(args),
-            "!" => self.execute_shell_command(args),
+            "c" => self.execute_shell_command(args),
             _ => BufferResult::Error(format!("Unrecognized command: '{cmd}'")),
         }
     }
