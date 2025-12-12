@@ -28,16 +28,14 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         self.selections.sort_unstable();
         let selections = if self.selections.is_empty() {
             // Save previous cursor position.
-            let tmp_view_cur = self.doc_view.cur;
             let tmp_doc_cur = self.doc.cur;
 
             let start = Cursor::new(0, 0);
-            cursor::jump_to_end_of_file(&mut self.doc, &mut self.doc_view);
+            cursor::jump_to_end_of_file(&mut self.doc);
             let end = self.doc.cur;
 
             // Restore previous cursor position.
             self.doc.cur = tmp_doc_cur;
-            self.doc_view.cur = tmp_view_cur;
 
             &vec![Selection::new(
                 start,
@@ -90,7 +88,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             None,
             None,
         ));
-        cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[idx].0);
+        cursor::move_to(&mut self.doc, self.matches[idx].0);
 
         BufferResult::Ok
     }
@@ -105,7 +103,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         if let Some(y) = y {
             pos.y = y.saturating_sub(1);
         }
-        cursor::move_to(&mut self.doc, &mut self.doc_view, pos);
+        cursor::move_to(&mut self.doc, pos);
 
         BufferResult::Ok
     }

@@ -81,7 +81,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
     ) -> Result<Self, Error> {
         // Set the command view number width manually.
         // FIXME: this limits the bar to always be exactly one in height.
-        let cmd_view = Viewport::new(w, 1, 0, 0, x_off, y_off, None);
+        let cmd_view = Viewport::new(w, 1, x_off, y_off, None);
 
         let count = contents.as_ref().map_or(1, |buff| buff.len().max(1));
         Ok(Self {
@@ -93,9 +93,9 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             cmd: Document::new(0, 0, None),
             // Shifted by one because of info/command line.
             // FIXME: this limits the bar to always be exactly one in height.
-            doc_view: Viewport::new(w, h - 1, 0, 0, x_off, y_off + 1, Some(count)),
+            doc_view: Viewport::new(w, h - 1, x_off, y_off + 1, Some(count)),
             // FIXME: this limits the bar to always be exactly one in height.
-            info_view: Viewport::new(w, 1, 0, 0, x_off, y_off, None),
+            info_view: Viewport::new(w, 1, x_off, y_off, None),
             cmd_view,
             selections: Vec::new(),
             active_selection: false,
@@ -154,7 +154,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             None,
             None,
         )];
-        cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[*idx].0);
+        cursor::move_to(&mut self.doc, self.matches[*idx].0);
     }
 
     // Jumps to the previous search match if any.
@@ -177,7 +177,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             None,
             None,
         )];
-        cursor::move_to(&mut self.doc, &mut self.doc_view, self.matches[*idx].0);
+        cursor::move_to(&mut self.doc, self.matches[*idx].0);
     }
 
     /// Clears the existing matches of the buffer.
@@ -280,7 +280,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
                 .from(self.cmd_history[self.cmd_history_idx].as_str());
         }
 
-        cursor::jump_to_end_of_line(&mut self.cmd, &mut self.cmd_view);
+        cursor::jump_to_end_of_line(&mut self.cmd);
     }
 
     /// Loads the previous command history item.
@@ -293,7 +293,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         self.cmd
             .from(self.cmd_history[self.cmd_history_idx].as_str());
 
-        cursor::jump_to_end_of_line(&mut self.cmd, &mut self.cmd_view);
+        cursor::jump_to_end_of_line(&mut self.cmd);
     }
 
     /// Changes the base buffers mode.
@@ -303,7 +303,8 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
                 // Clear command line so its ready for next entry. Don't save contents here since they are only
                 // saved when hitting enter.
                 self.cmd.from("");
-                self.cmd_view.cur = Cursor::new(0, 0);
+                self.cmd_view.scroll_x = 0;
+                self.cmd_view.scroll_y = 0;
             }
             Mode::View => {
                 // Since search matches could have been overwritten we discard all matches.

@@ -30,7 +30,8 @@ impl TextBuffer {
         // Reset state.
         self.base.doc.from("");
         self.base.cmd.from("");
-        self.base.doc_view.cur = Cursor::new(0, 0);
+        self.base.doc_view.scroll_x = 0;
+        self.base.doc_view.scroll_y = 0;
         self.base.doc_view.set_gutter_width(1);
         self.file = None;
         self.file_name = None;
@@ -118,16 +119,14 @@ impl TextBuffer {
         self.base.selections.sort_unstable();
         let selections = if self.base.selections.is_empty() {
             // Save previous cursor position.
-            let tmp_view_cur = self.base.doc_view.cur;
             let tmp_doc_cur = self.base.doc.cur;
 
             let start = Cursor::new(0, 0);
-            cursor::jump_to_end_of_file(&mut self.base.doc, &mut self.base.doc_view);
+            cursor::jump_to_end_of_file(&mut self.base.doc);
             let end = self.base.doc.cur;
 
             // Restore previous cursor position.
             self.base.doc.cur = tmp_doc_cur;
-            self.base.doc_view.cur = tmp_view_cur;
 
             &[Selection::new(
                 start,

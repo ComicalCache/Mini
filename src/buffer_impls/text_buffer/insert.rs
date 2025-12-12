@@ -10,7 +10,7 @@ impl TextBuffer {
     /// Inserts a new line above the current cursor position.
     /// The cursor will be on the new line.
     pub(super) fn insert_move_new_line_above(&mut self) {
-        cursor::jump_to_beginning_of_line(&mut self.base.doc, &mut self.base.doc_view);
+        cursor::jump_to_beginning_of_line(&mut self.base.doc);
         self.history.add_change(vec![Replace {
             pos: self.base.doc.cur,
             delete_data: String::new(),
@@ -31,10 +31,10 @@ impl TextBuffer {
         }]);
 
         self.base.doc.insert_line(self.base.doc.cur.y + 1);
-        cursor::down(&mut self.base.doc, &mut self.base.doc_view, 1);
+        cursor::down(&mut self.base.doc, 1);
 
         // Set target x coordinate, otherwise it would snap back when moving without inserting.
-        cursor::left(&mut self.base.doc, &mut self.base.doc_view, 0);
+        cursor::left(&mut self.base.doc, 0);
     }
 
     /// Replaces a character at the current cursor position.
@@ -65,7 +65,7 @@ impl TextBuffer {
 
         // Pass a None as History to not save the edit again.
         match ch {
-            '\t' => edit::write_tab(&mut self.base.doc, &mut self.base.doc_view, None, true),
+            '\t' => edit::write_tab(&mut self.base.doc, None, true),
             _ => self
                 .base
                 .doc
@@ -90,7 +90,7 @@ impl TextBuffer {
         let pos = self.base.doc.cur;
         if move_to {
             let end_pos = cursor::end_pos(&pos, insert_data.as_str());
-            cursor::move_to(&mut self.base.doc, &mut self.base.doc_view, end_pos);
+            cursor::move_to(&mut self.base.doc, end_pos);
         }
 
         self.history.add_change(vec![Replace {

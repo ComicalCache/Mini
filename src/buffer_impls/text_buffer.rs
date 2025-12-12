@@ -9,7 +9,7 @@ use crate::{
         delete, edit,
     },
     change,
-    cursor::{self, CursorStyle},
+    cursor::{self, Cursor, CursorStyle},
     delete,
     display::Display,
     document::Document,
@@ -154,13 +154,13 @@ impl TextBuffer {
         match self.view_mode {
             ViewMode::Normal => match key {
                 Key::Char('h') | Key::Left => movement!(self, left),
-                Key::Char('H') => movement!(self, shift_left),
+                Key::Char('H') => movement!(self, viewport_left, VIEWPORT),
                 Key::Char('j') | Key::Down => movement!(self, down),
-                Key::Char('J') => movement!(self, shift_down),
+                Key::Char('J') => movement!(self, viewport_down, VIEWPORT),
                 Key::Char('k') | Key::Up => movement!(self, up),
-                Key::Char('K') => movement!(self, shift_up),
+                Key::Char('K') => movement!(self, viewport_up, VIEWPORT),
                 Key::Char('l') | Key::Right => movement!(self, right),
-                Key::Char('L') => movement!(self, shift_right),
+                Key::Char('L') => movement!(self, viewport_right, VIEWPORT),
                 Key::Char('w') => movement!(self, next_word),
                 Key::Char('W') => movement!(self, next_word_end),
                 Key::Char('b') => movement!(self, prev_word),
@@ -189,11 +189,11 @@ impl TextBuffer {
                 Key::Char('N') => self.base.prev_match(),
                 Key::Char('i') => self.base.change_mode(Mode::Other(Insert)),
                 Key::Char('a') => {
-                    cursor::right(&mut self.base.doc, &mut self.base.doc_view, 1);
+                    cursor::right(&mut self.base.doc, 1);
                     self.base.change_mode(Mode::Other(Insert));
                 }
                 Key::Char('A') => {
-                    cursor::jump_to_end_of_line(&mut self.base.doc, &mut self.base.doc_view);
+                    cursor::jump_to_end_of_line(&mut self.base.doc);
                     self.base.change_mode(Mode::Other(Insert));
                 }
                 Key::Char('o') => {
@@ -276,22 +276,14 @@ impl TextBuffer {
                     Key::Char('v') => {
                         delete::selection(
                             &mut self.base.doc,
-                            &mut self.base.doc_view,
                             &mut self.base.selections,
                             Some(&mut self.history),
                         );
                         self.base.change_mode(Mode::Other(Insert));
                     }
                     Key::Char('c') => {
-                        cursor::jump_to_beginning_of_line(
-                            &mut self.base.doc,
-                            &mut self.base.doc_view,
-                        );
-                        delete::end_of_line(
-                            &mut self.base.doc,
-                            &mut self.base.doc_view,
-                            Some(&mut self.history),
-                        );
+                        cursor::jump_to_beginning_of_line(&mut self.base.doc);
+                        delete::end_of_line(&mut self.base.doc, Some(&mut self.history));
                         self.base.change_mode(Mode::Other(Insert));
                     }
                     Key::Char('h') => change!(self, left, REPEAT),
@@ -333,29 +325,15 @@ impl TextBuffer {
 
         match key {
             Key::Esc => self.base.change_mode(Mode::View),
-            Key::Left => cursor::left(&mut self.base.doc, &mut self.base.doc_view, 1),
-            Key::Down => cursor::down(&mut self.base.doc, &mut self.base.doc_view, 1),
-            Key::Up => cursor::up(&mut self.base.doc, &mut self.base.doc_view, 1),
-            Key::Right => cursor::right(&mut self.base.doc, &mut self.base.doc_view, 1),
-            Key::AltRight => cursor::next_word(&mut self.base.doc, &mut self.base.doc_view, 1),
-            Key::AltLeft => cursor::prev_word(&mut self.base.doc, &mut self.base.doc_view, 1),
-            Key::Char('\t') => edit::write_tab(
-                &mut self.base.doc,
-                &mut self.base.doc_view,
-                Some(&mut self.history),
-                true,
-            ),
-            Key::Backspace => edit::delete_char(
-                &mut self.base.doc,
-                &mut self.base.doc_view,
-                Some(&mut self.history),
-            ),
-            Key::Char(ch) => edit::write_char(
-                &mut self.base.doc,
-                &mut self.base.doc_view,
-                Some(&mut self.history),
-                ch,
-            ),
+            Key::Left => cursor::left(&mut self.base.doc, 1),
+            Key::Down => cursor::down(&mut self.base.doc, 1),
+            Key::Up => cursor::up(&mut self.base.doc, 1),
+            Key::Right => cursor::right(&mut self.base.doc, 1),
+            Key::AltRight => cursor::next_word(&mut self.base.doc, 1),
+            Key::AltLeft => cursor::prev_word(&mut self.base.doc, 1),
+            Key::Char('\t') => edit::write_tab(&mut self.base.doc, Some(&mut self.history), true),
+            Key::Backspace => edit::delete_char(&mut self.base.doc, Some(&mut self.history)),
+            Key::Char(ch) => edit::write_char(&mut self.base.doc, Some(&mut self.history), ch),
             _ => {}
         }
 
@@ -370,12 +348,12 @@ impl TextBuffer {
 
         match key {
             Key::Esc => self.base.change_mode(Mode::View),
-            Key::Left => cursor::left(&mut self.base.cmd, &mut self.base.cmd_view, 1),
-            Key::Right => cursor::right(&mut self.base.cmd, &mut self.base.cmd_view, 1),
+            Key::Left => cursor::left(&mut self.base.cmd, 1),
+            Key::Right => cursor::right(&mut self.base.cmd, 1),
             Key::Up => self.base.prev_command_history(),
             Key::Down => self.base.next_command_history(),
-            Key::AltRight => cursor::next_word(&mut self.base.cmd, &mut self.base.cmd_view, 1),
-            Key::AltLeft => cursor::prev_word(&mut self.base.cmd, &mut self.base.cmd_view, 1),
+            Key::AltRight => cursor::next_word(&mut self.base.cmd, 1),
+            Key::AltLeft => cursor::prev_word(&mut self.base.cmd, 1),
             Key::Char('\n') => {
                 // Commands have only one line.
                 let cmd = self.base.cmd.line(0).unwrap().to_string();
@@ -389,13 +367,9 @@ impl TextBuffer {
                     Err(cmd) => return self.apply_command(&cmd),
                 }
             }
-            Key::Char('\t') => {
-                edit::write_tab(&mut self.base.cmd, &mut self.base.cmd_view, None, false);
-            }
-            Key::Backspace => edit::delete_char(&mut self.base.cmd, &mut self.base.cmd_view, None),
-            Key::Char(ch) => {
-                edit::write_char(&mut self.base.cmd, &mut self.base.cmd_view, None, ch);
-            }
+            Key::Char('\t') => edit::write_tab(&mut self.base.cmd, None, false),
+            Key::Backspace => edit::delete_char(&mut self.base.cmd, None),
+            Key::Char(ch) => edit::write_char(&mut self.base.cmd, None, ch),
             _ => {}
         }
 
@@ -489,6 +463,7 @@ impl Buffer for TextBuffer {
             Mode::Other(OtherMode::Insert) => (CursorStyle::SteadyBar, false),
         };
 
+        self.base.doc_view.recalculate_viewport(&self.base.doc.cur);
         if let Some(shell_command) = &self.shell_command {
             self.base
                 .doc_view
@@ -501,20 +476,21 @@ impl Buffer for TextBuffer {
         }
 
         if cmd {
+            self.base.cmd_view.recalculate_viewport(&self.base.cmd.cur);
+
             self.base.cmd_view.render_bar(
                 self.base.cmd.line(0).unwrap().to_string().trim_end(),
                 0,
                 display,
-                &self.base.cmd,
             );
         } else {
+            self.base.info_view.recalculate_viewport(&Cursor::new(0, 0));
             self.info_line();
 
             self.base.info_view.render_bar(
                 self.info.line(0).unwrap().to_string().trim_end(),
                 0,
                 display,
-                &self.info,
             );
         }
 
@@ -522,18 +498,18 @@ impl Buffer for TextBuffer {
             self.base.doc_view.render_message(display, message);
             self.base
                 .doc_view
-                .render_cursor(display, CursorStyle::Hidden);
+                .render_cursor(display, &self.base.doc.cur, CursorStyle::Hidden);
             return;
         }
 
         // The shell handles it's own cursor.
         if self.shell_command.is_none() {
-            let view = if cmd {
-                &self.base.cmd_view
+            let (view, cur) = if cmd {
+                (&self.base.cmd_view, &self.base.cmd.cur)
             } else {
-                &self.base.doc_view
+                (&self.base.doc_view, &self.base.doc.cur)
             };
-            view.render_cursor(display, cursor_style);
+            view.render_cursor(display, cur, cursor_style);
         }
     }
 

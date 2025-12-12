@@ -40,26 +40,20 @@ pub struct Viewport {
     pub x_off: usize,
     /// The physical y offset of the viewport on the `Display`.
     pub y_off: usize,
+    /// The scroll x offset of the document within the viewport.
+    pub scroll_x: usize,
+    /// The scroll y offset of the document within the viewport.
+    pub scroll_y: usize,
     /// The width of the line number colon.
     pub gutter_w: usize,
     /// The width of the buffer content.
     pub buff_w: usize,
-    /// The (visible) cursor in the viewport.
-    pub cur: Cursor,
     /// If the viewport displays line numbers or not.
     gutter: bool,
 }
 
 impl Viewport {
-    pub fn new(
-        w: usize,
-        h: usize,
-        x: usize,
-        y: usize,
-        x_off: usize,
-        y_off: usize,
-        count: Option<usize>,
-    ) -> Self {
+    pub fn new(w: usize, h: usize, x_off: usize, y_off: usize, count: Option<usize>) -> Self {
         let (gutter_w, buff_w) = count.map_or((0, w), |count| {
             let digits = count.ilog10() as usize + 1;
             (digits + 4, w - digits - 4)
@@ -70,9 +64,10 @@ impl Viewport {
             h,
             x_off,
             y_off,
+            scroll_x: 0,
+            scroll_y: 0,
             gutter_w,
             buff_w,
-            cur: Cursor::new(x, y),
             gutter: count.is_some(),
         }
     }
@@ -91,9 +86,23 @@ impl Viewport {
         self.gutter_w = gutter_w;
         self.buff_w = buff_w;
         self.gutter = count.is_some();
+    }
 
-        self.cur.x = self.cur.x.min(self.buff_w - 1);
-        self.cur.y = self.cur.y.min(self.h - 1);
+    /// Recalculates the visible viewport area.
+    pub const fn recalculate_viewport(&mut self, cursor: &Cursor) {
+        // Horizontal Scrolling
+        if cursor.x < self.scroll_x {
+            self.scroll_x = cursor.x;
+        } else if cursor.x >= self.scroll_x + self.buff_w {
+            self.scroll_x = cursor.x.saturating_sub(self.buff_w) + 1;
+        }
+
+        // Vertical Scrolling
+        if cursor.y < self.scroll_y {
+            self.scroll_y = cursor.y;
+        } else if cursor.y >= self.scroll_y + self.h {
+            self.scroll_y = cursor.y.saturating_sub(self.h) + 1;
+        }
     }
 
     /// Sets the gutter width.
@@ -175,30 +184,22 @@ impl Viewport {
         doc: &Document,
         selections: &Vec<Selection>,
     ) {
-        // Calculate which line of text is visible at what line on the screen.
-        let y_off = doc.cur.y - self.cur.y;
-        let y_max = y_off + self.h;
-        // Calculate the offset of characters on the screen.
-        let x_off = doc.cur.x - self.cur.x;
-        let x_max = x_off + self.buff_w;
+        for y in 0..self.h {
+            let doc_y = self.scroll_y + y;
 
-        for y in y_off..y_max {
-            let Some(line) = doc.line(y) else {
+            let Some(line) = doc.line(doc_y) else {
                 break;
             };
 
             for (x, ch) in line.chars().enumerate() {
-                if x >= x_off && x < x_max {
+                if x >= self.scroll_x && x < self.scroll_x + self.buff_w {
                     let mut display_ch = ch;
                     let mut fg = TXT;
-                    let mut bg = if y == doc.cur.y { HIGHLIGHT } else { BG };
-
-                    let screen_y = y - y_off + self.y_off;
-                    let screen_x = self.gutter_w + x - x_off + self.x_off;
+                    let mut bg = if doc_y == doc.cur.y { HIGHLIGHT } else { BG };
 
                     // Layer 1: Selection.
                     for selection in selections {
-                        if selection.contains(Cursor::new(x, y)) {
+                        if selection.contains(Cursor::new(x, doc_y)) {
                             bg = SEL;
                             break;
                         }
@@ -221,31 +222,36 @@ impl Viewport {
                         bg = CHAR_WARN;
                     }
 
-                    display.update(Cell::new(display_ch, fg, bg), screen_x, screen_y);
+                    let x = self.x_off + self.gutter_w + x - self.scroll_x;
+                    let y = self.y_off + y;
+                    display.update(Cell::new(display_ch, fg, bg), x, y);
                 }
             }
         }
 
         // Render trailing whitespace to override previous screen content. The previous loop only renders the current
         // content without regard of removing existing content, which is why this second render pass is necessary.
-        for (y, doc_idx) in (0..self.h).zip(y_off..) {
+        for y in 0..self.h {
+            let doc_y = self.scroll_y + y;
+
             // Set base background color depending on if its the cursors line.
-            let base_bg = if y == self.cur.y { HIGHLIGHT } else { BG };
+            let base_bg = if doc_y == doc.cur.y { HIGHLIGHT } else { BG };
 
             // Skip screen lines outside the text line bounds.
-            if doc_idx >= doc.len() {
+            if doc_y >= doc.len() {
                 for x in self.gutter_w..self.w {
-                    display.update(Cell::new(' ', TXT, base_bg), x + self.x_off, y + self.y_off);
+                    display.update(Cell::new(' ', TXT, base_bg), self.x_off + x, self.y_off + y);
                 }
                 continue;
             }
 
-            let len = doc.line_count(doc_idx).unwrap();
+            let len = doc.line_count(doc_y).unwrap();
             // Calculate the end of the line contents.
-            let x = self.gutter_w + (len.saturating_sub(x_off)) + self.x_off;
+            let x = self.gutter_w + len.saturating_sub(self.scroll_x);
+
             // Stretch current line to end to show highlight properly.
             for x in x..self.w {
-                display.update(Cell::new(' ', TXT, base_bg), x, y + self.y_off);
+                display.update(Cell::new(' ', TXT, base_bg), self.x_off + x, self.y_off + y);
             }
         }
     }
@@ -305,46 +311,37 @@ impl Viewport {
             self.resize(self.w, self.h, self.x_off, self.y_off, Some(doc.len()));
         }
 
-        // Calculate which line of text is visible at what line on the screen.
-        #[allow(clippy::cast_possible_wrap)]
-        let offset = doc.cur.y as isize - self.cur.y as isize;
-        for (y, doc_idx) in (0..self.h).zip(offset..) {
+        for y in 0..self.h {
+            let doc_y = self.scroll_y + y;
             let mut x = self.x_off;
 
             // Set base background color and move to the start of the line.
-            let (base_bg, base_fg) = if y == self.cur.y {
+            let (base_bg, base_fg) = if doc_y == doc.cur.y {
                 (HIGHLIGHT, TXT)
             } else {
                 (BG, REL_NUMS)
             };
 
             // Skip screen lines outside the text line bounds.
-            // The value is guaranteed positive at that point.
-            #[allow(clippy::cast_sign_loss)]
-            if doc_idx < 0 || (doc_idx as usize) >= doc.len() {
+            if doc_y >= doc.len() {
                 for ch in format!("{}┃ ", " ".repeat(self.gutter_w - 2)).chars() {
-                    display.update(Cell::new(ch, base_fg, base_bg), x, y + self.y_off);
+                    display.update(Cell::new(ch, base_fg, base_bg), x, self.y_off + y);
                     x += 1;
                 }
                 continue;
             }
 
-            // The value is guaranteed positive at that point.
-            #[allow(clippy::cast_sign_loss)]
-            let doc_idx = doc_idx as usize;
-
-            // Write line numbers.
             let padding = self.gutter_w - 3;
-            for ch in format!("{:>padding$} ┃ ", doc_idx + 1).chars() {
-                display.update(Cell::new(ch, base_fg, base_bg), x, y + self.y_off);
+            for ch in format!("{:>padding$} ┃ ", doc_y + 1).chars() {
+                display.update(Cell::new(ch, base_fg, base_bg), x, self.y_off + y);
                 x += 1;
             }
         }
     }
 
     /// Renders a bar to the `Display`.
-    pub fn render_bar(&self, line: &str, y: usize, display: &mut Display, doc: &Document) {
-        let start = doc.cur.x.saturating_sub(self.cur.x);
+    pub fn render_bar(&self, line: &str, y: usize, display: &mut Display) {
+        let start = self.scroll_x;
         let end = (start + self.w).min(line.chars().count());
 
         let start_idx = line
@@ -364,14 +361,14 @@ impl Viewport {
     }
 
     /// Renders a `Cursor` to the `Display`.
-    pub const fn render_cursor(&self, display: &mut Display, cursor_style: CursorStyle) {
-        // The cursor is bound by the buffer width which is bound by terminal width.
-        #[allow(clippy::cast_possible_truncation)]
+    pub const fn render_cursor(
+        &self,
+        display: &mut Display,
+        cur: &Cursor,
+        cursor_style: CursorStyle,
+    ) {
         display.set_cursor(
-            Cursor::new(
-                self.gutter_w + self.cur.x + self.x_off,
-                self.cur.y + self.y_off,
-            ),
+            Cursor::new(self.gutter_w + cur.x + self.x_off, cur.y + self.y_off),
             cursor_style,
         );
     }

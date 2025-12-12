@@ -3,7 +3,6 @@ use crate::{
     cursor,
     document::Document,
     selection::{Selection, SelectionKind},
-    viewport::Viewport,
 };
 use arboard::Clipboard;
 
@@ -12,14 +11,12 @@ macro_rules! yank_fn {
         #[$comment]
         pub fn $func(
             doc: &mut Document,
-            view: &mut Viewport,
             clipboard: &mut Clipboard,
             $($n: usize,)?
         ) -> Result<(), BufferResult> {
-            let tmp_view_cur = view.cur;
             let tmp_doc_cur = doc.cur;
 
-            cursor::$func_call(doc, view $(,$n)?);
+            cursor::$func_call(doc $(,$n)?);
             let res = selection(
                 doc,
                 &mut [Selection::new(
@@ -32,7 +29,6 @@ macro_rules! yank_fn {
                 clipboard
             );
 
-            view.cur = tmp_view_cur;
             doc.cur = tmp_doc_cur;
 
             return res;
@@ -44,22 +40,15 @@ macro_rules! yank_fn {
 /// Convenience macro for calling yank functions. Expects a `BaseBuffer` as member `base`.
 macro_rules! yank {
     ($self:ident, $func:ident) => {
-        match $crate::buffer::yank::$func(
-            &mut $self.base.doc,
-            &mut $self.base.doc_view,
-            &mut $self.base.clipboard,
-        ) {
+        match $crate::buffer::yank::$func(&mut $self.base.doc, &mut $self.base.clipboard) {
             Ok(()) => {}
             Err(err) => return err,
         }
     };
     ($self:ident, $func:ident, REPEAT) => {{
-        if let Err(err) = $crate::buffer::yank::$func(
-            &mut $self.base.doc,
-            &mut $self.base.doc_view,
-            &mut $self.base.clipboard,
-            1,
-        ) {
+        if let Err(err) =
+            $crate::buffer::yank::$func(&mut $self.base.doc, &mut $self.base.clipboard, 1)
+        {
             return err;
         }
     }};
@@ -102,7 +91,7 @@ pub fn selection(
 }
 
 /// Yanks a line.
-pub fn line(doc: &Document, _: &Viewport, clipboard: &mut Clipboard) -> Result<(), BufferResult> {
+pub fn line(doc: &Document, clipboard: &mut Clipboard) -> Result<(), BufferResult> {
     selection(
         doc,
         &mut [Selection::new(

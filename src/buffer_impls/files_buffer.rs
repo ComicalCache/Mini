@@ -63,7 +63,8 @@ impl FilesBuffer {
             Ok(contents) => {
                 // Set contents moves the doc.cur to the beginning.
                 self.base.doc.from(contents.as_str());
-                self.base.doc_view.cur = Cursor::new(0, 0);
+                self.base.doc_view.scroll_x = 0;
+                self.base.doc_view.scroll_y = 0;
                 self.base.clear_selections();
 
                 BufferResult::Ok
@@ -86,7 +87,7 @@ impl FilesBuffer {
             )
             .as_str(),
         );
-        cursor::jump_to_end_of_line(&mut self.base.cmd, &mut self.base.cmd_view);
+        cursor::jump_to_end_of_line(&mut self.base.cmd);
         self.base.change_mode(Mode::Command);
 
         BufferResult::Ok
@@ -141,13 +142,13 @@ impl FilesBuffer {
         match self.view_mode {
             ViewMode::Normal => match key {
                 Key::Char('h') | Key::Left => movement!(self, left),
-                Key::Char('H') => movement!(self, shift_left),
+                Key::Char('H') => movement!(self, viewport_left, VIEWPORT),
                 Key::Char('j') | Key::Down => movement!(self, down),
-                Key::Char('J') => movement!(self, shift_down),
+                Key::Char('J') => movement!(self, viewport_down, VIEWPORT),
                 Key::Char('k') | Key::Up => movement!(self, up),
-                Key::Char('K') => movement!(self, shift_up),
+                Key::Char('K') => movement!(self, viewport_up, VIEWPORT),
                 Key::Char('l') | Key::Right => movement!(self, right),
-                Key::Char('L') => movement!(self, shift_right),
+                Key::Char('L') => movement!(self, viewport_right, VIEWPORT),
                 Key::Char('w') => movement!(self, next_word),
                 Key::Char('W') => movement!(self, next_word_end),
                 Key::Char('b') => movement!(self, prev_word),
@@ -223,12 +224,12 @@ impl FilesBuffer {
 
         match key {
             Key::Esc => self.base.change_mode(Mode::View),
-            Key::Left => cursor::left(&mut self.base.cmd, &mut self.base.cmd_view, 1),
-            Key::Right => cursor::right(&mut self.base.cmd, &mut self.base.cmd_view, 1),
+            Key::Left => cursor::left(&mut self.base.cmd, 1),
+            Key::Right => cursor::right(&mut self.base.cmd, 1),
             Key::Up => self.base.prev_command_history(),
             Key::Down => self.base.next_command_history(),
-            Key::AltRight => cursor::next_word(&mut self.base.cmd, &mut self.base.cmd_view, 1),
-            Key::AltLeft => cursor::prev_word(&mut self.base.cmd, &mut self.base.cmd_view, 1),
+            Key::AltRight => cursor::next_word(&mut self.base.cmd, 1),
+            Key::AltLeft => cursor::prev_word(&mut self.base.cmd, 1),
             Key::Char('\n') => {
                 // Commands have only one line.
                 let cmd = self.base.cmd.line(0).unwrap().to_string();
@@ -242,13 +243,9 @@ impl FilesBuffer {
                     Err(cmd) => return self.apply_command(&cmd),
                 }
             }
-            Key::Char('\t') => {
-                edit::write_tab(&mut self.base.cmd, &mut self.base.cmd_view, None, false);
-            }
-            Key::Backspace => edit::delete_char(&mut self.base.cmd, &mut self.base.cmd_view, None),
-            Key::Char(ch) => {
-                edit::write_char(&mut self.base.cmd, &mut self.base.cmd_view, None, ch);
-            }
+            Key::Char('\t') => edit::write_tab(&mut self.base.cmd, None, false),
+            Key::Backspace => edit::delete_char(&mut self.base.cmd, None),
+            Key::Char(ch) => edit::write_char(&mut self.base.cmd, None, ch),
             _ => {}
         }
 
@@ -277,26 +274,28 @@ impl Buffer for FilesBuffer {
             Mode::Command => (CursorStyle::SteadyBar, true),
         };
 
+        self.base.doc_view.recalculate_viewport(&self.base.doc.cur);
         self.base.doc_view.render_gutter(display, &self.base.doc);
         self.base
             .doc_view
             .render_document(display, &self.base.doc, &self.base.selections);
 
         if cmd {
+            self.base.cmd_view.recalculate_viewport(&self.base.cmd.cur);
+
             self.base.cmd_view.render_bar(
                 self.base.cmd.line(0).unwrap().to_string().trim_end(),
                 0,
                 display,
-                &self.base.cmd,
             );
         } else {
+            self.base.info_view.recalculate_viewport(&Cursor::new(0, 0));
             self.info_line();
 
             self.base.info_view.render_bar(
                 self.info.line(0).unwrap().to_string().trim_end(),
                 0,
                 display,
-                &self.info,
             );
         }
 
@@ -304,16 +303,16 @@ impl Buffer for FilesBuffer {
             self.base.doc_view.render_message(display, message);
             self.base
                 .doc_view
-                .render_cursor(display, CursorStyle::Hidden);
+                .render_cursor(display, &self.base.doc.cur, CursorStyle::Hidden);
             return;
         }
 
-        let view = if cmd {
-            &self.base.cmd_view
+        let (view, cur) = if cmd {
+            (&self.base.cmd_view, &self.base.cmd.cur)
         } else {
-            &self.base.doc_view
+            (&self.base.doc_view, &self.base.doc.cur)
         };
-        view.render_cursor(display, cursor_style);
+        view.render_cursor(display, cur, cursor_style);
     }
 
     fn resize(&mut self, w: usize, h: usize, x_off: usize, y_off: usize) {

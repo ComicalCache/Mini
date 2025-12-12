@@ -3,7 +3,6 @@ use crate::{
     document::Document,
     history::{History, Replace},
     selection::{Selection, SelectionKind},
-    viewport::Viewport,
 };
 
 macro_rules! delete_fn {
@@ -11,14 +10,13 @@ macro_rules! delete_fn {
         #[$comment]
         pub fn $func(
             doc: &mut Document,
-            view: &mut Viewport,
             history: Option<&mut History>,
             $($n: usize,)?
         ) {
             let tmp = doc.cur;
-            cursor::$func_call(doc, view $(,$n)?);
+            cursor::$func_call(doc $(,$n)?);
             let mut selections = vec![Selection::new(tmp, doc.cur, SelectionKind::Normal, None, None)];
-            selection(doc, view, &mut selections, history);
+            selection(doc, &mut selections, history);
         }
     };
 }
@@ -27,28 +25,18 @@ macro_rules! delete_fn {
 /// Convenience macro for calling deletion functions. Expects a `BaseBuffer` as member `base`.
 macro_rules! delete {
     ($self:ident, $func:ident) => {{
-        $crate::buffer::delete::$func(
-            &mut $self.base.doc,
-            &mut $self.base.doc_view,
-            Some(&mut $self.history),
-        );
+        $crate::buffer::delete::$func(&mut $self.base.doc, Some(&mut $self.history));
         $self.base.clear_matches();
         $self.base.clear_selections();
     }};
     ($self:ident, $func:ident, REPEAT) => {{
-        $crate::buffer::delete::$func(
-            &mut $self.base.doc,
-            &mut $self.base.doc_view,
-            Some(&mut $self.history),
-            1,
-        );
+        $crate::buffer::delete::$func(&mut $self.base.doc, Some(&mut $self.history), 1);
         $self.base.clear_matches();
         $self.base.clear_selections();
     }};
     ($self:ident, $func:ident, SELECTION) => {{
         $crate::buffer::delete::$func(
             &mut $self.base.doc,
-            &mut $self.base.doc_view,
             &mut $self.base.selections,
             Some(&mut $self.history),
         );
@@ -61,20 +49,11 @@ macro_rules! delete {
 /// Convenience macro for calling change functions. Expects a `BaseBuffer` as member `base`.
 macro_rules! change {
     ($self:ident, $func:ident) => {{
-        $crate::buffer::delete::$func(
-            &mut $self.base.doc,
-            &mut $self.base.doc_view,
-            Some(&mut $self.history),
-        );
+        $crate::buffer::delete::$func(&mut $self.base.doc, Some(&mut $self.history));
         $self.base.change_mode(Mode::Other(Insert));
     }};
     ($self:ident, $func:ident, REPEAT) => {{
-        $crate::buffer::delete::$func(
-            &mut $self.base.doc,
-            &mut $self.base.doc_view,
-            Some(&mut $self.history),
-            1,
-        );
+        $crate::buffer::delete::$func(&mut $self.base.doc, Some(&mut $self.history), 1);
         $self.base.change_mode(Mode::Other(Insert));
     }};
 }
@@ -82,7 +61,6 @@ macro_rules! change {
 /// Deletes the selected area.
 pub fn selection(
     doc: &mut Document,
-    view: &mut Viewport,
     selections: &mut [Selection],
     mut history: Option<&mut History>,
 ) {
@@ -103,7 +81,7 @@ pub fn selection(
         doc.remove_range(start, end);
 
         // Place cursor at the beginning of the deleted area.
-        cursor::move_to(doc, view, start);
+        cursor::move_to(doc, start);
     }
 
     if let Some(history) = history.as_mut() {
@@ -112,38 +90,37 @@ pub fn selection(
 }
 
 /// Deletes a line.
-pub fn line(doc: &mut Document, view: &mut Viewport, history: Option<&mut History>, n: usize) {
+pub fn line(doc: &mut Document, history: Option<&mut History>, n: usize) {
     if doc.len() == 1 && doc.line(0).unwrap().len_chars() == 0 {
         return;
     }
 
     if doc.cur.y + n >= doc.len() {
-        cursor::up(doc, view, doc.cur.y + n - doc.len());
+        cursor::up(doc, doc.cur.y + n - doc.len());
     }
 
     // Begin of selection at the end of one line above the first line or at beginning of current line
     // if in the first line.
     let tmp1 = doc.cur;
-    cursor::up(doc, view, 1);
+    cursor::up(doc, 1);
     if tmp1.y != 0 {
-        cursor::jump_to_end_of_line(doc, view);
+        cursor::jump_to_end_of_line(doc);
     } else {
-        cursor::jump_to_beginning_of_line(doc, view);
+        cursor::jump_to_beginning_of_line(doc);
     }
 
     // End selection at the end of the last line or at the beginning of the next line if selection started
     // in the first line.
     let tmp2 = doc.cur;
-    cursor::down(doc, view, n);
+    cursor::down(doc, n);
     if tmp1.y != 0 || tmp2.y + 1 == doc.len() {
-        cursor::jump_to_end_of_line(doc, view);
+        cursor::jump_to_end_of_line(doc);
     } else {
-        cursor::jump_to_beginning_of_line(doc, view);
+        cursor::jump_to_beginning_of_line(doc);
     }
 
     selection(
         doc,
-        view,
         &mut [Selection::new(
             tmp2,
             doc.cur,
@@ -156,9 +133,9 @@ pub fn line(doc: &mut Document, view: &mut Viewport, history: Option<&mut Histor
 
     // Fix cursor moving up due to moving it one line up.
     if tmp1.y != 0 {
-        cursor::down(doc, view, 1);
+        cursor::down(doc, 1);
     }
-    cursor::jump_to_beginning_of_line(doc, view);
+    cursor::jump_to_beginning_of_line(doc);
 }
 
 delete_fn!(left, left, doc = "Deletes left of the cursor.", n);

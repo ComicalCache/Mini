@@ -1,6 +1,6 @@
 [package]
 name = "mini"
-version = "7.5.3"
+version = "7.6.0-rev1"
 edition = "2024"
 
 [dependencies]
