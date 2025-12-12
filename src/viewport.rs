@@ -4,7 +4,7 @@ use crate::{
     document::Document,
     message::{Message, MessageKind},
     selection::Selection,
-    util::vt100_color_to_rgb,
+    shell_command::util::vt100_color_to_rgb,
 };
 use termion::color::{self, Bg, Fg};
 use vt100::Parser;

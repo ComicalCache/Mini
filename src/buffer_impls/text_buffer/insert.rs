@@ -1,11 +1,9 @@
 use crate::{
-    buffer::{
-        BufferResult,
-        edit::{self, TAB_WIDTH},
-    },
+    buffer::{BufferResult, edit},
     buffer_impls::text_buffer::TextBuffer,
     cursor::{self, Cursor},
     history::Replace,
+    util::TAB_WIDTH,
 };
 
 impl TextBuffer {

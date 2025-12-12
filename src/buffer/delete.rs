@@ -1,5 +1,5 @@
 use crate::{
-    cursor::{self},
+    cursor,
     document::Document,
     history::{History, Replace},
     selection::{Selection, SelectionKind},

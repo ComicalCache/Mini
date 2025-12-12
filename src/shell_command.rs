@@ -1,6 +1,8 @@
+pub mod util;
+
 use crate::{
     buffer::BufferResult,
-    util::{application_key_to_string, key_to_string},
+    shell_command::util::{application_key_to_string, key_to_string},
 };
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use std::{

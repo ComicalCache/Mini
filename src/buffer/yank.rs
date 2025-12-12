@@ -1,6 +1,6 @@
 use crate::{
     buffer::BufferResult,
-    cursor::{self},
+    cursor,
     document::Document,
     selection::{Selection, SelectionKind},
     viewport::Viewport,

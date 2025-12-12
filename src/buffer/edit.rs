@@ -2,10 +2,9 @@ use crate::{
     cursor,
     document::Document,
     history::{History, Replace},
+    util::TAB_WIDTH,
     viewport::Viewport,
 };
-
-pub const TAB_WIDTH: usize = 4;
 
 /// Writes a char at the current cursor position.
 /// The cursor will be after the new char.
