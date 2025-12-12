@@ -1,7 +1,7 @@
 Run Mini with a file(path) argument to open or create a file or a directory to open it in the file browser. Omit the
 file(path) to create a "scratchpad" buffer with no backing file. A few things that make Mini interesting: it has
 line-numbers, diffed-rendering, undo and redo, contains a file browser, allows for multiple buffers to be opened
-simultaneously and lets you run terminal commands.
+simultaneously, lets you run terminal commands and supports wide-character texts.
 
 > If you're in Mini, press 'J'/'K' to scroll or 'Y' to yank the message into the clipboard.
 

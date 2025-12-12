@@ -1,4 +1,4 @@
-use crate::{document::Document, viewport::Viewport};
+use crate::document::Document;
 
 #[derive(Clone, Copy)]
 /// The displayed cursor style.
@@ -73,10 +73,6 @@ macro_rules! movement {
         $crate::cursor::$func(&mut $self.base.doc, 1);
         $self.base.update_selection();
     }};
-    ($self:ident, $func:ident, VIEWPORT) => {{
-        $crate::cursor::$func(&mut $self.base.doc, &mut $self.base.doc_view, 1);
-        $self.base.update_selection();
-    }};
 }
 
 #[macro_export]
@@ -130,12 +126,6 @@ pub fn left(doc: &mut Document, n: usize) {
     doc.cur.left(n, 0);
 }
 
-/// Shifts the viewport to the left.
-pub fn viewport_left(doc: &Document, view: &mut Viewport, n: usize) {
-    let limit = (doc.cur.x + 1).saturating_sub(view.buff_w);
-    view.scroll_x = view.scroll_x.saturating_sub(n).max(limit);
-}
-
 /// Moves the cursors to the right
 pub fn right(doc: &mut Document, n: usize) {
     let mut line_bound = doc.line_count(doc.cur.y).unwrap();
@@ -144,11 +134,6 @@ pub fn right(doc: &mut Document, n: usize) {
     }
 
     doc.cur.right(n, line_bound);
-}
-
-/// Shifts the viewport to the right.
-pub fn viewport_right(doc: &Document, view: &mut Viewport, n: usize) {
-    view.scroll_x = (view.scroll_x + n).min(doc.cur.x);
 }
 
 /// Moves the cursors up.
@@ -164,11 +149,6 @@ pub fn up(doc: &mut Document, n: usize) {
     doc.cur.x = doc.cur.target_x.min(line_bound);
 }
 
-/// Shifts the viewport up.
-pub fn viewport_up(doc: &Document, view: &mut Viewport, n: usize) {
-    view.scroll_y = (view.scroll_y + n).min(doc.cur.y);
-}
-
 /// Moves the cursors down.
 pub fn down(doc: &mut Document, n: usize) {
     let bound = doc.len().saturating_sub(1);
@@ -181,12 +161,6 @@ pub fn down(doc: &mut Document, n: usize) {
     }
 
     doc.cur.x = doc.cur.target_x.min(line_bound);
-}
-
-/// Shifts the viewport up.
-pub fn viewport_down(doc: &Document, view: &mut Viewport, n: usize) {
-    let limit = (doc.cur.y + 1).saturating_sub(view.h);
-    view.scroll_y = view.scroll_y.saturating_sub(n).max(limit);
 }
 
 /// Jumps the cursors to the next "word".

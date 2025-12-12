@@ -9,7 +9,7 @@ use crate::{
         delete, edit,
     },
     change,
-    cursor::{self, Cursor, CursorStyle},
+    cursor::{self, CursorStyle},
     delete,
     display::Display,
     document::Document,
@@ -19,7 +19,7 @@ use crate::{
     movement,
     selection::SelectionKind,
     shell_command::{ShellCommand, ShellCommandResult},
-    yank,
+    shift, yank,
 };
 use std::{
     fs::File,
@@ -154,13 +154,13 @@ impl TextBuffer {
         match self.view_mode {
             ViewMode::Normal => match key {
                 Key::Char('h') | Key::Left => movement!(self, left),
-                Key::Char('H') => movement!(self, viewport_left, VIEWPORT),
+                Key::Char('H') => shift!(self, shift_left),
                 Key::Char('j') | Key::Down => movement!(self, down),
-                Key::Char('J') => movement!(self, viewport_down, VIEWPORT),
+                Key::Char('J') => shift!(self, shift_down),
                 Key::Char('k') | Key::Up => movement!(self, up),
-                Key::Char('K') => movement!(self, viewport_up, VIEWPORT),
+                Key::Char('K') => shift!(self, shift_up),
                 Key::Char('l') | Key::Right => movement!(self, right),
-                Key::Char('L') => movement!(self, viewport_right, VIEWPORT),
+                Key::Char('L') => shift!(self, shift_right),
                 Key::Char('w') => movement!(self, next_word),
                 Key::Char('W') => movement!(self, next_word_end),
                 Key::Char('b') => movement!(self, prev_word),
@@ -463,7 +463,7 @@ impl Buffer for TextBuffer {
             Mode::Other(OtherMode::Insert) => (CursorStyle::SteadyBar, false),
         };
 
-        self.base.doc_view.recalculate_viewport(&self.base.doc.cur);
+        self.base.doc_view.recalculate_viewport(&self.base.doc);
         if let Some(shell_command) = &self.shell_command {
             self.base
                 .doc_view
@@ -476,7 +476,7 @@ impl Buffer for TextBuffer {
         }
 
         if cmd {
-            self.base.cmd_view.recalculate_viewport(&self.base.cmd.cur);
+            self.base.cmd_view.recalculate_viewport(&self.base.cmd);
 
             self.base.cmd_view.render_bar(
                 self.base.cmd.line(0).unwrap().to_string().trim_end(),
@@ -484,7 +484,7 @@ impl Buffer for TextBuffer {
                 display,
             );
         } else {
-            self.base.info_view.recalculate_viewport(&Cursor::new(0, 0));
+            self.base.info_view.recalculate_viewport(&self.info);
             self.info_line();
 
             self.base.info_view.render_bar(
@@ -498,18 +498,18 @@ impl Buffer for TextBuffer {
             self.base.doc_view.render_message(display, message);
             self.base
                 .doc_view
-                .render_cursor(display, &self.base.doc.cur, CursorStyle::Hidden);
+                .render_cursor(display, &self.base.doc, CursorStyle::Hidden);
             return;
         }
 
         // The shell handles it's own cursor.
         if self.shell_command.is_none() {
-            let (view, cur) = if cmd {
-                (&self.base.cmd_view, &self.base.cmd.cur)
+            let (view, doc) = if cmd {
+                (&self.base.cmd_view, &self.base.cmd)
             } else {
-                (&self.base.doc_view, &self.base.doc.cur)
+                (&self.base.doc_view, &self.base.doc)
             };
-            view.render_cursor(display, cur, cursor_style);
+            view.render_cursor(display, doc, cursor_style);
         }
     }
 

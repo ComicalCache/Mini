@@ -98,6 +98,11 @@ impl Display {
             for (x, y) in self.redraw.drain(..) {
                 let Cell { ch, fg, bg, .. } = self.buff[y][x];
 
+                // Use the placeholder U+FFFF value to indicate a cell is taken by wide characters.
+                if ch == '\u{FFFF}' {
+                    continue;
+                }
+
                 // The indices are bound by terminal dimensions.
                 #[allow(clippy::cast_possible_truncation)]
                 write!(stdout, "{}", Goto(x as u16 + 1, y as u16 + 1))?;

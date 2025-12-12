@@ -5,9 +5,20 @@ use crate::{
     message::{Message, MessageKind},
     selection::Selection,
     shell_command::util::vt100_color_to_rgb,
+    util::text_width,
 };
 use termion::color::{self, Bg, Fg};
+use unicode_width::UnicodeWidthChar;
 use vt100::Parser;
+
+#[macro_export]
+/// Convenience macro for calling movement functions. Expects a `BaseBuffer` as member `base`.
+macro_rules! shift {
+    ($self:ident, $func:ident) => {{
+        $self.base.doc_view.$func(&mut $self.base.doc, 1);
+        $self.base.update_selection();
+    }};
+}
 
 /// Background color.
 pub const BG: Bg<color::Rgb> = Bg(color::Rgb(41, 44, 51));
@@ -88,20 +99,23 @@ impl Viewport {
         self.gutter = count.is_some();
     }
 
-    /// Recalculates the visible viewport area.
-    pub const fn recalculate_viewport(&mut self, cursor: &Cursor) {
-        // Horizontal Scrolling
-        if cursor.x < self.scroll_x {
-            self.scroll_x = cursor.x;
-        } else if cursor.x >= self.scroll_x + self.buff_w {
-            self.scroll_x = cursor.x.saturating_sub(self.buff_w) + 1;
+    pub fn recalculate_viewport(&mut self, doc: &Document) {
+        let line = doc
+            .line(doc.cur.y)
+            .map(|l| l.to_string())
+            .unwrap_or_default();
+        let visual_x = text_width(&line, doc.cur.x);
+
+        if visual_x < self.scroll_x {
+            self.scroll_x = visual_x;
+        } else if visual_x >= self.scroll_x + self.buff_w {
+            self.scroll_x = visual_x.saturating_sub(self.buff_w) + 1;
         }
 
-        // Vertical Scrolling
-        if cursor.y < self.scroll_y {
-            self.scroll_y = cursor.y;
-        } else if cursor.y >= self.scroll_y + self.h {
-            self.scroll_y = cursor.y.saturating_sub(self.h) + 1;
+        if doc.cur.y < self.scroll_y {
+            self.scroll_y = doc.cur.y;
+        } else if doc.cur.y >= self.scroll_y + self.h {
+            self.scroll_y = doc.cur.y.saturating_sub(self.h) + 1;
         }
     }
 
@@ -130,49 +144,69 @@ impl Viewport {
         // Skip the "scrolled off" lines and only show at most 1/3rd of the height of error.
         for y in 0..(message.lines - message.scroll).min(self.h / 3) {
             let mut newline = false;
-            for x in 0..self.w {
+
+            let mut x = 0;
+            while x < self.w {
+                // Clear the remaining line.
                 if newline {
-                    // Fill the remaining line.
                     display.update(
                         Cell::new(' ', ERROR_TXT, INFO),
                         self.x_off + x,
                         self.y_off + y,
                     );
-                } else {
-                    let mut display_ch = chars.next().unwrap_or(' ');
 
-                    if display_ch == '\n' {
+                    x += 1;
+                    continue;
+                }
+
+                let mut ch = match chars.next() {
+                    Some('\n') | None => {
                         newline = true;
-                        display.update(
-                            Cell::new(' ', ERROR_TXT, INFO),
-                            self.x_off + x,
-                            self.y_off + y,
-                        );
-                    } else {
-                        let mut fg = match message.kind {
-                            MessageKind::Info => INFO_TXT,
-                            MessageKind::Error => ERROR_TXT,
-                        };
-                        let mut bg = INFO;
+                        continue;
+                    }
+                    Some(ch) => ch,
+                };
 
-                        // Layer 1: Character replacement.
-                        if display_ch == '\r' {
-                            display_ch = '↤';
-                            fg = TXT;
-                            bg = CHAR_WARN;
-                        } else if display_ch == '\t' {
-                            display_ch = '↦';
-                            fg = TXT;
-                            bg = CHAR_WARN;
-                        }
+                let mut fg = match message.kind {
+                    MessageKind::Info => INFO_TXT,
+                    MessageKind::Error => ERROR_TXT,
+                };
+                let mut bg = INFO;
 
+                // Layer 1: Character replacement.
+                match ch {
+                    '\r' => {
+                        ch = '↤';
+                        fg = TXT;
+                        bg = CHAR_WARN;
+                    }
+                    '\t' => {
+                        ch = '↦';
+                        fg = TXT;
+                        bg = CHAR_WARN;
+                    }
+                    _ => {}
+                }
+
+                let width = ch.width().unwrap_or(0);
+                if width == 0 {
+                    continue;
+                }
+
+                if x + width <= self.w {
+                    display.update(Cell::new(ch, fg, bg), self.x_off + x, self.y_off + y);
+
+                    // Mark all following cells of wide characters as taken.
+                    for n in 1..width {
                         display.update(
-                            Cell::new(display_ch, fg, bg),
-                            self.x_off + x,
+                            Cell::new('\u{FFFF}', fg, bg),
+                            self.x_off + x + n,
                             self.y_off + y,
                         );
                     }
                 }
+
+                x += width;
             }
         }
     }
@@ -186,71 +220,69 @@ impl Viewport {
     ) {
         for y in 0..self.h {
             let doc_y = self.scroll_y + y;
+            let mut x = 0;
 
-            let Some(line) = doc.line(doc_y) else {
-                break;
-            };
-
-            for (x, ch) in line.chars().enumerate() {
-                if x >= self.scroll_x && x < self.scroll_x + self.buff_w {
-                    let mut display_ch = ch;
+            // Draw the contents of the line.
+            if let Some(line) = doc.line(doc_y) {
+                for (idx, mut ch) in line.chars().enumerate() {
                     let mut fg = TXT;
                     let mut bg = if doc_y == doc.cur.y { HIGHLIGHT } else { BG };
 
-                    // Layer 1: Selection.
-                    for selection in selections {
-                        if selection.contains(Cursor::new(x, doc_y)) {
-                            bg = SEL;
-                            break;
+                    // Layer 1: Character replacement.
+                    match ch {
+                        ' ' => {
+                            ch = '·';
+                            fg = WHITESPACE;
+                        }
+                        '\n' => {
+                            ch = '⏎';
+                            fg = WHITESPACE;
+                        }
+                        '\r' => {
+                            ch = '↤';
+                            fg = TXT;
+                            bg = CHAR_WARN;
+                        }
+                        '\t' => {
+                            ch = '↦';
+                            fg = TXT;
+                            bg = CHAR_WARN;
+                        }
+                        _ => {}
+                    }
+
+                    let width = ch.width().unwrap_or(0);
+                    if width == 0 {
+                        continue;
+                    }
+
+                    if x + width >= self.scroll_x && x + width <= self.scroll_x + self.buff_w {
+                        // Layer 2: Selection.
+                        for selection in selections {
+                            if selection.contains(Cursor::new(idx, doc_y)) {
+                                bg = SEL;
+                                break;
+                            }
+                        }
+
+                        let x = self.x_off + self.gutter_w + x.saturating_sub(self.scroll_x);
+                        let y = self.y_off + y;
+                        display.update(Cell::new(ch, fg, bg), x, y);
+
+                        // Mark all following cells of wide characters as taken.
+                        for n in 1..width {
+                            display.update(Cell::new('\u{FFFF}', fg, bg), x + n, y);
                         }
                     }
 
-                    // Layer 2: Character replacement.
-                    if display_ch == ' ' {
-                        display_ch = '·';
-                        fg = WHITESPACE;
-                    } else if display_ch == '\n' {
-                        display_ch = '⏎';
-                        fg = WHITESPACE;
-                    } else if display_ch == '\r' {
-                        display_ch = '↤';
-                        fg = TXT;
-                        bg = CHAR_WARN;
-                    } else if display_ch == '\t' {
-                        display_ch = '↦';
-                        fg = TXT;
-                        bg = CHAR_WARN;
-                    }
-
-                    let x = self.x_off + self.gutter_w + x - self.scroll_x;
-                    let y = self.y_off + y;
-                    display.update(Cell::new(display_ch, fg, bg), x, y);
+                    x += width;
                 }
             }
-        }
 
-        // Render trailing whitespace to override previous screen content. The previous loop only renders the current
-        // content without regard of removing existing content, which is why this second render pass is necessary.
-        for y in 0..self.h {
-            let doc_y = self.scroll_y + y;
-
-            // Set base background color depending on if its the cursors line.
+            // Clear the remaining line.
             let base_bg = if doc_y == doc.cur.y { HIGHLIGHT } else { BG };
-
-            // Skip screen lines outside the text line bounds.
-            if doc_y >= doc.len() {
-                for x in self.gutter_w..self.w {
-                    display.update(Cell::new(' ', TXT, base_bg), self.x_off + x, self.y_off + y);
-                }
-                continue;
-            }
-
-            let len = doc.line_count(doc_y).unwrap();
-            // Calculate the end of the line contents.
-            let x = self.gutter_w + len.saturating_sub(self.scroll_x);
-
-            // Stretch current line to end to show highlight properly.
-            for x in x..self.w {
+            let start = self.gutter_w + x.saturating_sub(self.scroll_x);
+            for x in start..self.w {
                 display.update(Cell::new(' ', TXT, base_bg), self.x_off + x, self.y_off + y);
             }
         }
@@ -266,21 +298,23 @@ impl Viewport {
                 // The indices are bound by terminal dimensions.
                 #[allow(clippy::cast_possible_truncation)]
                 if let Some(cell) = screen.cell(y as u16, x as u16) {
-                    let ch = cell.contents().chars().next().unwrap_or(' ');
+                    let Some(ch) = cell.contents().chars().next() else {
+                        continue;
+                    };
                     let fg = vt100_color_to_rgb(cell.fgcolor(), true);
                     let bg = vt100_color_to_rgb(cell.bgcolor(), false);
 
                     display.update(
                         Cell::new(ch, Fg(fg), Bg(bg)),
-                        self.gutter_w + x + self.x_off,
-                        y + self.y_off,
+                        self.x_off + self.gutter_w + x,
+                        self.y_off + y,
                     );
                 } else {
                     // Default background if the cell doesn't contain data.
                     display.update(
                         Cell::new(' ', TXT, BG),
-                        self.gutter_w + x + self.x_off,
-                        y + self.y_off,
+                        self.x_off + self.gutter_w + x,
+                        self.y_off + y,
                     );
                 }
             }
@@ -293,7 +327,7 @@ impl Viewport {
             let (x, y) = (col as usize, row as usize);
 
             display.set_cursor(
-                Cursor::new(self.gutter_w + x + self.x_off, y + self.y_off),
+                Cursor::new(self.x_off + self.gutter_w + x, self.y_off + y),
                 CursorStyle::SteadyBlock,
             );
         }
@@ -353,23 +387,73 @@ impl Viewport {
             .nth(end)
             .map_or(line.len(), |(idx, _)| idx);
         let cmd = &line[start_idx..end_idx];
-        let padding = self.w.saturating_sub(cmd.chars().count());
 
-        for (x, ch) in format!("{cmd}{}", " ".repeat(padding)).chars().enumerate() {
-            display.update(Cell::new(ch, TXT, INFO), x + self.x_off, y + self.y_off);
+        let mut x = 0;
+        for ch in cmd.chars() {
+            let width = ch.width().unwrap_or(0);
+            if width == 0 {
+                continue;
+            }
+
+            if x + width <= self.w {
+                display.update(Cell::new(ch, TXT, INFO), self.x_off + x, self.y_off + y);
+
+                // Mark all following cells of wide characters as taken.
+                for n in 1..width {
+                    display.update(
+                        Cell::new('\u{FFFF}', TXT, INFO),
+                        self.x_off + x + n,
+                        self.y_off + y,
+                    );
+                }
+            }
+            x += width;
+        }
+
+        // Clear the remaining line.
+        while x < self.w {
+            display.update(Cell::new(' ', TXT, INFO), self.x_off + x, self.y_off + y);
+            x += 1;
         }
     }
 
-    /// Renders a `Cursor` to the `Display`.
-    pub const fn render_cursor(
-        &self,
-        display: &mut Display,
-        cur: &Cursor,
-        cursor_style: CursorStyle,
-    ) {
+    /// Renders the `Cursor` of a `Document` to the `Display`.
+    pub fn render_cursor(&self, display: &mut Display, doc: &Document, style: CursorStyle) {
+        let line = doc
+            .line(doc.cur.y)
+            .map(|l| l.to_string())
+            .unwrap_or_default();
+        let visual_x = text_width(&line, doc.cur.x);
+
+        let x = visual_x.saturating_sub(self.scroll_x);
+        let y = doc.cur.y.saturating_sub(self.scroll_y);
+
+        assert!(x < self.buff_w && y < self.h);
         display.set_cursor(
-            Cursor::new(self.gutter_w + cur.x + self.x_off, cur.y + self.y_off),
-            cursor_style,
+            Cursor::new(self.x_off + self.gutter_w + x, self.y_off + y),
+            style,
         );
+    }
+
+    /// Shifts the viewport to the left.
+    pub fn shift_left(&mut self, doc: &Document, n: usize) {
+        let limit = (doc.cur.x + 1).saturating_sub(self.buff_w);
+        self.scroll_x = self.scroll_x.saturating_sub(n).max(limit);
+    }
+
+    /// Shifts the viewport to the right.
+    pub fn shift_right(&mut self, doc: &Document, n: usize) {
+        self.scroll_x = (self.scroll_x + n).min(doc.cur.x);
+    }
+
+    /// Shifts the viewport up.
+    pub fn shift_up(&mut self, doc: &Document, n: usize) {
+        self.scroll_y = (self.scroll_y + n).min(doc.cur.y);
+    }
+
+    /// Shifts the viewport up.
+    pub fn shift_down(&mut self, doc: &Document, n: usize) {
+        let limit = (doc.cur.y + 1).saturating_sub(self.h);
+        self.scroll_y = self.scroll_y.saturating_sub(n).max(limit);
     }
 }

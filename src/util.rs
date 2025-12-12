@@ -4,6 +4,8 @@ use std::{
     path::Path,
 };
 
+use unicode_width::UnicodeWidthChar;
+
 pub const TAB_WIDTH: usize = 4;
 
 /// Retreives the filename of a given path.
@@ -44,4 +46,12 @@ pub fn line_column(input: &str) -> (Option<usize>, Option<usize>) {
     }
 
     (x, y)
+}
+
+/// Calculates the width of text up to `char_idx`.
+pub fn text_width(text: &str, char_idx: usize) -> usize {
+    text.chars()
+        .take(char_idx)
+        .map(|ch| ch.width().unwrap_or(0))
+        .sum()
 }

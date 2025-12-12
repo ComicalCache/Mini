@@ -4,7 +4,7 @@ A "minimalistic" terminal based text-editor.
 
 ### Features
 Mini supports ergonomic motions, text selection, search and replace, undo and redo, a file browser, opening multiple
-buffer and more.
+buffers, running terminal commands, wide-character texts and more.
 
 `./mini --help` prints an exhaustiv documentation of all features. See `info.txt` for the command output or type space,
 `?` and hit enter to see it inside the editor.
