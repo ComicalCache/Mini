@@ -7,6 +7,9 @@ use termion::{
 
 use crate::cursor::{Cursor, CursorStyle};
 
+/// Use the placeholder U+FFFF value to indicate a cell is taken by wide characters.
+pub const PLACEHOLDER: char = '\u{FFFF}';
+
 /// Reset text color.
 const NO_TXT: Fg<Reset> = Fg(Reset);
 /// Reset background color.
@@ -98,8 +101,7 @@ impl Display {
             for (x, y) in self.redraw.drain(..) {
                 let Cell { ch, fg, bg, .. } = self.buff[y][x];
 
-                // Use the placeholder U+FFFF value to indicate a cell is taken by wide characters.
-                if ch == '\u{FFFF}' {
+                if ch == PLACEHOLDER {
                     continue;
                 }
 

@@ -48,10 +48,12 @@ pub fn line_column(input: &str) -> (Option<usize>, Option<usize>) {
     (x, y)
 }
 
-/// Calculates the width of text up to `char_idx`.
+/// Calculates the width of text up to a character index.
 pub fn text_width(text: &str, char_idx: usize) -> usize {
-    text.chars()
-        .take(char_idx)
-        .map(|ch| ch.width().unwrap_or(0))
-        .sum()
+    text.chars().take(char_idx).fold(0, |acc, ch| {
+        acc + match ch {
+            '\t' => TAB_WIDTH - (acc % TAB_WIDTH),
+            ch => ch.width().unwrap_or(0),
+        }
+    })
 }

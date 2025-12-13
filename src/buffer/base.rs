@@ -132,10 +132,6 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         self.info_view.resize(w, 1, x_off, y_off, None);
         // FIXME: this limits the bar to always be exactly one in height.
         self.cmd_view.resize(w, 1, x_off, y_off, None);
-
-        if let Some(message) = &mut self.message {
-            message.calculate_lines(w);
-        }
     }
 
     /// Jumps to the next search match if any.

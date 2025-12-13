@@ -1,11 +1,11 @@
 use crate::{
     cursor::{Cursor, CursorStyle},
-    display::{Cell, Display},
+    display::{Cell, Display, PLACEHOLDER},
     document::Document,
     message::{Message, MessageKind},
     selection::Selection,
     shell_command::util::vt100_color_to_rgb,
-    util::text_width,
+    util::{TAB_WIDTH, text_width},
 };
 use termion::color::{self, Bg, Fg};
 use unicode_width::UnicodeWidthChar;
@@ -126,47 +126,17 @@ impl Viewport {
     }
 
     /// Renders a message overlay to the `Display`. Should be called after `render_document` because it will get
-    /// overwritten otherwise.
+    /// overwritten otherwise. This function assumes that `MessageIter` correctly calculates the lines and does
+    /// NO bounds-checking when updating the display.
     pub fn render_message(&self, display: &mut Display, message: &Message) {
-        let mut chars = message.text.chars();
+        let count = (message.lines.saturating_sub(message.scroll)).min(self.h / 3);
 
-        // Skip lines that are "scrolled off" the screen.
-        for _ in 0..message.scroll {
-            for _ in 0..self.w {
-                match chars.next() {
-                    Some('\n') => break,
-                    Some(_) => {}
-                    None => unreachable!(),
-                }
-            }
-        }
-
-        // Skip the "scrolled off" lines and only show at most 1/3rd of the height of error.
-        for y in 0..(message.lines - message.scroll).min(self.h / 3) {
-            let mut newline = false;
-
+        let lines = message.iter(self.w).skip(message.scroll).take(count);
+        for (y, line) in lines.enumerate() {
             let mut x = 0;
-            while x < self.w {
-                // Clear the remaining line.
-                if newline {
-                    display.update(
-                        Cell::new(' ', ERROR_TXT, INFO),
-                        self.x_off + x,
-                        self.y_off + y,
-                    );
+            let display_y = self.y_off + y;
 
-                    x += 1;
-                    continue;
-                }
-
-                let mut ch = match chars.next() {
-                    Some('\n') | None => {
-                        newline = true;
-                        continue;
-                    }
-                    Some(ch) => ch,
-                };
-
+            for ch in line.chars() {
                 let mut fg = match message.kind {
                     MessageKind::Info => INFO_TXT,
                     MessageKind::Error => ERROR_TXT,
@@ -174,39 +144,57 @@ impl Viewport {
                 let mut bg = INFO;
 
                 // Layer 1: Character replacement.
-                match ch {
+                let display_ch = match ch {
                     '\r' => {
-                        ch = '↤';
                         fg = TXT;
                         bg = CHAR_WARN;
+                        '↤'
                     }
                     '\t' => {
-                        ch = '↦';
                         fg = TXT;
                         bg = CHAR_WARN;
+                        '↦'
                     }
-                    _ => {}
-                }
+                    _ => ch,
+                };
 
-                let width = ch.width().unwrap_or(0);
+                let width = match ch {
+                    '\r' => 1,
+                    '\t' => TAB_WIDTH - (x % TAB_WIDTH),
+                    ch => ch.width().unwrap_or(0),
+                };
                 if width == 0 {
                     continue;
                 }
 
-                if x + width <= self.w {
-                    display.update(Cell::new(ch, fg, bg), self.x_off + x, self.y_off + y);
+                // Assert that MessageIter correctly calculates lines.
+                assert!(x + width <= self.w);
+                display.update(Cell::new(display_ch, fg, bg), self.x_off + x, display_y);
 
+                // Layer 2: Expand tabs.
+                if ch == '\t' {
+                    // Write as many spaces as needed after the tab character.
+                    for n in 1..=width {
+                        display.update(Cell::new(' ', fg, bg), self.x_off + x + n, display_y);
+                    }
+                } else {
                     // Mark all following cells of wide characters as taken.
                     for n in 1..width {
                         display.update(
-                            Cell::new('\u{FFFF}', fg, bg),
+                            Cell::new(PLACEHOLDER, fg, bg),
                             self.x_off + x + n,
-                            self.y_off + y,
+                            display_y,
                         );
                     }
                 }
 
                 x += width;
+            }
+
+            // Clear the rest of the line
+            while x < self.w {
+                display.update(Cell::new(' ', ERROR_TXT, INFO), self.x_off + x, display_y);
+                x += 1;
             }
         }
     }
@@ -224,39 +212,45 @@ impl Viewport {
 
             // Draw the contents of the line.
             if let Some(line) = doc.line(doc_y) {
-                for (idx, mut ch) in line.chars().enumerate() {
+                for (idx, ch) in line.chars().enumerate() {
                     let mut fg = TXT;
                     let mut bg = if doc_y == doc.cur.y { HIGHLIGHT } else { BG };
 
                     // Layer 1: Character replacement.
+                    let mut display_ch = ch;
                     match ch {
                         ' ' => {
-                            ch = '·';
+                            display_ch = '·';
                             fg = WHITESPACE;
                         }
                         '\n' => {
-                            ch = '⏎';
+                            display_ch = '⏎';
                             fg = WHITESPACE;
                         }
                         '\r' => {
-                            ch = '↤';
+                            display_ch = '↤';
                             fg = TXT;
                             bg = CHAR_WARN;
                         }
                         '\t' => {
-                            ch = '↦';
+                            display_ch = '↦';
                             fg = TXT;
                             bg = CHAR_WARN;
                         }
                         _ => {}
                     }
 
-                    let width = ch.width().unwrap_or(0);
+                    let width = match ch {
+                        ' ' | '\n' | '\r' => 1,
+                        '\t' => TAB_WIDTH - (x % TAB_WIDTH),
+                        ch => ch.width().unwrap_or(0),
+                    };
                     if width == 0 {
                         continue;
                     }
 
-                    if x + width >= self.scroll_x && x + width <= self.scroll_x + self.buff_w {
+                    // If any part of the character is visible, render that.
+                    if x + width >= self.scroll_x && x < self.scroll_x + self.buff_w {
                         // Layer 2: Selection.
                         for selection in selections {
                             if selection.contains(Cursor::new(idx, doc_y)) {
@@ -265,13 +259,41 @@ impl Viewport {
                             }
                         }
 
-                        let x = self.x_off + self.gutter_w + x.saturating_sub(self.scroll_x);
-                        let y = self.y_off + y;
-                        display.update(Cell::new(ch, fg, bg), x, y);
+                        let display_y = self.y_off + y;
 
-                        // Mark all following cells of wide characters as taken.
-                        for n in 1..width {
-                            display.update(Cell::new('\u{FFFF}', fg, bg), x + n, y);
+                        if x >= self.scroll_x {
+                            let display_x = self.x_off + self.gutter_w + x - self.scroll_x;
+                            display.update(Cell::new(display_ch, fg, bg), display_x, display_y);
+                        }
+
+                        // Layer 3: Expand tabs.
+                        if ch == '\t' {
+                            // Write as many spaces as needed after the tab character.
+                            for n in 1..=width {
+                                if x + n < self.scroll_x || x + n >= self.scroll_x + self.buff_w {
+                                    continue;
+                                }
+
+                                let display_x = self.x_off + self.gutter_w + x + n - self.scroll_x;
+                                display.update(Cell::new(' ', fg, bg), display_x, display_y);
+                            }
+                        } else {
+                            // Mark all following cells of wide characters as taken.
+                            for n in 1..width {
+                                if x + n < self.scroll_x || x + n >= self.scroll_x + self.buff_w {
+                                    continue;
+                                }
+
+                                // Use unknown character if the initial character was outside the viewport to avoid
+                                // ghosting.
+                                let display_ch = if x >= self.scroll_x {
+                                    PLACEHOLDER
+                                } else {
+                                    '\u{FFFD}'
+                                };
+                                let display_x = self.x_off + self.gutter_w + x + n - self.scroll_x;
+                                display.update(Cell::new(display_ch, fg, bg), display_x, display_y);
+                            }
                         }
                     }
 
@@ -401,7 +423,7 @@ impl Viewport {
                 // Mark all following cells of wide characters as taken.
                 for n in 1..width {
                     display.update(
-                        Cell::new('\u{FFFF}', TXT, INFO),
+                        Cell::new(PLACEHOLDER, TXT, INFO),
                         self.x_off + x + n,
                         self.y_off + y,
                     );
@@ -437,13 +459,25 @@ impl Viewport {
 
     /// Shifts the viewport to the left.
     pub fn shift_left(&mut self, doc: &Document, n: usize) {
-        let limit = (doc.cur.x + 1).saturating_sub(self.buff_w);
-        self.scroll_x = self.scroll_x.saturating_sub(n).max(limit);
+        let line = doc
+            .line(doc.cur.y)
+            .map(|l| l.to_string())
+            .unwrap_or_default();
+        let x = text_width(&line, doc.cur.x);
+
+        self.scroll_x = (self.scroll_x + n).min(x);
     }
 
     /// Shifts the viewport to the right.
     pub fn shift_right(&mut self, doc: &Document, n: usize) {
-        self.scroll_x = (self.scroll_x + n).min(doc.cur.x);
+        let line = doc
+            .line(doc.cur.y)
+            .map(|l| l.to_string())
+            .unwrap_or_default();
+        let x = text_width(&line, doc.cur.x);
+
+        let limit = (x + 1).saturating_sub(self.buff_w);
+        self.scroll_x = self.scroll_x.saturating_sub(n).max(limit);
     }
 
     /// Shifts the viewport up.
