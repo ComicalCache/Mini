@@ -91,6 +91,8 @@ impl BufferManager {
 
     /// Handles the event, that the terminal was resized.
     pub fn resize(&mut self, w: usize, h: usize) {
+        self.w = w;
+        self.h = h;
         for buff in &mut self.buffs {
             buff.resize(w, h, 0, 0);
         }
