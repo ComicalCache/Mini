@@ -26,23 +26,20 @@ impl FilesBuffer {
             .collect::<Result<Vec<_>, Error>>()?;
         entries.sort();
 
-        let mut contents = vec!["..".to_string()];
-        for entry in &mut entries.iter() {
-            contents.push(if entry.is_symlink() {
-                let path = entry.read_link()?;
-                if path.is_dir() {
-                    format!("{} -> {}/", entry.display(), path.display())
-                } else {
-                    format!("{} -> {}", entry.display(), path.display())
-                }
+        let mut contents = String::from("..\n");
+        contents.extend(entries.iter().map(|entry| {
+            if entry.is_symlink() {
+                let target = entry.read_link().unwrap_or_else(|_| PathBuf::from("?"));
+                let suffix = if target.is_dir() { "/" } else { "" };
+                format!("{} -> {}{}\n", entry.display(), target.display(), suffix)
             } else if entry.is_dir() {
-                format!("{}/", entry.display())
+                format!("{}/\n", entry.display())
             } else {
-                format!("{}", entry.display())
-            });
-        }
+                format!("{}\n", entry.display())
+            }
+        }));
 
-        Ok(contents.join("\n"))
+        Ok(contents)
     }
 
     /// Handles the user selection of an entry in the file buffer.

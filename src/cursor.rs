@@ -55,14 +55,20 @@ impl PartialEq for Cursor {
 
 impl PartialOrd for Cursor {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Cursor {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // Compare y coordinates first.
-        match self.y.partial_cmp(&other.y) {
-            Some(core::cmp::Ordering::Equal) => {}
+        match self.y.cmp(&other.y) {
+            core::cmp::Ordering::Equal => {}
             ord => return ord,
         }
 
         // Compare x coordinates second.
-        self.x.partial_cmp(&other.x)
+        self.x.cmp(&other.x)
     }
 }
 
@@ -85,25 +91,22 @@ macro_rules! jump {
 }
 
 /// Calculates the position of a cursor after skipping the supplied text.
-pub fn end_pos(start: &Cursor, text: &str) -> Cursor {
-    let mut end = *start;
-
-    let mut count = 0;
-    let mut offset = 0;
-    for line in text.split('\n') {
-        count += 1;
-        offset = line.chars().count();
+pub fn pos_after_text(start: &Cursor, text: &str) -> Cursor {
+    if text.is_empty() {
+        return *start;
     }
 
-    end.y += count - 1;
-    if start.y == end.y {
+    let (lines, line_len) = text
+        // Use split to not lose empty trailing lines.
+        .split('\n')
+        .fold((0, 0), |(lines, _), line| (lines + 1, line.chars().count()));
+
+    if lines == 1 {
         // The offset is additive on the same line.
-        end.x += offset;
+        Cursor::new(start.x + line_len, start.y)
     } else {
-        end.x = offset;
+        Cursor::new(line_len, start.y + lines - 1)
     }
-
-    end
 }
 
 /// Moves the cursor to a specific position.
@@ -171,89 +174,45 @@ pub fn next_word(doc: &mut Document, n: usize) {
 }
 
 fn __next_word(doc: &mut Document) {
-    // Move line down if at end of line and not at end of document.
-    let mut len = doc.line_count(doc.cur.y).unwrap();
-    if doc.ends_with_newline(doc.cur.y) {
-        len = len.saturating_sub(1);
+    let end = {
+        let y = doc.len().saturating_sub(1);
+        let x = doc.line_count(y).unwrap_or(0);
+        Cursor::new(x, y)
+    };
+    if doc.cur == end {
+        return;
     }
 
-    if len <= doc.cur.x && doc.cur.y < doc.len() {
-        jump_to_beginning_of_line(doc);
-        down(doc, 1);
-
-        // If empty line or not whitespace, abort.
-        if doc
-            .line(doc.cur.y)
-            .unwrap()
-            .chars()
-            .next()
-            .is_none_or(|ch| !ch.is_whitespace())
-        {
-            return;
-        }
-
-        len = doc.line_count(doc.cur.y).unwrap();
-        if doc.ends_with_newline(doc.cur.y) {
-            len = len.saturating_sub(1);
-        }
-    }
-
-    let line = doc.line(doc.cur.y).unwrap();
-    let curr = line
-        .chars()
-        .nth(doc.cur.x.min(len.saturating_sub(1)))
-        .unwrap();
-    let mut idx = 0;
-
-    if curr.is_alphanumeric() {
-        // Find next non alphanumeric:
-        // - if non whitespace, jump there,
-        // - if whitespace, find next alphanumeric, jump there,
-        // - else jump to end of line.
-        let Some((jdx, ch)) = line
-            .chars()
-            .skip(doc.cur.x + 1)
-            .enumerate()
-            .find(|(_, ch)| !ch.is_alphanumeric())
-        else {
-            jump_to_end_of_line(doc);
-            return;
-        };
-
-        if !ch.is_whitespace() {
-            right(doc, jdx + 1);
-            return;
-        }
-
-        idx = jdx;
-    } else if !curr.is_alphanumeric() {
-        // If next is not whitespace, move there.
-        // Else find next alphanumeric and jump there, else end of line.
-        let Some((jdx, ch)) = line.chars().skip(doc.cur.x + 1).enumerate().next() else {
-            jump_to_end_of_line(doc);
-            return;
-        };
-
-        if !ch.is_whitespace() {
-            right(doc, jdx + 1);
-            return;
-        }
-
-        idx = jdx;
-    }
-
-    // Find next alphanumeric and jump there, else end of line.
-    let Some((jdx, _)) = line
-        .chars()
-        .skip(doc.cur.x + 1 + idx)
-        .enumerate()
-        .find(|(_, ch)| !ch.is_whitespace())
-    else {
-        jump_to_end_of_line(doc);
+    let Some(text) = doc.get_range(doc.cur, end) else {
+        return;
+    };
+    let mut chars = text.chars().peekable();
+    let mut idx = doc.xy_to_idx(doc.cur.x, doc.cur.y);
+    let Some(first) = chars.peek().copied() else {
         return;
     };
 
-    right(doc, idx + jdx + 1);
+    if first.is_alphanumeric() {
+        while chars.next_if(|c| c.is_alphanumeric()).is_some() {
+            idx += 1;
+        }
+        while chars.next_if(|c| c.is_whitespace()).is_some() {
+            idx += 1;
+        }
+    } else if first.is_whitespace() {
+        while chars.next_if(|c| c.is_whitespace()).is_some() {
+            idx += 1;
+        }
+    } else {
+        chars.next();
+        idx += 1;
+        while chars.next_if(|c| c.is_whitespace()).is_some() {
+            idx += 1;
+        }
+    }
+
+    let (x, y) = doc.idx_to_xy(idx);
+    doc.cur = Cursor::new(x, y);
 }
 
 /// Jumps the cursors to the end of the next "word".
@@ -264,83 +223,48 @@ pub fn next_word_end(doc: &mut Document, n: usize) {
 }
 
 fn __next_word_end(doc: &mut Document) {
-    // Move line down if at end of line and not at end of document.
-    let mut len = doc.line_count(doc.cur.y).unwrap();
-    if doc.ends_with_newline(doc.cur.y) {
-        len = len.saturating_sub(1);
+    let end = {
+        let end_y = doc.len().saturating_sub(1);
+        let end_x = doc.line_count(end_y).unwrap_or(0);
+        Cursor::new(end_x, end_y)
+    };
+    if doc.cur == end {
+        return;
     }
 
-    if len <= doc.cur.x && doc.cur.y < doc.len() {
-        jump_to_beginning_of_line(doc);
-        down(doc, 1);
-
-        // If empty line, abort.
-        if doc.line(doc.cur.y).unwrap().chars().next().is_none() {
-            return;
-        }
-
-        len = doc.line_count(doc.cur.y).unwrap();
-        if doc.ends_with_newline(doc.cur.y) {
-            len = len.saturating_sub(1);
-        }
-    }
-
-    let line = doc.line(doc.cur.y).unwrap();
-    let curr = line
-        .chars()
-        .nth(doc.cur.x.min(len.saturating_sub(1)))
-        .unwrap();
-    let mut idx = 0;
-
-    if curr.is_whitespace() {
-        // Find next non whitespace:
-        // - if alphanumeric, find next non alphanumeric and jump there, else end of line,
-        // - if not alphanumeric, jump there,
-        // - else end of line.
-        let Some((jdx, ch)) = line
-            .chars()
-            .skip(doc.cur.x + 1)
-            .enumerate()
-            .find(|(_, ch)| !ch.is_whitespace())
-        else {
-            jump_to_end_of_line(doc);
-            return;
-        };
-
-        if !ch.is_alphanumeric() {
-            right(doc, jdx + 1);
-            return;
-        }
-
-        idx = jdx;
-    } else if !curr.is_alphanumeric() {
-        // If next is not whitespace, move there.
-        // Else find next non alphanumeric and jump there, else end of line.
-        let Some((jdx, ch)) = line.chars().skip(doc.cur.x + 1).enumerate().next() else {
-            jump_to_end_of_line(doc);
-            return;
-        };
-
-        if !ch.is_whitespace() {
-            right(doc, jdx + 1);
-            return;
-        }
-
-        idx = jdx;
-    }
-
-    // Find next non alphanumeric and jump there, else to end of line.
-    let Some((jdx, _)) = line
-        .chars()
-        .skip(doc.cur.x + 1 + idx)
-        .enumerate()
-        .find(|(_, ch)| !ch.is_alphanumeric())
-    else {
-        jump_to_end_of_line(doc);
+    let Some(text) = doc.get_range(doc.cur, end) else {
+        return;
+    };
+    let mut chars = text.chars().peekable();
+    let mut idx = doc.xy_to_idx(doc.cur.x, doc.cur.y);
+    let Some(first) = chars.peek().copied() else {
         return;
     };
 
-    right(doc, idx + jdx + 1);
+    if first.is_alphanumeric() {
+        while chars.next_if(|c| c.is_alphanumeric()).is_some() {
+            idx += 1;
+        }
+    } else if first.is_whitespace() {
+        while chars.next_if(|c| c.is_whitespace()).is_some() {
+            idx += 1;
+        }
+        if let Some(c) = chars.peek()
+            && !c.is_whitespace()
+            && !c.is_alphanumeric()
+        {
+            idx += 1;
+        } else {
+            while chars.next_if(|c| c.is_alphanumeric()).is_some() {
+                idx += 1;
+            }
+        }
+    } else {
+        idx += 1;
+    }
+
+    let (x, y) = doc.idx_to_xy(idx);
+    doc.cur = Cursor::new(x, y);
 }
 
 /// Jumps the cursors to the previous "word".
@@ -351,42 +275,43 @@ pub fn prev_word(doc: &mut Document, n: usize) {
 }
 
 fn __prev_word(doc: &mut Document) {
-    // Move line up if at beginning of line and not at beginning of document.
-    if doc.cur.x == 0 && doc.cur.y > 0 {
-        up(doc, 1);
-        jump_to_end_of_line(doc);
-
-        // If empty line, abort.
-        if doc.line(doc.cur.y).unwrap().len_chars() == 0 {
-            return;
-        }
+    if doc.cur == Cursor::new(0, 0) {
+        return;
     }
 
-    let line = doc.line(doc.cur.y).unwrap();
+    let Some(text) = doc.get_range(Cursor::new(0, 0), doc.cur) else {
+        return;
+    };
+    let mut chars = text.chars_at(text.len_chars()).reversed().peekable();
+    let mut idx = doc.xy_to_idx(doc.cur.x, doc.cur.y);
+    let Some(first) = chars.peek().copied() else {
+        return;
+    };
 
-    // Find next non-whitespace character.
-    if let Some((idx, ch)) = line
-        .chars_at(doc.cur.x)
-        .reversed()
-        .enumerate()
-        .find(|(_, ch)| !ch.is_whitespace())
-    {
-        let mut offset = idx + 1;
-
-        // If it's alphanumeric, find first character of that sequence of alphanumeric characters.
-        if ch.is_alphanumeric() {
-            offset += line
-                .chars_at(doc.cur.x - offset)
-                .reversed()
-                .take_while(|ch| ch.is_alphanumeric())
-                .count();
+    if first.is_alphanumeric() {
+        while chars.next_if(|c| c.is_alphanumeric()).is_some() {
+            idx -= 1;
         }
-
-        left(doc, offset);
+    } else if first.is_whitespace() {
+        while chars.next_if(|c| c.is_whitespace()).is_some() {
+            idx -= 1;
+        }
+        if let Some(c) = chars.peek()
+            && !c.is_whitespace()
+            && !c.is_alphanumeric()
+        {
+            idx -= 1;
+        } else {
+            while chars.next_if(|c| c.is_alphanumeric()).is_some() {
+                idx -= 1;
+            }
+        }
     } else {
-        // Move to the beginning of line.
-        jump_to_beginning_of_line(doc);
+        idx -= 1;
     }
+
+    let (x, y) = doc.idx_to_xy(idx);
+    doc.cur = Cursor::new(x, y);
 }
 
 /// Jumps the cursors to the end of the previous "word".
@@ -397,43 +322,36 @@ pub fn prev_word_end(doc: &mut Document, n: usize) {
 }
 
 fn __prev_word_end(doc: &mut Document) {
-    // Move line up if at beginning of line and not at beginning of document.
-    if doc.cur.x == 0 && doc.cur.y > 0 {
-        up(doc, 1);
-        jump_to_end_of_line(doc);
-
-        let line = doc.line(doc.cur.y).unwrap();
-        // If empty line or not whitespace, abort.
-        if line.len_chars() == 0 || !line.chars().last().unwrap().is_whitespace() {
-            return;
-        }
+    if doc.cur == Cursor::new(0, 0) {
+        return;
     }
 
-    let line = doc.line(doc.cur.y).unwrap();
+    let Some(text) = doc.get_range(Cursor::new(0, 0), doc.cur) else {
+        return;
+    };
+    let mut chars = text.chars_at(text.len_chars()).reversed().peekable();
+    let mut idx = doc.xy_to_idx(doc.cur.x, doc.cur.y);
+    let Some(first) = chars.peek().copied() else {
+        return;
+    };
 
-    // Find next non alphanumeric character.
-    if let Some((idx, ch)) = line
-        .chars_at(doc.cur.x)
-        .reversed()
-        .enumerate()
-        .find(|(_, ch)| !ch.is_alphanumeric())
-    {
-        let mut offset = idx;
-
-        // If it's whitespace, find first character of that sequence of alphanumeric characters.
-        if ch.is_whitespace() {
-            offset += line
-                .chars_at(doc.cur.x - offset)
-                .reversed()
-                .take_while(|ch| ch.is_whitespace())
-                .count();
+    if first.is_alphanumeric() {
+        while chars.next_if(|c| c.is_alphanumeric()).is_some() {
+            idx -= 1;
         }
-
-        left(doc, offset.max(1));
+        while chars.next_if(|c| c.is_whitespace()).is_some() {
+            idx -= 1;
+        }
+    } else if first.is_whitespace() {
+        while chars.next_if(|c| c.is_whitespace()).is_some() {
+            idx -= 1;
+        }
     } else {
-        // Move to the beginning of line.
-        jump_to_beginning_of_line(doc);
+        idx -= 1;
     }
+
+    let (x, y) = doc.idx_to_xy(idx);
+    doc.cur = Cursor::new(x, y);
 }
 
 /// Jumps to the next whitespace.
@@ -444,43 +362,30 @@ pub fn next_whitespace(doc: &mut Document, n: usize) {
 }
 
 fn __next_whitespace(doc: &mut Document) {
-    // Move line down if at end of line and not at end of document.
-    let mut len = doc.line_count(doc.cur.y).unwrap();
-    if doc.ends_with_newline(doc.cur.y) {
-        len = len.saturating_sub(1);
+    let end = {
+        let y = doc.len().saturating_sub(1);
+        let x = doc.line_count(y).unwrap_or(0);
+        Cursor::new(x, y)
+    };
+    if doc.cur == end {
+        return;
     }
 
-    if len <= doc.cur.x && doc.cur.y < doc.len() {
-        jump_to_beginning_of_line(doc);
-        down(doc, 1);
+    let Some(text) = doc.get_range(doc.cur, end) else {
+        return;
+    };
+    let mut chars = text.chars().peekable();
+    let mut idx = doc.xy_to_idx(doc.cur.x, doc.cur.y);
 
-        // If empty line or whitespace, abort.
-        if doc
-            .line(doc.cur.y)
-            .unwrap()
-            .chars()
-            .next()
-            .is_none_or(char::is_whitespace)
-        {
-            return;
-        }
-
-        len = doc.line_count(doc.cur.y).unwrap();
-        if doc.ends_with_newline(doc.cur.y) {
-            len = len.saturating_sub(1);
-        }
+    while chars.next_if(|c| c.is_whitespace()).is_some() {
+        idx += 1;
+    }
+    while chars.next_if(|c| !c.is_whitespace()).is_some() {
+        idx += 1;
     }
 
-    let line = doc.line(doc.cur.y).unwrap();
-
-    let (n, _) = line
-        .chars()
-        .skip(doc.cur.x + 1)
-        .enumerate()
-        .find(|(_, ch)| ch.is_whitespace())
-        .unwrap_or((len - doc.cur.x, '\0'));
-
-    right(doc, n + 1);
+    let (x, y) = doc.idx_to_xy(idx);
+    doc.cur = Cursor::new(x, y);
 }
 
 /// Jumps to the previous whitespace.
@@ -491,34 +396,28 @@ pub fn prev_whitespace(doc: &mut Document, n: usize) {
 }
 
 fn __prev_whitespace(doc: &mut Document) {
-    // Move line up if at beginning of line and not at beginning of document.
-    if doc.cur.x == 0 && doc.cur.y > 0 {
-        up(doc, 1);
-        jump_to_end_of_line(doc);
-
+    if doc.cur == Cursor::new(0, 0) {
         return;
     }
 
-    let line = doc.line(doc.cur.y).unwrap();
-
-    let Some((n, _)) = line
-        .chars_at(doc.cur.x)
-        .reversed()
-        .enumerate()
-        .find(|(_, ch)| ch.is_whitespace())
-    else {
-        // If no whitespace was found on line, move line up, else move to be start of the line.
-        if doc.cur.y > 0 {
-            up(doc, 1);
-            jump_to_end_of_line(doc);
-        } else {
-            left(doc, doc.cur.x);
-        }
-
+    let Some(text) = doc.get_range(Cursor::new(0, 0), doc.cur) else {
         return;
     };
+    let mut chars = text.chars_at(text.len_chars()).reversed().peekable();
+    let mut idx = doc.xy_to_idx(doc.cur.x, doc.cur.y);
 
-    left(doc, n + 1);
+    while chars.next_if(|c| c.is_whitespace()).is_some() {
+        idx -= 1;
+    }
+    while chars.next_if(|c| !c.is_whitespace()).is_some() {
+        idx -= 1;
+    }
+    while chars.next_if(|c| c.is_whitespace()).is_some() {
+        idx -= 1;
+    }
+
+    let (x, y) = doc.idx_to_xy(idx);
+    doc.cur = Cursor::new(x, y);
 }
 
 /// Jumps to the next empty line.
@@ -585,8 +484,7 @@ pub fn jump_to_matching_opposite(doc: &mut Document) {
 }
 
 fn find_matching_bracket(doc: &Document) -> Option<(usize, usize)> {
-    let cur = doc.cur;
-    let Some(current_char) = doc.line(cur.y).unwrap().chars().nth(cur.x) else {
+    let Some(current_char) = doc.line(doc.cur.y).unwrap().chars().nth(doc.cur.x) else {
         return None; // Cursor is at the end of line.
     };
 
@@ -595,53 +493,47 @@ fn find_matching_bracket(doc: &Document) -> Option<(usize, usize)> {
         '[' => ('[', ']', true),
         '{' => ('{', '}', true),
         '<' => ('<', '>', true),
-        ')' => ('(', ')', false),
-        ']' => ('[', ']', false),
-        '}' => ('{', '}', false),
-        '>' => ('<', '>', false),
+        ')' => (')', '(', false),
+        ']' => (']', '[', false),
+        '}' => ('}', '{', false),
+        '>' => ('>', '<', false),
         _ => return None,
     };
 
-    let mut depth = 1;
-    if forward {
-        // Search forward from the character after the cursor.
-        for y in cur.y..doc.len() {
-            let line = doc.line(y).unwrap();
-            let offset = if y == cur.y { cur.x + 1 } else { 0 };
-
-            for (x, ch) in line.chars().enumerate().skip(offset) {
-                if ch == opening {
-                    depth += 1;
-                } else if ch == closing {
-                    depth -= 1;
-                }
-
-                if depth == 0 {
-                    return Some((x, y));
-                }
-            }
-        }
+    let end = if forward {
+        let end_y = doc.len().saturating_sub(1);
+        let end_x = doc.line_count(end_y).unwrap_or(0);
+        Cursor::new(end_x, end_y)
     } else {
-        // Search backward from the character before the cursor.
-        for y in (0..=cur.y).rev() {
-            let line = doc.line(y).unwrap();
-            let offset = if y == cur.y { cur.x } else { line.len_chars() };
+        Cursor::new(0, 0)
+    };
 
-            for (x, ch) in line.chars_at(offset).reversed().enumerate() {
-                if ch == closing {
-                    depth += 1;
-                } else if ch == opening {
-                    depth -= 1;
-                }
+    let text = doc.get_range(doc.cur, end)?;
+    let mut chars = if forward {
+        text.chars()
+    } else {
+        text.chars_at(text.len_chars()).reversed()
+    };
 
-                if depth == 0 {
-                    return Some((offset - x - 1, y));
-                }
-            }
-        }
+    // Start with one for backwards search since the initial char is cut off.
+    let mut depth = usize::from(!forward);
+    let pred = |ch: char| {
+        depth += usize::from(ch == opening);
+        depth -= usize::from(ch == closing);
+
+        depth == 0
+    };
+    let offset = chars
+        .position(pred)
+        // Plus one for backwards search since the last char is cut off.
+        .map(|idx| idx + usize::from(!forward))?;
+
+    let idx = doc.xy_to_idx(doc.cur.x, doc.cur.y);
+    if forward {
+        Some(doc.idx_to_xy(idx + offset))
+    } else {
+        Some(doc.idx_to_xy(idx - offset))
     }
-
-    None
 }
 
 /// Jumps the cursors to the last line of the file.

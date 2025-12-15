@@ -108,9 +108,7 @@ impl BufferManager {
                         "No buffer at index `{idx}`.\n\
                         Use the `lb` command to list all open buffers or `nb <type>` to create a new buffer."
                     );
-                    self.buffs[self.active].set_message(MessageKind::Error, message);
-                    self.log
-                        .push(self.buffs[self.active].get_message().unwrap());
+                    self.log(MessageKind::Error, message);
 
                     return true;
                 }
@@ -119,21 +117,11 @@ impl BufferManager {
                 self.active = idx;
                 self.force_rerender = true;
             }
-            BufferResult::Info(message) => {
-                self.buffs[self.active].set_message(MessageKind::Info, message);
-                self.log
-                    .push(self.buffs[self.active].get_message().unwrap());
-            }
-            BufferResult::Error(message) => {
-                self.buffs[self.active].set_message(MessageKind::Error, message);
-                self.log
-                    .push(self.buffs[self.active].get_message().unwrap());
-            }
+            BufferResult::Info(message) => self.log(MessageKind::Info, message),
+            BufferResult::Error(message) => self.log(MessageKind::Error, message),
             BufferResult::ListBuffers => {
                 let message = self.buffer_list();
-                self.buffs[self.active].set_message(MessageKind::Info, message);
-                self.log
-                    .push(self.buffs[self.active].get_message().unwrap());
+                self.log(MessageKind::Info, message);
             }
             BufferResult::NewBuffer(kind) => {
                 self.prev = Some(self.active);
@@ -169,9 +157,7 @@ impl BufferManager {
             }
             BufferResult::Quit => {
                 if let Err(err) = self.buffs[self.active].can_quit() {
-                    self.buffs[self.active].set_message(MessageKind::Error, err);
-                    self.log
-                        .push(self.buffs[self.active].get_message().unwrap());
+                    self.log(MessageKind::Error, err);
                     return true;
                 }
 
@@ -213,25 +199,27 @@ impl BufferManager {
     }
 
     fn buffer_list(&self) -> String {
+        use std::fmt::Write;
+
         let mut message = String::new();
         for (idx, buff) in self.buffs.iter().enumerate() {
-            let mut tmp = if idx == self.active {
-                "[*] ".to_string()
-            } else {
-                format!("[{idx}] ")
+            let marker = if idx == self.active { "*" } else { " " };
+            let info = match buff.kind() {
+                BufferKind::Text => format!("Text ({})", buff.name()),
+                BufferKind::Files => "Files".to_string(),
             };
-            match buff.kind() {
-                BufferKind::Text => {
-                    tmp.push_str(format!("Text ({})\n", buff.name()).as_str());
-                }
-                BufferKind::Files => tmp.push_str("Files\n"),
-            }
 
-            message.push_str(tmp.as_str());
+            writeln!(message, "[{idx}{marker}] {info}").unwrap();
         }
         message.push_str("Use `cb <idx>` to switch to a buffer.");
 
         message
+    }
+
+    fn log(&mut self, kind: MessageKind, text: String) {
+        self.buffs[self.active].set_message(kind, text);
+        self.log
+            .push(self.buffs[self.active].get_message().unwrap());
     }
 
     fn write_log(&mut self, log_file_path: &PathBuf) -> bool {

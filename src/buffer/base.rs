@@ -205,16 +205,7 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             return;
         }
 
-        // Check if we are on an existing selection and activate it if so.
-        let mut resume_idx = None;
-        for (i, sel) in self.selections.iter().enumerate() {
-            if sel.contains(cur) {
-                resume_idx = Some(i);
-                break;
-            }
-        }
-
-        if let Some(idx) = resume_idx {
+        if let Some(idx) = self.selections.iter().position(|sel| sel.contains(cur)) {
             let last_idx = self.selections.len().saturating_sub(1);
             self.selections.swap(idx, last_idx);
 

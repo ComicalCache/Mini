@@ -1,5 +1,5 @@
 use crate::{
-    buffer::{BufferResult, edit},
+    buffer::BufferResult,
     buffer_impls::text_buffer::TextBuffer,
     cursor::{self, Cursor},
     history::Replace,
@@ -47,30 +47,21 @@ impl TextBuffer {
             .base
             .doc
             .delete_char(self.base.doc.cur.x, self.base.doc.cur.y);
+        let new_ch = if ch == '\t' {
+            " ".repeat(TAB_WIDTH - (self.base.doc.cur.x % TAB_WIDTH))
+        } else {
+            ch.to_string()
+        };
 
-        // Store the change in one replace change.
-        {
-            let ch = if ch == '\t' {
-                " ".repeat(TAB_WIDTH - (self.base.doc.cur.x % TAB_WIDTH))
-            } else {
-                ch.to_string()
-            };
+        self.base
+            .doc
+            .write_str_at(self.base.doc.cur.x, self.base.doc.cur.y, new_ch.as_str());
 
-            self.history.add_change(vec![Replace {
-                pos: self.base.doc.cur,
-                delete_data: old_ch.to_string(),
-                insert_data: ch,
-            }]);
-        }
-
-        // Pass a None as History to not save the edit again.
-        match ch {
-            '\t' => edit::write_tab(&mut self.base.doc, None, true),
-            _ => self
-                .base
-                .doc
-                .write_char(ch, self.base.doc.cur.x, self.base.doc.cur.y),
-        }
+        self.history.add_change(vec![Replace {
+            pos: self.base.doc.cur,
+            delete_data: old_ch.to_string(),
+            insert_data: new_ch,
+        }]);
     }
 
     /// Paste the system clipboard contents after the current cursor.
@@ -89,7 +80,7 @@ impl TextBuffer {
         self.base.doc.write_str(insert_data.as_str());
         let pos = self.base.doc.cur;
         if move_to {
-            let end_pos = cursor::end_pos(&pos, insert_data.as_str());
+            let end_pos = cursor::pos_after_text(&pos, insert_data.as_str());
             cursor::move_to(&mut self.base.doc, end_pos);
         }
 

@@ -42,11 +42,8 @@ impl Selection {
 
     /// Returns the range of the selection.
     pub fn range(&self) -> (Cursor, Cursor) {
-        let (start, end) = if self.anchor <= self.head {
-            (self.anchor, self.head)
-        } else {
-            (self.head, self.anchor)
-        };
+        let start = self.anchor.min(self.head);
+        let end = self.anchor.max(self.head);
 
         match self.kind {
             SelectionKind::Normal => (start, end),
@@ -84,24 +81,17 @@ impl PartialOrd for Selection {
 
 impl Ord for Selection {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // Compare y coordinates of the anchor first.
-        match self.anchor.y.cmp(&other.anchor.y) {
-            std::cmp::Ordering::Equal => {}
-            ord => return ord,
-        }
-
-        // Compare x coordinates second. In line mode, the effective start x is always 0.
-        let self_x = if self.kind == SelectionKind::Line {
-            0
+        let anchor1 = if self.kind == SelectionKind::Line {
+            Cursor::new(0, self.anchor.y)
         } else {
-            self.anchor.x
+            self.anchor
         };
-        let other_x = if other.kind == SelectionKind::Line {
-            0
+        let anchor2 = if other.kind == SelectionKind::Line {
+            Cursor::new(0, other.anchor.y)
         } else {
-            other.anchor.x
+            other.anchor
         };
 
-        self_x.cmp(&other_x)
+        anchor1.cmp(&anchor2)
     }
 }

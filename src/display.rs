@@ -28,6 +28,9 @@ pub struct Display {
     w: usize,
     /// The height of the display.
     h: usize,
+
+    /// Issuing a full redraw on resize.
+    full_redraw: bool,
 }
 
 impl Display {
@@ -38,6 +41,7 @@ impl Display {
             cursor: (Cursor::new(0, 0), CursorStyle::SteadyBlock),
             w,
             h,
+            full_redraw: false,
         }
     }
 
@@ -46,6 +50,7 @@ impl Display {
         let mut redraw = false;
         // Resize line width first to avoid more work.
         if self.w != w {
+            self.w = w;
             redraw = true;
 
             for line in &mut self.buff {
@@ -55,23 +60,14 @@ impl Display {
 
         // Resize height second.
         if self.h != h {
+            self.h = h;
             redraw = true;
 
             self.buff.resize(h, vec![Cell::default(); w]);
         }
 
-        self.w = w;
-        self.h = h;
-
         // Redraw everything on resize.
-        if redraw {
-            self.redraw.clear();
-            for x in 0..self.w {
-                for y in 0..self.h {
-                    self.redraw.push((x, y));
-                }
-            }
-        }
+        self.full_redraw = redraw;
     }
 
     /// Updates a cell in the display.
@@ -92,41 +88,27 @@ impl Display {
         // Hide the cursor to avoid it flickering over the screen.
         write!(stdout, "{Hide}")?;
 
-        if !self.redraw.is_empty() {
+        if self.full_redraw {
+            write!(stdout, "{NO_TXT}{NO_BG}")?;
+            write!(stdout, "{}", termion::clear::All)?;
+
             // Store last used colors to not write the color for ever character.
             let mut last_fg: Option<Fg<color::Rgb>> = None;
             let mut last_bg: Option<Bg<color::Rgb>> = None;
-
-            // Drain doesn't allocate and removes the items.
-            for (x, y) in self.redraw.drain(..) {
-                let Cell { ch, fg, bg, .. } = self.buff[y][x];
-
-                if ch == PLACEHOLDER {
-                    continue;
+            for y in 0..self.h {
+                for x in 0..self.w {
+                    self.draw_cell(x, y, &mut last_fg, &mut last_bg, stdout)?;
                 }
-
-                // The indices are bound by terminal dimensions.
-                #[allow(clippy::cast_possible_truncation)]
-                write!(stdout, "{}", Goto(x as u16 + 1, y as u16 + 1))?;
-
-                // Write colors if necessary.
-                match last_fg {
-                    Some(last_fg) if last_fg.0 == fg.0 => {}
-                    _ => {
-                        write!(stdout, "{fg}")?;
-                        last_fg = Some(fg);
-                    }
-                }
-                match last_bg {
-                    Some(last_bg) if last_bg.0 == bg.0 => {}
-                    _ => {
-                        write!(stdout, "{bg}")?;
-                        last_bg = Some(bg);
-                    }
-                }
-
-                write!(stdout, "{ch}")?;
             }
+            self.full_redraw = false;
+        } else if !self.redraw.is_empty() {
+            // Store last used colors to not write the color for ever character.
+            let mut last_fg: Option<Fg<color::Rgb>> = None;
+            let mut last_bg: Option<Bg<color::Rgb>> = None;
+            for (x, y) in &self.redraw {
+                self.draw_cell(*x, *y, &mut last_fg, &mut last_bg, stdout)?;
+            }
+            self.redraw.clear();
         }
 
         // Always draw the cursor.
@@ -139,10 +121,45 @@ impl Display {
             CursorStyle::SteadyBlock => write!(stdout, "{cur}{SteadyBlock}{Show}")?,
         }
 
-        // Always reset styling and show cursor.
         write!(stdout, "{NO_TXT}{NO_BG}")?;
-
         stdout.flush()
+    }
+
+    fn draw_cell(
+        &self,
+        x: usize,
+        y: usize,
+        last_fg: &mut Option<Fg<color::Rgb>>,
+        last_bg: &mut Option<Bg<color::Rgb>>,
+        stdout: &mut BufWriter<RawTerminal<Stdout>>,
+    ) -> Result<(), Error> {
+        let Cell { ch, fg, bg, .. } = self.buff[y][x];
+
+        if ch == PLACEHOLDER {
+            return Ok(());
+        }
+
+        // The indices are bound by terminal dimensions.
+        #[allow(clippy::cast_possible_truncation)]
+        write!(stdout, "{}", Goto(x as u16 + 1, y as u16 + 1))?;
+
+        // Write colors if necessary.
+        match last_fg {
+            Some(last_fg) if last_fg.0 == fg.0 => {}
+            _ => {
+                write!(stdout, "{fg}")?;
+                *last_fg = Some(fg);
+            }
+        }
+        match last_bg {
+            Some(last_bg) if last_bg.0 == bg.0 => {}
+            _ => {
+                write!(stdout, "{bg}")?;
+                *last_bg = Some(bg);
+            }
+        }
+
+        write!(stdout, "{ch}")
     }
 }
 

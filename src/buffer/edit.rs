@@ -48,35 +48,15 @@ pub fn write_tab(doc: &mut Document, history: Option<&mut History>, relative: bo
     cursor::right(doc, n);
 }
 
-/// Deletes a character at the current cursor position, joining two lines if necessary.
-/// The cursor will be at the delete chars position.
+/// Deletes a character at the current cursor position. The cursor will be at the delete chars position.
 pub fn delete_char(doc: &mut Document, history: Option<&mut History>) {
-    let cur = doc.cur;
-
-    if cur.x > 0 {
-        // If deleting a character in a line.
-        cursor::left(doc, 1);
-        let ch = doc.delete_char(doc.cur.x, doc.cur.y);
-
-        if let Some(history) = history {
-            history.add_change(vec![Replace {
-                pos: doc.cur,
-                delete_data: ch.to_string(),
-                insert_data: String::new(),
-            }]);
-        }
-    } else if cur.y > 0 {
-        // If deleting at the beginning of a line and it's not the first line.
-        cursor::up(doc, 1);
-        cursor::jump_to_end_of_line(doc);
-        let ch = doc.delete_char(doc.cur.x, doc.cur.y);
-
-        if let Some(history) = history {
-            history.add_change(vec![Replace {
-                pos: doc.cur,
-                delete_data: ch.to_string(),
-                insert_data: String::new(),
-            }]);
-        }
+    cursor::left(doc, 1);
+    let ch = doc.delete_char(doc.cur.x, doc.cur.y);
+    if let Some(history) = history {
+        history.add_change(vec![Replace {
+            pos: doc.cur,
+            delete_data: ch.to_string(),
+            insert_data: String::new(),
+        }]);
     }
 }

@@ -1,6 +1,5 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
-#![allow(clippy::too_many_lines, clippy::enum_glob_use, clippy::similar_names)]
-#![feature(trait_alias)]
+#![allow(clippy::too_many_lines, clippy::similar_names)]
 
 mod buffer;
 mod buffer_impls;
@@ -21,11 +20,7 @@ use crate::{
     util::{file_name, open_file},
 };
 use polling::{Events, Poller};
-use std::{
-    io::{BufWriter, Write},
-    os::fd::AsFd,
-    time::Duration,
-};
+use std::{io::BufWriter, os::fd::AsFd, time::Duration};
 use termion::{
     input::TermRead,
     raw::IntoRawMode,
@@ -36,25 +31,32 @@ use termion::{
 const STDIN_EVENT_KEY: usize = 25663;
 const INFO_MSG: &str = include_str!("../info.txt");
 
-#[allow(clippy::too_many_lines)]
-fn main() -> Result<(), std::io::Error> {
+fn main() {
     let mut args = std::env::args();
     args.next();
 
-    // Print help or read file if argument was supplied.
     let path = args.next();
-    let (file, file_name) = if let Some(path) = &path {
-        if path == "--help" {
-            let version = option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap();
-            println!("Mini - A terminal text-editor (v{version})\n\n{INFO_MSG}");
-            return Ok(());
-        }
+    if let Some(path) = &path
+        && path == "--help"
+    {
+        let version = option_env!("CARGO_PKG_VERSION").or(Some("?.?.?")).unwrap();
+        println!("Mini - A terminal text-editor (v{version})\n\n{INFO_MSG}");
+        return;
+    }
 
-        let file = open_file(path);
-        (Some(file), file_name(path))
-    } else {
-        (None, None)
-    };
+    print!("{ToAlternateScreen}");
+    let res = mini(path.as_ref());
+    print!("{ToMainScreen}");
+
+    if let Err(err) = res {
+        eprintln!("{err}");
+    }
+}
+
+fn mini(path: Option<&String>) -> Result<(), std::io::Error> {
+    let (file, file_name) = path.as_ref().map_or((None, None), |path| {
+        (Some(open_file(path)), file_name(path))
+    });
 
     // Setup stdin and stdout.
     let mut stdout = BufWriter::new(std::io::stdout().into_raw_mode()?);
@@ -67,20 +69,14 @@ fn main() -> Result<(), std::io::Error> {
 
     let (w, h) = termion::terminal_size()?;
 
-    // Buffer manager holds app state.
-    let mut buffer_manager =
-        BufferManager::new(path.as_ref(), file, file_name, w as usize, h as usize)?;
-    // Create a display buffer.
+    let mut buffer_manager = BufferManager::new(path, file, file_name, w as usize, h as usize)?;
     let mut display = Display::new(w as usize, h as usize);
 
-    // Init terminal by switching to alternate screen.
-    write!(&mut stdout, "{ToAlternateScreen}")?;
     buffer_manager.render(&mut display);
     display.draw(&mut stdout)?;
 
     let mut events = Events::new();
     loop {
-        // Handle terminal resizing.
         let (w, h) = termion::terminal_size()?;
         buffer_manager.resize(w as usize, h as usize);
         display.resize(w as usize, h as usize);
@@ -91,7 +87,10 @@ fn main() -> Result<(), std::io::Error> {
 
         let key = if events.iter().any(|e| e.key == STDIN_EVENT_KEY) {
             // If a new event exists, send a tick with the key immediately.
-            Some(stdin_keys.next().unwrap()?)
+            match stdin_keys.next() {
+                Some(Ok(key)) => Some(key),
+                Some(Err(_)) | None => return Ok(()),
+            }
         } else {
             // Otherwise send an empty tick after the timeout.
             None
@@ -107,7 +106,5 @@ fn main() -> Result<(), std::io::Error> {
         poller.modify(stdin.as_fd(), polling::Event::readable(STDIN_EVENT_KEY))?;
     }
 
-    // Switch back to the main screen before exiting.
-    write!(stdout, "{ToMainScreen}")?;
-    stdout.flush()
+    Ok(())
 }

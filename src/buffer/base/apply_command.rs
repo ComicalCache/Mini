@@ -27,15 +27,12 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
         // Use selections or search entire buffer.
         self.selections.sort_unstable();
         let selections = if self.selections.is_empty() {
-            // Save previous cursor position.
-            let tmp_doc_cur = self.doc.cur;
-
             let start = Cursor::new(0, 0);
-            cursor::jump_to_end_of_file(&mut self.doc);
-            let end = self.doc.cur;
-
-            // Restore previous cursor position.
-            self.doc.cur = tmp_doc_cur;
+            let end = {
+                let y = self.doc.len().saturating_sub(1);
+                let x = self.doc.line_count(y).unwrap_or(0);
+                Cursor::new(x, y)
+            };
 
             &vec![Selection::new(
                 start,
@@ -56,8 +53,8 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             self.matches = regex
                 .find_iter(&hay)
                 .map(|mat| {
-                    let start_pos = cursor::end_pos(&start, &hay[..mat.start()]);
-                    let end_pos = cursor::end_pos(&start, &hay[..mat.end()]);
+                    let start_pos = cursor::pos_after_text(&start, &hay[..mat.start()]);
+                    let end_pos = cursor::pos_after_text(&start, &hay[..mat.end()]);
                     (start_pos, end_pos)
                 })
                 .collect();

@@ -12,12 +12,15 @@ impl TextBuffer {
             // To undo an insert, delete the data that was inserted.
             self.base
                 .doc
-                .remove_range(c.pos, cursor::end_pos(&c.pos, &c.insert_data));
+                .remove_range(c.pos, cursor::pos_after_text(&c.pos, &c.insert_data));
             cursor::move_to(&mut self.base.doc, c.pos);
 
             // To undo a delete, insert the data back.
             self.base.doc.write_str_at(c.pos.x, c.pos.y, &c.delete_data);
-            cursor::move_to(&mut self.base.doc, cursor::end_pos(&c.pos, &c.delete_data));
+            cursor::move_to(
+                &mut self.base.doc,
+                cursor::pos_after_text(&c.pos, &c.delete_data),
+            );
         }
 
         self.history.push_redo(changes);
@@ -33,12 +36,15 @@ impl TextBuffer {
             // To redo a delete, delete the data.
             self.base
                 .doc
-                .remove_range(c.pos, cursor::end_pos(&c.pos, &c.delete_data));
+                .remove_range(c.pos, cursor::pos_after_text(&c.pos, &c.delete_data));
             cursor::move_to(&mut self.base.doc, c.pos);
 
             // To redo an insert, insert the data.
             self.base.doc.write_str_at(c.pos.x, c.pos.y, &c.insert_data);
-            cursor::move_to(&mut self.base.doc, cursor::end_pos(&c.pos, &c.insert_data));
+            cursor::move_to(
+                &mut self.base.doc,
+                cursor::pos_after_text(&c.pos, &c.insert_data),
+            );
         }
 
         self.history.push_undo(changes);

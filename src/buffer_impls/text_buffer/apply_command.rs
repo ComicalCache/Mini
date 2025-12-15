@@ -118,15 +118,12 @@ impl TextBuffer {
         // Use selections or replace in entire buffer.
         self.base.selections.sort_unstable();
         let selections = if self.base.selections.is_empty() {
-            // Save previous cursor position.
-            let tmp_doc_cur = self.base.doc.cur;
-
             let start = Cursor::new(0, 0);
-            cursor::jump_to_end_of_file(&mut self.base.doc);
-            let end = self.base.doc.cur;
-
-            // Restore previous cursor position.
-            self.base.doc.cur = tmp_doc_cur;
+            let end = {
+                let y = self.base.doc.len().saturating_sub(1);
+                let x = self.base.doc.line_count(y).unwrap_or(0);
+                Cursor::new(x, y)
+            };
 
             &[Selection::new(
                 start,
@@ -153,7 +150,7 @@ impl TextBuffer {
                 new.push_str(&hay[last_match..mat.start()]);
 
                 // Save pos of replacement in new string.
-                let pos = cursor::end_pos(&start, &new);
+                let pos = cursor::pos_after_text(&start, &new);
 
                 // Replace match.
                 let mut replacement = String::new();

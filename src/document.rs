@@ -122,11 +122,8 @@ impl Document {
 
     /// Gets a range of text from the document.
     pub fn get_range(&self, pos1: Cursor, pos2: Cursor) -> Option<RopeSlice<'_>> {
-        let (start, end) = if pos1 <= pos2 {
-            (pos1, pos2)
-        } else {
-            (pos2, pos1)
-        };
+        let start = pos1.min(pos2);
+        let end = pos1.max(pos2);
 
         let start_idx = self.xy_to_idx(start.x, start.y);
         let end_idx = self.xy_to_idx(end.x, end.y);
@@ -136,20 +133,25 @@ impl Document {
 
     /// Removes a range of text from the document.
     pub fn remove_range(&mut self, pos1: Cursor, pos2: Cursor) {
-        let (start, end) = if pos1 <= pos2 {
-            (pos1, pos2)
-        } else {
-            (pos2, pos1)
-        };
+        let start = pos1.min(pos2);
+        let end = pos1.max(pos2);
 
         let start_idx = self.xy_to_idx(start.x, start.y);
         let end_idx = self.xy_to_idx(end.x, end.y);
+
         self.rope.remove(start_idx..end_idx);
         self.edited = true;
     }
 
     /// Converts (x, y) coordinates to a rope index.
-    fn xy_to_idx(&self, x: usize, y: usize) -> usize {
+    pub fn xy_to_idx(&self, x: usize, y: usize) -> usize {
         self.rope.line_to_char(y) + x
+    }
+
+    /// Converts a rope index to (x, y) coordinates.
+    pub fn idx_to_xy(&self, idx: usize) -> (usize, usize) {
+        let y = self.rope.char_to_line(idx);
+        let x = idx - self.rope.line_to_char(y);
+        (x, y)
     }
 }

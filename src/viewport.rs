@@ -106,17 +106,12 @@ impl Viewport {
             .unwrap_or_default();
         let visual_x = text_width(&line, doc.cur.x);
 
-        if visual_x < self.scroll_x {
-            self.scroll_x = visual_x;
-        } else if visual_x >= self.scroll_x + self.buff_w {
-            self.scroll_x = visual_x.saturating_sub(self.buff_w) + 1;
-        }
-
-        if doc.cur.y < self.scroll_y {
-            self.scroll_y = doc.cur.y;
-        } else if doc.cur.y >= self.scroll_y + self.h {
-            self.scroll_y = doc.cur.y.saturating_sub(self.h) + 1;
-        }
+        self.scroll_x = self
+            .scroll_x
+            .clamp(visual_x.saturating_sub(self.buff_w - 1), visual_x);
+        self.scroll_y = self
+            .scroll_y
+            .clamp(doc.cur.y.saturating_sub(self.h - 1), doc.cur.y);
     }
 
     /// Sets the gutter width.
