@@ -314,22 +314,27 @@ impl Viewport {
             for x in 0..self.buff_w {
                 // The indices are bound by terminal dimensions.
                 #[allow(clippy::cast_possible_truncation)]
-                if let Some(cell) = screen.cell(y as u16, x as u16) {
-                    let Some(ch) = cell.contents().chars().next() else {
-                        continue;
-                    };
-                    let fg = vt100_color_to_rgb(cell.fgcolor(), true);
-                    let bg = vt100_color_to_rgb(cell.bgcolor(), false);
+                let cell = screen.cell(y as u16, x as u16).unwrap();
+                let fg = vt100_color_to_rgb(cell.fgcolor(), true);
+                let bg = vt100_color_to_rgb(cell.bgcolor(), false);
 
+                if !cell.has_contents() {
+                    // Default background if the cell doesn't contain data.
                     display.update(
-                        Cell::new(ch, Fg(fg), Bg(bg)),
+                        Cell::new(' ', TXT, BG),
+                        self.x_off + self.gutter_w + x,
+                        self.y_off + y,
+                    );
+                } else if cell.is_wide_continuation() {
+                    display.update(
+                        Cell::new(PLACEHOLDER, Fg(fg), Bg(bg)),
                         self.x_off + self.gutter_w + x,
                         self.y_off + y,
                     );
                 } else {
-                    // Default background if the cell doesn't contain data.
+                    let ch = cell.contents().chars().next().unwrap();
                     display.update(
-                        Cell::new(' ', TXT, BG),
+                        Cell::new(ch, Fg(fg), Bg(bg)),
                         self.x_off + self.gutter_w + x,
                         self.y_off + y,
                     );
