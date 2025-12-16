@@ -3,11 +3,7 @@ mod history;
 mod insert;
 
 use crate::{
-    buffer::{
-        Buffer, BufferKind, BufferResult,
-        base::{BaseBuffer, Mode},
-        delete, edit,
-    },
+    buffer::{Buffer, BufferKind, BufferResult, base::BaseBuffer, delete, edit},
     change,
     cursor::{self, CursorStyle},
     delete,
@@ -28,7 +24,9 @@ use std::{
 };
 use termion::event::Key;
 
-enum OtherMode {
+enum Mode {
+    View,
+    Command,
     Insert,
 }
 
@@ -42,7 +40,8 @@ enum ViewMode {
 
 /// A text buffer.
 pub struct TextBuffer {
-    base: BaseBuffer<OtherMode>,
+    base: BaseBuffer,
+    mode: Mode,
     view_mode: ViewMode,
 
     /// The info bar content.
@@ -80,6 +79,7 @@ impl TextBuffer {
 
         Ok(Self {
             base: BaseBuffer::new(w, h, x_off, y_off, contents)?,
+            mode: Mode::View,
             view_mode: ViewMode::Normal,
             info: Document::new(0, 0, None),
             file,
@@ -89,15 +89,42 @@ impl TextBuffer {
         })
     }
 
+    /// Changes the mode.
+    fn change_mode(&mut self, new_mode: Mode) {
+        match self.mode {
+            Mode::Command => {
+                // Clear command line so its ready for next entry. Don't save contents here since they are only
+                // saved when hitting enter.
+                self.base.cmd.from("");
+                self.base.cmd_view.scroll_x = 0;
+                self.base.cmd_view.scroll_y = 0;
+            }
+            Mode::View => {
+                // Since search matches could have been overwritten we discard all matches.
+                if self.base.doc.edited {
+                    self.base.clear_matches();
+                }
+            }
+            Mode::Insert => {}
+        }
+
+        match new_mode {
+            Mode::Command => self.base.cmd_history_idx = self.base.cmd_history.len(),
+            Mode::View | Mode::Insert => {}
+        }
+
+        self.mode = new_mode;
+    }
+
     /// Creates an info line
     fn info_line(&mut self) {
         use std::fmt::Write;
 
         let mut info_line = String::new();
 
-        let mode = match self.base.mode {
+        let mode = match self.mode {
             Mode::View => "[VIS] ",
-            Mode::Other(OtherMode::Insert) => "[INS] ",
+            Mode::Insert => "[INS] ",
             Mode::Command => unreachable!(),
         };
         let view_mode = match self.view_mode {
@@ -145,8 +172,6 @@ impl TextBuffer {
 
     /// Handles self defined view actions.
     fn view_tick(&mut self, key: Option<Key>) -> BufferResult {
-        use OtherMode::Insert;
-
         let Some(key) = key else {
             return BufferResult::Ok;
         };
@@ -184,25 +209,25 @@ impl TextBuffer {
                 }
                 Key::Esc => self.base.selections.clear(),
                 Key::Char('y') => self.view_mode = ViewMode::Yank,
-                Key::Char(' ') => self.base.change_mode(Mode::Command),
+                Key::Char(' ') => self.change_mode(Mode::Command),
                 Key::Char('n') => self.base.next_match(),
                 Key::Char('N') => self.base.prev_match(),
-                Key::Char('i') => self.base.change_mode(Mode::Other(Insert)),
+                Key::Char('i') => self.change_mode(Mode::Insert),
                 Key::Char('a') => {
                     cursor::right(&mut self.base.doc, 1);
-                    self.base.change_mode(Mode::Other(Insert));
+                    self.change_mode(Mode::Insert);
                 }
                 Key::Char('A') => {
                     cursor::jump_to_end_of_line(&mut self.base.doc);
-                    self.base.change_mode(Mode::Other(Insert));
+                    self.change_mode(Mode::Insert);
                 }
                 Key::Char('o') => {
                     self.insert_move_new_line_bellow();
-                    self.base.change_mode(Mode::Other(Insert));
+                    self.change_mode(Mode::Insert);
                 }
                 Key::Char('O') => {
                     self.insert_move_new_line_above();
-                    self.base.change_mode(Mode::Other(Insert));
+                    self.change_mode(Mode::Insert);
                 }
                 Key::Char('d') => self.view_mode = ViewMode::Delete,
                 Key::Char('x') => delete!(self, right, REPEAT),
@@ -279,12 +304,12 @@ impl TextBuffer {
                             &mut self.base.selections,
                             Some(&mut self.history),
                         );
-                        self.base.change_mode(Mode::Other(Insert));
+                        self.change_mode(Mode::Insert);
                     }
                     Key::Char('c') => {
                         cursor::jump_to_beginning_of_line(&mut self.base.doc);
                         delete::end_of_line(&mut self.base.doc, Some(&mut self.history));
-                        self.base.change_mode(Mode::Other(Insert));
+                        self.change_mode(Mode::Insert);
                     }
                     Key::Char('h') => change!(self, left, REPEAT),
                     Key::Char('l') => change!(self, right, REPEAT),
@@ -324,7 +349,7 @@ impl TextBuffer {
         };
 
         match key {
-            Key::Esc => self.base.change_mode(Mode::View),
+            Key::Esc => self.change_mode(Mode::View),
             Key::Left => cursor::left(&mut self.base.doc, 1),
             Key::Down => cursor::down(&mut self.base.doc, 1),
             Key::Up => cursor::up(&mut self.base.doc, 1),
@@ -347,7 +372,7 @@ impl TextBuffer {
         };
 
         match key {
-            Key::Esc => self.base.change_mode(Mode::View),
+            Key::Esc => self.change_mode(Mode::View),
             Key::Left => cursor::left(&mut self.base.cmd, 1),
             Key::Right => cursor::right(&mut self.base.cmd, 1),
             Key::Up => self.base.prev_command_history(),
@@ -360,7 +385,7 @@ impl TextBuffer {
                 if !cmd.is_empty() {
                     self.base.cmd_history.push(cmd.clone());
                 }
-                self.base.change_mode(Mode::View);
+                self.change_mode(Mode::View);
 
                 match self.base.apply_command(cmd) {
                     Ok(res) => return res,
@@ -457,10 +482,10 @@ impl Buffer for TextBuffer {
     fn render(&mut self, display: &mut Display) {
         self.base.rerender = false;
 
-        let (cursor_style, cmd) = match self.base.mode {
+        let (cursor_style, cmd) = match self.mode {
             Mode::View => (CursorStyle::SteadyBlock, false),
             Mode::Command => (CursorStyle::SteadyBar, true),
-            Mode::Other(OtherMode::Insert) => (CursorStyle::SteadyBar, false),
+            Mode::Insert => (CursorStyle::SteadyBar, false),
         };
 
         self.base.doc_view.recalculate_viewport(&self.base.doc);
@@ -559,10 +584,10 @@ impl Buffer for TextBuffer {
             }
         }
 
-        match self.base.mode {
+        match self.mode {
             Mode::View => self.view_tick(key),
             Mode::Command => self.command_tick(key),
-            Mode::Other(OtherMode::Insert) => self.write_tick(key),
+            Mode::Insert => self.write_tick(key),
         }
     }
 

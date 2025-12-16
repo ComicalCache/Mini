@@ -50,11 +50,11 @@ macro_rules! delete {
 macro_rules! change {
     ($self:ident, $func:ident) => {{
         $crate::buffer::delete::$func(&mut $self.base.doc, Some(&mut $self.history));
-        $self.base.change_mode(Mode::Other(Insert));
+        $self.change_mode(Mode::Insert);
     }};
     ($self:ident, $func:ident, REPEAT) => {{
         $crate::buffer::delete::$func(&mut $self.base.doc, Some(&mut $self.history), 1);
-        $self.base.change_mode(Mode::Other(Insert));
+        $self.change_mode(Mode::Insert);
     }};
 }
 

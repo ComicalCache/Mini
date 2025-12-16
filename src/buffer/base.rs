@@ -10,20 +10,10 @@ use crate::{
 use arboard::Clipboard;
 use std::io::Error;
 
-/// A base set of buffer mode.
-pub enum Mode<T> {
-    /// View mode, made for inspecting a document.
-    View,
-    /// Command mode, made to issue commands to the buffer.
-    Command,
-    /// Other modes defined by specialized buffers.
-    Other(T),
-}
-
 /// A struct defining the base functionality of a buffer. Specialized buffers can keep
 /// it as a field to "inherit" this base. Buffers with completely separate functionality
 /// can use it as a blueprint and define their own functionality from scratch.
-pub struct BaseBuffer<ModeEnum> {
+pub struct BaseBuffer {
     /// Total width of the `Buffer`.
     pub w: usize,
     /// Total height of the `Buffer`.
@@ -49,8 +39,6 @@ pub struct BaseBuffer<ModeEnum> {
     pub selections: Vec<Selection>,
     active_selection: bool,
 
-    /// The current buffer mode.
-    pub mode: Mode<ModeEnum>,
     /// An instance of the system clipboard to yank to.
     pub clipboard: Clipboard,
 
@@ -71,7 +59,7 @@ pub struct BaseBuffer<ModeEnum> {
     pub rerender: bool,
 }
 
-impl<ModeEnum> BaseBuffer<ModeEnum> {
+impl BaseBuffer {
     pub fn new(
         w: usize,
         h: usize,
@@ -99,7 +87,6 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             cmd_view,
             selections: Vec::new(),
             active_selection: false,
-            mode: Mode::View,
             clipboard: Clipboard::new().map_err(Error::other)?,
             matches: Vec::new(),
             matches_idx: None,
@@ -281,33 +268,6 @@ impl<ModeEnum> BaseBuffer<ModeEnum> {
             .from(self.cmd_history[self.cmd_history_idx].as_str());
 
         cursor::jump_to_end_of_line(&mut self.cmd);
-    }
-
-    /// Changes the base buffers mode.
-    pub fn change_mode(&mut self, new_mode: Mode<ModeEnum>) {
-        match self.mode {
-            Mode::Command => {
-                // Clear command line so its ready for next entry. Don't save contents here since they are only
-                // saved when hitting enter.
-                self.cmd.from("");
-                self.cmd_view.scroll_x = 0;
-                self.cmd_view.scroll_y = 0;
-            }
-            Mode::View => {
-                // Since search matches could have been overwritten we discard all matches.
-                if self.doc.edited {
-                    self.clear_matches();
-                }
-            }
-            Mode::Other(_) => {}
-        }
-
-        match new_mode {
-            Mode::Command => self.cmd_history_idx = self.cmd_history.len(),
-            Mode::View | Mode::Other(_) => {}
-        }
-
-        self.mode = new_mode;
     }
 
     /// Set a message to display to the user.
