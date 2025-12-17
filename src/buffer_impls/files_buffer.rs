@@ -94,6 +94,9 @@ impl FilesBuffer {
                 self.base.doc.from(contents.as_str());
                 self.base.doc_view.scroll_x = 0;
                 self.base.doc_view.scroll_y = 0;
+
+                // Refreshing might cause matches and selections to become invalid.
+                self.base.clear_matches();
                 self.base.clear_selections();
 
                 BufferResult::Ok

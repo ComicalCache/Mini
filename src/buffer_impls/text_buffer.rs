@@ -110,7 +110,12 @@ impl TextBuffer {
 
         match new_mode {
             Mode::Command => self.base.cmd_history_idx = self.base.cmd_history.len(),
-            Mode::View | Mode::Insert => {}
+            Mode::Insert => {
+                // Edits might cause matches and selections to become invalid.
+                self.base.clear_matches();
+                self.base.clear_selections();
+            }
+            Mode::View => {}
         }
 
         self.mode = new_mode;
@@ -236,14 +241,20 @@ impl TextBuffer {
                     if let Some(res) = self.paste(false, false) {
                         return res;
                     }
+
+                    // Pasting might cause matches and selections to become invalid.
                     self.base.clear_matches();
+                    self.base.clear_selections();
                 }
                 Key::Char('P') => {
                     self.insert_move_new_line_above();
                     if let Some(res) = self.paste(true, false) {
                         return res;
                     }
+
+                    // Pasting might cause matches and selections to become invalid.
                     self.base.clear_matches();
+                    self.base.clear_selections();
                 }
                 Key::Char('r') => self.view_mode = ViewMode::Replace,
                 Key::Char('u') => self.undo(),
@@ -333,7 +344,6 @@ impl TextBuffer {
             ViewMode::Replace => {
                 if let Key::Char(ch) = key {
                     self.replace(ch);
-                    self.base.clear_matches();
                 }
                 self.view_mode = ViewMode::Normal;
             }

@@ -26,11 +26,13 @@ macro_rules! delete_fn {
 macro_rules! delete {
     ($self:ident, $func:ident) => {{
         $crate::buffer::delete::$func(&mut $self.base.doc, Some(&mut $self.history));
+        // Deletions might cause matches and selections to become invalid.
         $self.base.clear_matches();
         $self.base.clear_selections();
     }};
     ($self:ident, $func:ident, REPEAT) => {{
         $crate::buffer::delete::$func(&mut $self.base.doc, Some(&mut $self.history), 1);
+        // Deletions might cause matches and selections to become invalid.
         $self.base.clear_matches();
         $self.base.clear_selections();
     }};
@@ -40,6 +42,7 @@ macro_rules! delete {
             &mut $self.base.selections,
             Some(&mut $self.history),
         );
+        // Deletions might cause matches and selections to become invalid.
         $self.base.clear_matches();
         $self.base.clear_selections();
     }};

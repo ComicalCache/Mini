@@ -33,6 +33,8 @@ impl TextBuffer {
         self.base.doc_view.scroll_x = 0;
         self.base.doc_view.scroll_y = 0;
         self.base.doc_view.set_gutter_width(1);
+        self.base.clear_matches();
+        self.base.clear_selections();
         self.file = None;
         self.file_name = None;
 
@@ -175,6 +177,7 @@ impl TextBuffer {
             self.base.doc.write_str_at(start.x, start.y, &new);
         }
 
+        self.base.clear_matches();
         self.base.clear_selections();
 
         if !changes.is_empty() {
@@ -190,9 +193,16 @@ impl TextBuffer {
             self.base.doc_view.h,
             args.to_string(),
         ) {
-            Ok(sc) => Some(sc),
+            Ok(sc) => {
+                // Shell commands might cause matches and selections to become invalid.
+                self.base.clear_matches();
+                self.base.clear_selections();
+
+                Some(sc)
+            }
             Err(err) => return err,
         };
+
         BufferResult::Ok
     }
 

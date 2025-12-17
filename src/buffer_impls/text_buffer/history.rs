@@ -7,6 +7,10 @@ impl TextBuffer {
             return;
         };
 
+        // Undoing might cause matches and selections to become invalid.
+        self.base.clear_matches();
+        self.base.clear_selections();
+
         // Undo in reverse order to not change indices of later events.
         for c in changes.iter().rev() {
             // To undo an insert, delete the data that was inserted.
@@ -31,6 +35,10 @@ impl TextBuffer {
         let Some(changes) = self.history.redo() else {
             return;
         };
+
+        // Redoing might cause matches and selections to become invalid.
+        self.base.clear_matches();
+        self.base.clear_selections();
 
         for c in &changes {
             // To redo a delete, delete the data.
