@@ -108,8 +108,10 @@ impl Display {
             for (x, y) in &self.redraw {
                 self.draw_cell(*x, *y, &mut last_fg, &mut last_bg, stdout)?;
             }
-            self.redraw.clear();
         }
+        // Clear the redraw buffer in any case since it contains stale data on full redraw.
+        // Full redraw always means a resize, so previous redraw instructions are invalidated.
+        self.redraw.clear();
 
         // Always draw the cursor.
         // The cursor is bound by the terminal dimensions.
