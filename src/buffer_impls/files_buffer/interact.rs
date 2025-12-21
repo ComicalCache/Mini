@@ -26,18 +26,23 @@ impl FilesBuffer {
             .collect::<Result<Vec<_>, Error>>()?;
         entries.sort();
 
-        let mut contents = String::from("..\n");
-        contents.extend(entries.iter().map(|entry| {
-            if entry.is_symlink() {
-                let target = entry.read_link().unwrap_or_else(|_| PathBuf::from("?"));
-                let suffix = if target.is_dir() { "/" } else { "" };
-                format!("{} -> {}{}\n", entry.display(), target.display(), suffix)
-            } else if entry.is_dir() {
-                format!("{}/\n", entry.display())
-            } else {
-                format!("{}\n", entry.display())
-            }
-        }));
+        let mut contents = String::from("..");
+        if !entries.is_empty() {
+            let len = entries.len() - 1;
+            contents.push('\n');
+            contents.extend(entries.iter().enumerate().map(|(idx, entry)| {
+                let nl = if idx == len { "" } else { "\n" };
+                if entry.is_symlink() {
+                    let target = entry.read_link().unwrap_or_else(|_| PathBuf::from("?"));
+                    let suffix = if target.is_dir() { "/" } else { "" };
+                    format!("{} -> {}{suffix}{nl}", entry.display(), target.display())
+                } else if entry.is_dir() {
+                    format!("{}/{nl}", entry.display())
+                } else {
+                    format!("{}{nl}", entry.display())
+                }
+            }));
+        }
 
         Ok(contents)
     }
