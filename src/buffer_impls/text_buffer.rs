@@ -212,7 +212,7 @@ impl TextBuffer {
                     self.base.add_selection(SelectionKind::Line);
                     self.base.update_selection();
                 }
-                Key::Esc => self.base.selections.clear(),
+                Key::Esc => self.base.clear_selections(),
                 Key::Char('y') => self.view_mode = ViewMode::Yank,
                 Key::Char(' ') => self.change_mode(Mode::Command),
                 Key::Char('n') => self.base.next_match(),
