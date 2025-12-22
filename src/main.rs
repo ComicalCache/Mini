@@ -18,7 +18,7 @@ use crate::{
     buffer_manager::BufferManager,
     display::Display,
     util::{file_name, open_file},
-    viewport::{BG, CHAR_WARN, HIGHLIGHT, INFO, SEL},
+    viewport::{BG, CHAR_WARN, HIGHLIGHT, INFO, SEL, TXT},
 };
 use polling::{Events, Poller};
 use std::{io::BufWriter, os::fd::AsFd, time::Duration};
@@ -56,21 +56,23 @@ fn kitty_pop_colors() {
 
 /// Sets the transparentcy colors of kitty.
 fn kitty_transparency() {
-    let colors = [BG.0, HIGHLIGHT.0, INFO.0, SEL.0, CHAR_WARN.0];
+    let colors = [HIGHLIGHT.0, INFO.0, SEL.0, CHAR_WARN.0];
 
-    let mut seq = String::from("\x1b]21");
-    seq.extend(colors.iter().enumerate().map(|(idx, color)| {
+    let mut trans = String::new();
+    trans.extend(colors.iter().enumerate().map(|(idx, color)| {
         format!(
-            ";transparent_background_color{}=rgb:{:02x}/{:02x}/{:02x}@0.8",
+            ";transparent_background_color{}=rgb:{:02x}/{:02x}/{:02x}@-1",
             idx + 1,
             color.0,
             color.1,
             color.2
         )
     }));
-    seq.push_str("\x1b\\");
 
-    print!("{seq}");
+    print!(
+        "\x1b]21;foreground=rgb:{:02x}/{:02x}/{:02x};background=rgb:{:02x}/{:02x}/{:02x}{trans}\x1b\\",
+        TXT.0.0, TXT.0.1, TXT.0.2, BG.0.0, BG.0.1, BG.0.2
+    );
 }
 
 fn main() {
