@@ -18,6 +18,7 @@ use crate::{
     buffer_manager::BufferManager,
     display::Display,
     util::{file_name, open_file},
+    viewport::{BG, CHAR_WARN, HIGHLIGHT, INFO, SEL},
 };
 use polling::{Events, Poller};
 use std::{io::BufWriter, os::fd::AsFd, time::Duration};
@@ -30,6 +31,47 @@ use termion::{
 // Random value chosen by dev-rng.
 const STDIN_EVENT_KEY: usize = 25663;
 const INFO_MSG: &str = include_str!("../info.txt");
+
+/// Checks if the current running terminal is kitty.
+fn is_kitty() -> bool {
+    let term = std::env::var("TERM")
+        .map(|s| s.contains("kitty"))
+        .unwrap_or(false);
+    let prog = std::env::var("TERM_PROGRAM")
+        .map(|s| s.contains("kitty"))
+        .unwrap_or(false);
+
+    term || prog
+}
+
+/// Pushes to the kitty color stack.
+fn kitty_push_colors() {
+    print!("\x1b]30001\x1b\\");
+}
+
+/// Pops from the kitty color stack.
+fn kitty_pop_colors() {
+    print!("\x1b]30101\x1b\\");
+}
+
+/// Sets the transparentcy colors of kitty.
+fn kitty_transparency() {
+    let colors = [BG.0, HIGHLIGHT.0, INFO.0, SEL.0, CHAR_WARN.0];
+
+    let mut seq = String::from("\x1b]21");
+    seq.extend(colors.iter().enumerate().map(|(idx, color)| {
+        format!(
+            ";transparent_background_color{}=rgb:{:02x}/{:02x}/{:02x}@0.8",
+            idx + 1,
+            color.0,
+            color.1,
+            color.2
+        )
+    }));
+    seq.push_str("\x1b\\");
+
+    print!("{seq}");
+}
 
 fn main() {
     let mut args = std::env::args();
@@ -45,7 +87,14 @@ fn main() {
     }
 
     print!("{ToAlternateScreen}");
+    if is_kitty() {
+        kitty_push_colors();
+        kitty_transparency();
+    }
     let res = mini(path.as_ref());
+    if is_kitty() {
+        kitty_pop_colors();
+    }
     print!("{ToMainScreen}");
 
     if let Err(err) = res {

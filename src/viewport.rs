@@ -23,11 +23,11 @@ macro_rules! shift {
 /// Background color.
 pub const BG: Bg<color::Rgb> = Bg(color::Rgb(41, 44, 51));
 /// Line highlight background color.
-const HIGHLIGHT: Bg<color::Rgb> = Bg(color::Rgb(51, 53, 59));
+pub const HIGHLIGHT: Bg<color::Rgb> = Bg(color::Rgb(51, 53, 59));
 /// Info line background color.
-const INFO: Bg<color::Rgb> = Bg(color::Rgb(59, 61, 66));
+pub const INFO: Bg<color::Rgb> = Bg(color::Rgb(59, 61, 66));
 /// Selection highlight background color
-const SEL: Bg<color::Rgb> = Bg(color::Rgb(75, 78, 87));
+pub const SEL: Bg<color::Rgb> = Bg(color::Rgb(75, 78, 87));
 /// Text color.
 pub const TXT: Fg<color::Rgb> = Fg(color::Rgb(172, 178, 190));
 /// Relative number text color.
@@ -35,7 +35,7 @@ const REL_NUMS: Fg<color::Rgb> = Fg(color::Rgb(101, 103, 105));
 /// Whitespace symbol text color.
 const WHITESPACE: Fg<color::Rgb> = Fg(color::Rgb(68, 71, 79));
 /// Background to warn of tab characters.
-const CHAR_WARN: Bg<color::Rgb> = Bg(color::Rgb(181, 59, 59));
+pub const CHAR_WARN: Bg<color::Rgb> = Bg(color::Rgb(181, 59, 59));
 /// Info message text color.
 const INFO_TXT: Fg<color::Rgb> = Fg(color::Rgb(55, 131, 181));
 /// Error message text color.
